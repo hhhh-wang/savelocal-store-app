@@ -120,12 +120,20 @@ export function getCurrentPageI18nKey() {
  */
 export function getEnvBaseUrl() {
   // 请求基准地址
-  let baseUrl = import.meta.env.VITE_SERVER_BASEURL
+  let baseUrl = import.meta.env.VITE_SERVER_BASEURL || 'https://test-mini.shuomishengda.cn'
 
   // # 有些同学可能需要在微信小程序里面根据 develop、trial、release 分别设置上传地址，参考代码如下。
-  const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://ukw0y1.laf.run'
-  const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://ukw0y1.laf.run'
-  const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://ukw0y1.laf.run'
+  // const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'http://192.168.0.2:8090'
+  // const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'http://192.168.0.2:8090'
+  // const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'http://192.168.0.2:8090'
+
+  const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://test-mini.shuomishengda.cn'
+  const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://test-mini.shuomishengda.cn'
+  const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://test-mini.shuomishengda.cn'
+
+  // const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://mini.shuomishengda.cn'
+  // const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://mini.shuomishengda.cn'
+  // const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://mini.shuomishengda.cn'
 
   // 微信小程序端环境区分
   if (isMpWeixin) {
@@ -149,10 +157,21 @@ export function getEnvBaseUrl() {
   return baseUrl
 }
 
-/**
- * 是否是双token模式
- */
-export const isDoubleTokenMode = import.meta.env.VITE_AUTH_MODE === 'double'
+export function formatAssetUrl(url?: string) {
+  if (!url) {
+    return ''
+  }
+  if (/^https?:\/\//.test(url)) {
+    return url
+  }
+  const baseUrl = getEnvBaseUrl()
+  if (!baseUrl) {
+    return url
+  }
+  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+  const normalizedPath = url.startsWith('/') ? url : `/${url}`
+  return `${normalizedBaseUrl}${normalizedPath}`
+}
 
 /**
  * 首页路径，通过 page.json 里面的 type 为 home 的页面获取，如果没有，则默认是第一个页面

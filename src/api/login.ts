@@ -1,44 +1,44 @@
-import type { IAuthLoginRes, ICaptcha, IDoubleTokenRes, IUpdateInfo, IUpdatePassword, IUserInfoRes } from './types/login'
+import type { IAuthLoginRes, ICaptcha, IUpdateInfo, IUpdatePassword, IUserInfoRes } from './types/login'
 import { http } from '@/http/http'
 
 /**
  * 登录表单
  */
-export interface ILoginForm {
+export interface IAccountLoginForm {
   username: string
   password: string
 }
+
+export type ILoginForm = IAccountLoginForm
 
 /**
  * 获取验证码
  * @returns ICaptcha 验证码
  */
-export function getCode() {
+export function getCaptcha() {
   return http.get<ICaptcha>('/user/getCode')
 }
+
+export const getCode = getCaptcha
 
 /**
  * 用户登录
  * @param loginForm 登录表单
  */
-export function login(loginForm: ILoginForm) {
+export function accountLogin(loginForm: IAccountLoginForm) {
   return http.post<IAuthLoginRes>('/auth/login', loginForm)
 }
 
-/**
- * 刷新token
- * @param refreshToken 刷新token
- */
-export function refreshToken(refreshToken: string) {
-  return http.post<IDoubleTokenRes>('/auth/refreshToken', { refreshToken })
-}
+export const login = accountLogin
 
 /**
  * 获取用户信息
  */
-export function getUserInfo() {
+export function getCurrentUserInfo() {
   return http.get<IUserInfoRes>('/user/info')
 }
+
+export const getUserInfo = getCurrentUserInfo
 
 /**
  * 退出登录
@@ -50,16 +50,20 @@ export function logout() {
 /**
  * 修改用户信息
  */
-export function updateInfo(data: IUpdateInfo) {
+export function updateUserInfo(data: IUpdateInfo) {
   return http.post('/user/updateInfo', data)
 }
+
+export const updateInfo = updateUserInfo
 
 /**
  * 修改用户密码
  */
-export function updateUserPassword(data: IUpdatePassword) {
+export function changeUserPassword(data: IUpdatePassword) {
   return http.post('/user/updatePassword', data)
 }
+
+export const updateUserPassword = changeUserPassword
 
 /**
  * 获取微信登录凭证
@@ -77,7 +81,8 @@ export function getWxCode() {
 
 /**
  * 微信登录
- * @param params 微信登录参数，包含code
+ * 非小程序端如不需要可忽略该能力
+ * @param data 微信登录参数，包含 code
  * @returns Promise 包含登录结果
  */
 export function wxLogin(data: { code: string }) {

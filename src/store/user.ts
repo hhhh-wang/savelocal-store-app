@@ -2,7 +2,7 @@ import type { IUserInfoRes } from '@/api/types/login'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
-  getUserInfo,
+  getCurrentUserInfo,
 } from '@/api/login'
 
 // 初始化状态
@@ -21,14 +21,13 @@ export const useUserStore = defineStore(
     // 设置用户信息
     const setUserInfo = (val: IUserInfoRes) => {
       console.log('设置用户信息', val)
-      // 若头像为空 则使用默认头像
-      if (!val.avatar) {
-        val.avatar = userInfoState.avatar
+      userInfo.value = {
+        ...val,
+        avatar: val.avatar || userInfoState.avatar,
       }
-      userInfo.value = val
     }
     const setUserAvatar = (avatar: string) => {
-      userInfo.value.avatar = avatar
+      userInfo.value.avatar = avatar || userInfoState.avatar
       console.log('设置用户头像', avatar)
       console.log('userInfo', userInfo.value)
     }
@@ -42,7 +41,7 @@ export const useUserStore = defineStore(
      * 获取用户信息
      */
     const fetchUserInfo = async () => {
-      const res = await getUserInfo()
+      const res = await getCurrentUserInfo()
       setUserInfo(res)
       return res
     }
