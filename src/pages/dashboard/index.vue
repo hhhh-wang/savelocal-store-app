@@ -209,7 +209,7 @@ function openCustomerService() {
   flex: 1;
   overflow: hidden;
   color: #1f2023;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -277,13 +277,13 @@ function openCustomerService() {
 
 .stats-card__label {
   color: #2a2e35;
-  font-size: 34rpx;
+  font-size: 28rpx;
   font-weight: 600;
 }
 
 .stats-card__value {
   color: #202327;
-  font-size: 64rpx;
+  font-size: 52rpx;
   font-weight: 700;
   line-height: 1;
 }
@@ -364,7 +364,7 @@ function openCustomerService() {
 
 .section-card__title {
   color: #1d2025;
-  font-size: 50rpx;
+  font-size: 40rpx;
   font-weight: 700;
 }
 
