@@ -18,7 +18,7 @@ const pages = {
       type: 'home',
       style: {
         navigationStyle: 'custom',
-        navigationBarTitleText: '首页',
+        navigationBarTitleText: '工作台',
       },
     },
     {

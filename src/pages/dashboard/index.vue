@@ -12,7 +12,7 @@ definePage({
   style: {
     // 'custom' 表示开启自定义导航栏，默认 'default'
     navigationStyle: 'custom',
-    navigationBarTitleText: '首页',
+    navigationBarTitleText: '工作台',
   },
 })
 
