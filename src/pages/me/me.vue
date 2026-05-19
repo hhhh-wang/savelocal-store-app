@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import settingIcon from '@/static/icons/setting.png'
 import customerServiceIcon from '@/static/icons/customer-service.png'
+import settingIcon from '@/static/icons/setting.png'
 
 defineOptions({
   name: 'Me',
@@ -27,8 +27,15 @@ const walletItems = [
   { label: '余额(元)', value: '25.9', subtext: '可提现' },
 ]
 
-const menuItems = [
-  { title: '门店信息', iconText: '店' },
+interface MenuItem {
+  title: string
+  iconText: string
+  iconImage?: string
+  path?: string
+}
+
+const menuItems: MenuItem[] = [
+  { title: '门店信息', iconText: '店', path: '/pages/me/store-info/index' },
   { title: '通知设置', iconText: '通' },
   { title: '我的合同', iconText: '合' },
   { title: '联系客服', iconText: '服', iconImage: customerServiceIcon },
@@ -40,6 +47,20 @@ const menuItems = [
 function openSettings() {
   uni.showToast({
     title: '设置入口待接入',
+    icon: 'none',
+  })
+}
+
+function handleMenuItemTap(item: (typeof menuItems)[number]) {
+  if (item.path) {
+    uni.navigateTo({
+      url: item.path,
+    })
+    return
+  }
+
+  uni.showToast({
+    title: `${item.title}入口待接入`,
     icon: 'none',
   })
 }
@@ -104,7 +125,13 @@ function openSettings() {
 
       <view class="menu-card">
         <view class="menu-grid">
-          <view v-for="item in menuItems" :key="item.title" class="menu-grid__item">
+          <view
+            v-for="item in menuItems"
+            :key="item.title"
+            class="menu-grid__item"
+            hover-class="menu-grid__item--hover"
+            @tap="handleMenuItemTap(item)"
+          >
             <view class="menu-grid__icon-shell">
               <image v-if="item.iconImage" class="menu-grid__icon-image" :src="item.iconImage" mode="aspectFit" />
               <text v-else class="menu-grid__icon-text">
@@ -319,6 +346,10 @@ function openSettings() {
   align-items: center;
   gap: 14rpx;
   padding: 14rpx 0;
+}
+
+.menu-grid__item--hover {
+  opacity: 0.84;
 }
 
 .menu-grid__icon-shell {
