@@ -18,22 +18,32 @@ interface ProductCard {
   subtitle: string
   image: string
   themeClass: string
+  path?: string
 }
 
 const productCards: ProductCard[] = [
   {
     title: '商品库',
     subtitle: '管理门店所有上线菜品信息',
-    image: menuItemImage,
+    image: dishLibraryImage,
     themeClass: 'product-management-card--library',
   },
   {
     title: '商品图片',
     subtitle: '图文结合，效果更好',
-    image: dishLibraryImage,
+    image: menuItemImage,
     themeClass: 'product-management-card--image',
+    path: '/pages/dashboard/menu-album/index',
   },
 ]
+
+function handleCardTap(card: ProductCard) {
+  if (card.path) {
+    uni.navigateTo({
+      url: card.path,
+    })
+  }
+}
 </script>
 
 <template>
@@ -64,6 +74,8 @@ const productCards: ProductCard[] = [
           :key="card.title"
           class="product-management-card"
           :class="card.themeClass"
+          hover-class="product-management-card--hover"
+          @tap="handleCardTap(card)"
         >
           <image class="product-management-card__image" :src="card.image" mode="aspectFill" />
 
