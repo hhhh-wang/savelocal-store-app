@@ -72,7 +72,7 @@ function openFeedback() {
         <fg-back-button
           fallback-url="/pages/me/me"
           color="#22262d"
-          background="rgba(255, 255, 255, 0.94)"
+          background="transparent"
           size="72rpx"
         />
 
