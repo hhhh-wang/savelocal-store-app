@@ -33,12 +33,6 @@ const storeInfoRows: StoreInfoRow[] = [
   { label: '门店地址', value: '崧河街道新桥社区1号师范后门' },
 ]
 
-function goBack() {
-  uni.navigateBack({
-    delta: 1,
-  })
-}
-
 function openCustomerService() {
   uni.showToast({
     title: '客服入口待接入',
@@ -75,11 +69,12 @@ function openFeedback() {
 
     <view class="store-info-page__content">
       <view class="store-info-nav">
-        <view class="store-info-nav__back" hover-class="store-info-nav__back--hover" @tap="goBack">
-          <text class="store-info-nav__back-icon">
-            ‹
-          </text>
-        </view>
+        <fg-back-button
+          fallback-url="/pages/me/me"
+          color="#22262d"
+          background="rgba(255, 255, 255, 0.94)"
+          size="72rpx"
+        />
 
         <text class="store-info-nav__title">
           门店信息
@@ -185,7 +180,6 @@ function openFeedback() {
   min-height: 72rpx;
 }
 
-.store-info-nav__back,
 .store-info-nav__action {
   display: flex;
   align-items: center;
@@ -195,18 +189,11 @@ function openFeedback() {
   border-radius: 9999rpx;
 }
 
-.store-info-nav__back--hover,
 .store-info-nav__action--hover,
 .store-info-summary--hover,
 .store-info-card__row--hover,
 .store-info-footer__button--hover {
   opacity: 0.82;
-}
-
-.store-info-nav__back-icon {
-  color: #22262d;
-  font-size: 44rpx;
-  line-height: 1;
 }
 
 .store-info-nav__title {
