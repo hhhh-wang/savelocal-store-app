@@ -384,16 +384,6 @@ function openCustomerService() {
   padding: 0 6rpx 18rpx;
 }
 
-.assistant-tabs__item--active::after {
-  position: absolute;
-  right: 16rpx;
-  bottom: 0;
-  left: 16rpx;
-  height: 4rpx;
-  border-radius: 999rpx;
-  background: #efc873;
-  content: '';
-}
 
 .assistant-tabs__label-wrap {
   display: flex;
