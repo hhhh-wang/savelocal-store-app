@@ -24,13 +24,25 @@ const stats = [
   { label: '原价金额', value: '¥0', subtext: '昨日 ¥--' },
 ]
 
-const menuList = [
-  { title: '商品管理', short: '商', background: 'linear-gradient(180deg, #ffa726 0%, #ff9300 100%)' },
+interface DashboardMenuItem {
+  title: string
+  short: string
+  background: string
+  path?: string
+}
+
+const menuList: DashboardMenuItem[] = [
+  {
+    title: '商品管理',
+    short: '商',
+    background: 'linear-gradient(180deg, #ffa726 0%, #ff9300 100%)',
+    path: '/pages/dashboard/product-management/index',
+  },
   { title: '订单管理', short: '单', background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)' },
   { title: '财务对账', short: '¥', background: 'linear-gradient(180deg, #74dc62 0%, #42bf33 100%)' },
   { title: '售后管理', short: '售', background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)' },
   { title: '全部', short: '全', background: 'linear-gradient(180deg, #d0d6e2 0%, #bcc4d4 100%)' },
-] as const
+]
 
 const assistantTabs = [
   { key: 'orders', label: '待处理订单', emptyText: '无订单' },
@@ -68,6 +80,20 @@ function switchTab(tabKey: AssistantTabKey) {
 function openCustomerService() {
   uni.showToast({
     title: '客服入口待接入',
+    icon: 'none',
+  })
+}
+
+function handleMenuTap(item: DashboardMenuItem) {
+  if (item.path) {
+    uni.navigateTo({
+      url: item.path,
+    })
+    return
+  }
+
+  uni.showToast({
+    title: `${item.title}入口待接入`,
     icon: 'none',
   })
 }
@@ -112,7 +138,13 @@ function openCustomerService() {
 
       <view class="section-card">
         <view class="menu-grid">
-          <view v-for="item in menuList" :key="item.title" class="menu-grid__item">
+          <view
+            v-for="item in menuList"
+            :key="item.title"
+            class="menu-grid__item"
+            hover-class="menu-grid__item--hover"
+            @tap="handleMenuTap(item)"
+          >
             <view class="menu-grid__icon" :style="{ background: item.background }">
               {{ item.short }}
             </view>
@@ -339,6 +371,10 @@ function openCustomerService() {
   gap: 14rpx;
 }
 
+.menu-grid__item--hover {
+  opacity: 0.84;
+}
+
 .menu-grid__icon {
   display: flex;
   align-items: center;
@@ -383,7 +419,6 @@ function openCustomerService() {
   gap: 18rpx;
   padding: 0 6rpx 18rpx;
 }
-
 
 .assistant-tabs__label-wrap {
   display: flex;
