@@ -20,6 +20,8 @@ interface StoreInfoRow {
   imageText?: string
 }
 
+const storeNamePagePath = '/pages/me/store-name/index'
+
 const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
 
 const storeInfoRows: StoreInfoRow[] = [
@@ -41,13 +43,17 @@ function openCustomerService() {
 }
 
 function openStoreName() {
-  uni.showToast({
-    title: '店铺名称入口待接入',
-    icon: 'none',
+  uni.navigateTo({
+    url: storeNamePagePath,
   })
 }
 
 function handleRowTap(row: StoreInfoRow) {
+  if (row.label === '门店名称') {
+    openStoreName()
+    return
+  }
+
   uni.showToast({
     title: `${row.label}入口待接入`,
     icon: 'none',
