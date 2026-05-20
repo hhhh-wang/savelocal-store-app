@@ -22,6 +22,20 @@ const form = reactive({
   branchName: '现炒盖饭·油炸小吃',
 })
 
+const previewStats = {
+  rating: '4.8',
+  soldText: '月售 999+',
+  priceText: '人均 ¥25',
+  category: '快餐简餐',
+  area: '上海 · 杨浦',
+}
+
+const previewTags = [
+  { text: '满减', tone: 'primary' },
+  { text: '配送', tone: 'neutral' },
+  { text: '免配送费', tone: 'highlight' },
+]
+
 const previewStoreName = computed(() => { 
   const storeName = form.storeName.trim()
   const branchName = form.branchName.trim()
@@ -143,15 +157,41 @@ function handleSubmit() {
           </text>
 
           <view class="store-name-preview__card">
-            <image class="store-name-preview__image" :src="previewImage" mode="aspectFill" />
+            <view class="store-name-preview__cover">
+              <image class="store-name-preview__image" :src="previewImage" mode="aspectFill" />
+              <view class="store-name-preview__cover-shade" />
+            </view>
 
             <view class="store-name-preview__content">
               <text class="store-name-preview__title">
                 {{ previewStoreName }}
               </text>
-              <text class="store-name-preview__meta">
-                外卖店铺展示效果预览
-              </text>
+
+              <view class="store-name-preview__meta">
+                <view class="store-name-preview__rating-row">
+                  <text class="store-name-preview__stars">★★★★★</text>
+                  <text class="store-name-preview__rating">{{ previewStats.rating }}</text>
+                  <text class="store-name-preview__sold">{{ previewStats.soldText }}</text>
+                  <text class="store-name-preview__price">{{ previewStats.priceText }}</text>
+                </view>
+
+                <view class="store-name-preview__desc-row">
+                  <text class="store-name-preview__desc">{{ previewStats.category }}</text>
+                  <text class="store-name-preview__dot">·</text>
+                  <text class="store-name-preview__desc">{{ previewStats.area }}</text>
+                </view>
+
+                <view class="store-name-preview__tags">
+                  <view
+                    v-for="tag in previewTags"
+                    :key="tag.text"
+                    class="store-name-preview__tag"
+                    :class="`store-name-preview__tag--${tag.tone}`"
+                  >
+                    {{ tag.text }}
+                  </view>
+                </view>
+              </view>
             </view>
           </view>
         </view>
@@ -324,17 +364,35 @@ function handleSubmit() {
   align-items: center;
   gap: 20rpx;
   margin-top: 20rpx;
-  padding: 20rpx;
+  padding: 18rpx;
   border-radius: 24rpx;
   background: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
   box-shadow: inset 0 0 0 2rpx rgba(240, 242, 246, 0.9);
 }
 
-.store-name-preview__image {
-  width: 132rpx;
-  height: 132rpx;
+.store-name-preview__cover {
+  position: relative;
+  overflow: hidden;
+  width: 168rpx;
+  height: 168rpx;
   flex-shrink: 0;
   border-radius: 20rpx;
+  background: linear-gradient(135deg, #ffaf42 0%, #f3c44e 48%, #d98a22 100%);
+}
+
+.store-name-preview__image {
+  width: 100%;
+  height: 100%;
+  filter: blur(10rpx);
+  transform: scale(1.16);
+}
+
+.store-name-preview__cover-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.1) 100%),
+    linear-gradient(135deg, rgba(255, 173, 49, 0.2) 0%, rgba(255, 103, 12, 0.16) 100%);
 }
 
 .store-name-preview__content {
@@ -342,7 +400,7 @@ function handleSubmit() {
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .store-name-preview__title {
@@ -356,8 +414,85 @@ function handleSubmit() {
 }
 
 .store-name-preview__meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10rpx;
+  filter: blur(5rpx);
+  transform: scale(1.01);
+  transform-origin: left top;
+}
+
+.store-name-preview__rating-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.store-name-preview__stars {
+  color: #ff5a2f;
+  font-size: 20rpx;
+  line-height: 1;
+  letter-spacing: 2rpx;
+}
+
+.store-name-preview__rating {
+  color: #ff5a2f;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.store-name-preview__sold,
+.store-name-preview__price,
+.store-name-preview__desc {
   color: #9aa0aa;
-  font-size: 24rpx;
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+.store-name-preview__desc-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.store-name-preview__dot {
+  color: #b5b5b5;
+  font-size: 20rpx;
+  line-height: 1;
+}
+
+.store-name-preview__tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.store-name-preview__tag {
+  padding: 4rpx 10rpx;
+  border-radius: 10rpx;
+  font-size: 20rpx;
+  line-height: 1.2;
+}
+
+.store-name-preview__tag--primary {
+  background: #fff0f0;
+  color: #ff4f43;
+  font-weight: 700;
+}
+
+.store-name-preview__tag--neutral {
+  background: #f5f5f5;
+  color: #787878;
+}
+
+.store-name-preview__tag--highlight {
+  background: #fff4e6;
+  color: #b96f1d;
 }
 
 .store-name-footer {
