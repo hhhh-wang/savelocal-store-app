@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import mapMarkerIcon from '@/static/icons/map-marker.svg'
-
 defineOptions({
   name: 'StoreAddress',
 })
@@ -22,17 +20,6 @@ const mapCenter = {
   latitude: 31.2304,
   longitude: 121.4737,
 }
-
-const mapMarkers = [
-  {
-    id: 1,
-    latitude: mapCenter.latitude,
-    longitude: mapCenter.longitude,
-    iconPath: mapMarkerIcon,
-    width: 34,
-    height: 40,
-  },
-]
 
 function handleClose() {
   const pages = getCurrentPages()
@@ -123,18 +110,18 @@ function handleSubmit() {
             </text>
           </view>
 
-          <view class="store-address-map-wrap">
-            <map
-              class="store-address-map"
-              :latitude="mapCenter.latitude"
-              :longitude="mapCenter.longitude"
-              :markers="mapMarkers"
-              :scale="14"
-              enable-poi
-              enable-scroll
-              enable-zoom
-            />
-          </view>
+          <fg-tencent-map
+            class="store-address-map"
+            height="260rpx"
+            border-radius="20rpx"
+            background="#edf5fb"
+            :latitude="mapCenter.latitude"
+            :longitude="mapCenter.longitude"
+            :scale="14"
+            :enable-poi="true"
+            :enable-scroll="true"
+            :enable-zoom="true"
+          />
         </view>
       </view>
     </view>
@@ -274,19 +261,9 @@ function handleSubmit() {
   padding-top: 20rpx;
 }
 
-.store-address-map-wrap {
-  position: relative;
-  overflow: hidden;
-  height: 260rpx;
-  margin-top: 18rpx;
-  border-radius: 20rpx;
-  background: #edf5fb;
-  box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.75);
-}
-
 .store-address-map {
-  width: 100%;
-  height: 100%;
+  display: block;
+  margin-top: 18rpx;
 }
 
 .store-address-footer {
