@@ -18,6 +18,7 @@ const {
   VITE_WX_APPID,
   VITE_APP_PUBLIC_BASE,
   VITE_FALLBACK_LOCALE,
+  VITE_TENCENT_MAP_KEY,
 } = env
 // console.log('manifest.config.ts env:', env)
 
@@ -32,6 +33,16 @@ export default defineManifestConfig({
   'h5': {
     router: {
       base: VITE_APP_PUBLIC_BASE,
+    },
+    sdkConfigs: {
+      maps: {
+        tencent: {
+          key: VITE_TENCENT_MAP_KEY,
+        },
+        qqmap: {
+          key: VITE_TENCENT_MAP_KEY,
+        },
+      },
     },
   },
   /* 5+App特有相关 */

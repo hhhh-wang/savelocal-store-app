@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import mapMarkerIcon from '@/static/icons/map-marker.svg'
+
 defineOptions({
   name: 'StoreAddress',
 })
@@ -20,6 +22,17 @@ const mapCenter = {
   latitude: 31.2304,
   longitude: 121.4737,
 }
+
+const mapMarkers = [
+  {
+    id: 1,
+    latitude: mapCenter.latitude,
+    longitude: mapCenter.longitude,
+    iconPath: mapMarkerIcon,
+    width: 34,
+    height: 40,
+  },
+]
 
 function handleClose() {
   const pages = getCurrentPages()
@@ -115,30 +128,12 @@ function handleSubmit() {
               class="store-address-map"
               :latitude="mapCenter.latitude"
               :longitude="mapCenter.longitude"
+              :markers="mapMarkers"
               :scale="14"
-              show-location
+              enable-poi
+              enable-scroll
+              enable-zoom
             />
-
-            <view class="store-address-map__overlay">
-              <view class="store-address-map__river" />
-              <view class="store-address-map__road store-address-map__road--top" />
-              <view class="store-address-map__road store-address-map__road--bottom" />
-
-              <view class="store-address-map__label store-address-map__label--right-top">
-                师范学院
-                <text class="store-address-map__label-small">
-                  三号教学楼
-                </text>
-              </view>
-
-              <view class="store-address-map__label store-address-map__label--right-bottom">
-                新桥街
-              </view>
-
-              <view class="store-address-map__pin">
-                <view class="store-address-map__pin-dot" />
-              </view>
-            </view>
           </view>
         </view>
       </view>
@@ -285,104 +280,13 @@ function handleSubmit() {
   height: 260rpx;
   margin-top: 18rpx;
   border-radius: 20rpx;
-  background: linear-gradient(180deg, #edf5fb 0%, #dfeef8 100%);
+  background: #edf5fb;
   box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.75);
 }
 
 .store-address-map {
   width: 100%;
   height: 100%;
-  opacity: 0.18;
-  filter: grayscale(0.1) blur(0.2rpx);
-}
-
-.store-address-map__overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%),
-    linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(245, 250, 255, 0.32) 30%, rgba(255, 255, 255, 0) 100%);
-}
-
-.store-address-map__river {
-  position: absolute;
-  left: -6%;
-  top: 58%;
-  width: 52%;
-  height: 18%;
-  border-radius: 9999rpx;
-  background: linear-gradient(90deg, #72b5ea 0%, #4c9fe3 45%, #7cc0f0 100%);
-  transform: rotate(18deg);
-  box-shadow: 0 0 0 12rpx rgba(255, 255, 255, 0.38);
-}
-
-.store-address-map__road {
-  position: absolute;
-  height: 10rpx;
-  border-radius: 9999rpx;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 0 0 2rpx rgba(201, 215, 228, 0.44);
-}
-
-.store-address-map__road--top {
-  top: 22%;
-  left: 18%;
-  width: 58%;
-  transform: rotate(12deg);
-}
-
-.store-address-map__road--bottom {
-  top: 44%;
-  right: 8%;
-  width: 44%;
-  transform: rotate(-4deg);
-}
-
-.store-address-map__label {
-  position: absolute;
-  color: #79a7d8;
-  font-size: 20rpx;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.store-address-map__label-small {
-  display: block;
-  font-size: 18rpx;
-  font-weight: 500;
-}
-
-.store-address-map__label--right-top {
-  top: 28%;
-  right: 10%;
-  text-align: right;
-}
-
-.store-address-map__label--right-bottom {
-  top: 68%;
-  right: 12%;
-}
-
-.store-address-map__pin {
-  position: absolute;
-  top: 38%;
-  left: 46%;
-  width: 34rpx;
-  height: 34rpx;
-  border-radius: 9999rpx 9999rpx 9999rpx 0;
-  background: #ff6a2a;
-  transform: translate(-50%, -50%) rotate(-45deg);
-}
-
-.store-address-map__pin-dot {
-  position: absolute;
-  top: 8rpx;
-  left: 8rpx;
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 9999rpx;
-  background: #fff;
 }
 
 .store-address-footer {
