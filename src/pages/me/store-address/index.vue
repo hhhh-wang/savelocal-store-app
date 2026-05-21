@@ -16,10 +16,10 @@ const form = reactive({
   address: '崧河街道新桥社区1号师范后门',
 })
 
-const mapCenter = {
+const mapLocation = reactive({
   latitude: 31.2304,
   longitude: 121.4737,
-}
+})
 
 function handleClose() {
   const pages = getCurrentPages()
@@ -47,6 +47,15 @@ function handleSubmit() {
     title: '提交成功，等待审核',
     icon: 'none',
   })
+}
+
+function handleMapChange(payload: { latitude: number, longitude: number, address?: string, name?: string }) {
+  mapLocation.latitude = payload.latitude
+  mapLocation.longitude = payload.longitude
+
+  if (payload.address) {
+    form.address = payload.address
+  }
 }
 </script>
 
@@ -115,12 +124,16 @@ function handleSubmit() {
             height="260rpx"
             border-radius="20rpx"
             background="#edf5fb"
-            :latitude="mapCenter.latitude"
-            :longitude="mapCenter.longitude"
+            selectable
+            reverse-geocode
+            selection-mode="center"
+            :latitude="mapLocation.latitude"
+            :longitude="mapLocation.longitude"
             :scale="14"
             :enable-poi="true"
             :enable-scroll="true"
             :enable-zoom="true"
+            @change="handleMapChange"
           />
         </view>
       </view>
