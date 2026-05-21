@@ -42,6 +42,24 @@ function handleClose() {
   })
 }
 
+function loadUserLocation() {
+  uni.getLocation({
+    type: 'gcj02',
+    isHighAccuracy: true,
+    success(res) {
+      mapLocation.latitude = res.latitude
+      mapLocation.longitude = res.longitude
+      console.log('门店地址定位成功:', {
+        latitude: res.latitude,
+        longitude: res.longitude,
+      })
+    },
+    fail(error) {
+      console.log('门店地址定位失败，使用默认经纬度:', error)
+    },
+  })
+}
+
 function handleSubmit() {
   if (!form.address.trim()) {
     uni.showToast({
@@ -68,6 +86,10 @@ function handleMapChange(payload: MapChangePayload) {
     })
   }
 }
+
+onMounted(() => {
+  loadUserLocation()
+})
 </script>
 
 <template>

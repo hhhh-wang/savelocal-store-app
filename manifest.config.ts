@@ -70,6 +70,8 @@ export default defineManifestConfig({
         abiFilters: ['armeabi-v7a', 'arm64-v8a'],
         permissions: [
           '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
+          '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>',
+          '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>',
           '<uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"/>',
           '<uses-permission android:name="android.permission.VIBRATE"/>',
           '<uses-permission android:name="android.permission.READ_LOGS"/>',
@@ -87,7 +89,11 @@ export default defineManifestConfig({
         ],
       },
       /* ios打包配置 */
-      ios: {},
+      ios: {
+        privacyDescription: {
+          NSLocationWhenInUseUsageDescription: '用于获取您的当前位置以回显门店地图',
+        },
+      },
       /* SDK配置 */
       sdkConfigs: {},
       /* 图标配置 */
