@@ -23,6 +23,12 @@ const mapLocation = reactive({
 
 const mapScale = ref(14)
 
+type MapChangePayload = {
+  latitude: number
+  longitude: number
+  source?: 'init' | 'poi' | 'tap' | 'regionchange'
+}
+
 function handleClose() {
   const pages = getCurrentPages()
 
@@ -51,12 +57,15 @@ function handleSubmit() {
   })
 }
 
-function handleMapChange(payload: { latitude: number, longitude: number, address?: string, name?: string }) {
+function handleMapChange(payload: MapChangePayload) {
   mapLocation.latitude = payload.latitude
   mapLocation.longitude = payload.longitude
 
-  if (payload.address) {
-    form.address = payload.address
+  if (payload.source === 'regionchange') {
+    console.log('门店地址地图滑动后经纬度:', {
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+    })
   }
 }
 </script>
@@ -127,7 +136,6 @@ function handleMapChange(payload: { latitude: number, longitude: number, address
             border-radius="20rpx"
             background="#edf5fb"
             selectable
-            reverse-geocode
             selection-mode="center"
             :latitude="mapLocation.latitude"
             :longitude="mapLocation.longitude"

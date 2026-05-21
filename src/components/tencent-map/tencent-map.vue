@@ -20,8 +20,6 @@ interface MapMarkerLike {
 interface LocationPayload {
   latitude: number
   longitude: number
-  address?: string
-  name?: string
   source: LocationSource
 }
 
@@ -42,8 +40,6 @@ interface Props {
   markerHeight?: number
   selectable?: boolean
   selectionMode?: SelectionMode
-  reverseGeocode?: boolean
-  tencentMapKey?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -61,8 +57,6 @@ const props = withDefaults(defineProps<Props>(), {
   markerHeight: 40,
   selectable: false,
   selectionMode: 'center',
-  reverseGeocode: false,
-  tencentMapKey: '',
 })
 
 const emit = defineEmits<{
@@ -85,7 +79,6 @@ const currentScale = ref(props.scale)
 const mapContext = shallowRef<ReturnType<typeof uni.createMapContext>>()
 const centerPinVisible = computed(() => props.selectable && props.selectionMode === 'center')
 const hasCustomMarkers = computed(() => props.markers.length > 0)
-const runtimeTencentMapKey = computed(() => props.tencentMapKey || import.meta.env.VITE_TENCENT_MAP_KEY || '')
 
 const resolvedMarkers = computed(() => {
   if (centerPinVisible.value) {
@@ -134,65 +127,7 @@ onMounted(() => {
   mapContext.value = proxy
     ? uni.createMapContext(mapId, proxy)
     : uni.createMapContext(mapId)
-
-  if (props.reverseGeocode) {
-    void emitLocationChange({
-      latitude: selectedLatitude.value,
-      longitude: selectedLongitude.value,
-      source: 'init',
-    })
-  }
 })
-
-async function reverseGeocode(latitude: number, longitude: number) {
-  const key = runtimeTencentMapKey.value
-
-  if (!key) {
-    return {}
-  }
-
-  try {
-    const response = await new Promise<UniApp.RequestSuccessCallbackResult>((resolve, reject) => {
-      uni.request({
-        url: 'https://apis.map.qq.com/ws/geocoder/v1/',
-        method: 'GET',
-        data: {
-          key,
-          location: `${latitude},${longitude}`,
-        },
-        success: resolve,
-        fail: reject,
-      })
-    })
-
-    const data = response.data as {
-      status?: number
-      result?: {
-        address?: string
-        formatted_addresses?: {
-          recommend?: string
-        }
-        address_reference?: {
-          landmark_l2?: {
-            title?: string
-          }
-        }
-      }
-    }
-
-    if (data.status !== 0 || !data.result) {
-      return {}
-    }
-
-    return {
-      address: data.result.address,
-      name: data.result.formatted_addresses?.recommend || data.result.address_reference?.landmark_l2?.title,
-    }
-  }
-  catch {
-    return {}
-  }
-}
 
 async function emitLocationChange(payload: LocationPayload) {
   selectedLatitude.value = payload.latitude
@@ -200,16 +135,7 @@ async function emitLocationChange(payload: LocationPayload) {
 
   emit('update:latitude', payload.latitude)
   emit('update:longitude', payload.longitude)
-
-  const resolvedAddress = props.reverseGeocode
-    ? await reverseGeocode(payload.latitude, payload.longitude)
-    : {}
-
-  emit('change', {
-    ...payload,
-    address: payload.address || resolvedAddress.address,
-    name: payload.name || resolvedAddress.name,
-  })
+  emit('change', payload)
 }
 
 async function updateByCenter(source: LocationSource) {
@@ -251,7 +177,7 @@ function handlePoiTap(event: any) {
     return
   }
 
-  const { latitude, longitude, name } = event.detail || {}
+  const { latitude, longitude } = event.detail || {}
 
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
     return
@@ -260,8 +186,6 @@ function handlePoiTap(event: any) {
   void emitLocationChange({
     latitude,
     longitude,
-    name,
-    address: name,
     source: 'poi',
   })
 }
