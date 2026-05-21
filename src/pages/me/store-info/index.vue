@@ -22,6 +22,7 @@ interface StoreInfoRow {
 
 const storeNamePagePath = '/pages/me/store-name/index'
 const storePhonePagePath = '/pages/me/store-phone/index'
+const storeAddressPagePath = '/pages/me/store-address/index'
 
 const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
 
@@ -58,6 +59,13 @@ function handleRowTap(row: StoreInfoRow) {
   if (row.label === '门店电话') {
     uni.navigateTo({
       url: storePhonePagePath,
+    })
+    return
+  }
+
+  if (row.label === '门店地址') {
+    uni.navigateTo({
+      url: storeAddressPagePath,
     })
     return
   }
