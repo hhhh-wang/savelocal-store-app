@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance } from 'vue'
-import defaultMarkerIcon from '@/static/icons/map-marker.svg'
+import defaultMarkerIcon from '@/static/icons/map-marker.png'
 
 let mapInstanceSeed = 0
 
@@ -53,8 +53,8 @@ const props = withDefaults(defineProps<Props>(), {
   enableZoom: true,
   showLocation: false,
   markerIconPath: defaultMarkerIcon,
-  markerWidth: 34,
-  markerHeight: 40,
+  markerWidth: 150,
+  markerHeight: 150,
   selectable: false,
   selectionMode: 'center',
 })
@@ -274,15 +274,15 @@ function handleRegionChange(event: any) {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 34rpx;
-  height: 40rpx;
-  margin-left: -17rpx;
+  width: 50rpx;
+  height: 50rpx;
+  margin-left: -11rpx;
   margin-top: -40rpx;
   pointer-events: none;
 }
 
 .tencent-map__center-pin {
-  width: 34rpx;
-  height: 40rpx;
+  width: 50rpx;
+  height: 50rpx;
 }
 </style>
