@@ -66,20 +66,22 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  change: [payload: LocationPayload]
-  updated: []
-  markertap: [event: any]
-  poitap: [event: any]
-  regionchange: [event: any]
-  tap: [event: any]
-  'update:latitude': [value: number]
-  'update:longitude': [value: number]
+  (e: 'change', payload: LocationPayload): void
+  (e: 'updated'): void
+  (e: 'markertap', event: any): void
+  (e: 'poitap', event: any): void
+  (e: 'regionchange', event: any): void
+  (e: 'tap', event: any): void
+  (e: 'update:latitude', value: number): void
+  (e: 'update:longitude', value: number): void
+  (e: 'update:scale', value: number): void
 }>()
 
 const mapId = `tencent-map-${++mapInstanceSeed}`
 const instance = getCurrentInstance()
 const selectedLatitude = ref(props.latitude)
 const selectedLongitude = ref(props.longitude)
+const currentScale = ref(props.scale)
 const mapContext = shallowRef<ReturnType<typeof uni.createMapContext>>()
 const centerPinVisible = computed(() => props.selectable && props.selectionMode === 'center')
 const hasCustomMarkers = computed(() => props.markers.length > 0)
@@ -105,6 +107,13 @@ const resolvedMarkers = computed(() => {
     },
   ]
 })
+
+watch(
+  () => props.scale,
+  (value) => {
+    currentScale.value = value
+  },
+)
 
 watch(
   () => props.latitude,
@@ -307,7 +316,7 @@ function handleRegionChange(event: any) {
       :latitude="selectedLatitude"
       :longitude="selectedLongitude"
       :markers="resolvedMarkers"
-      :scale="props.scale"
+      :scale="currentScale"
       :enable-poi="props.enablePoi"
       :enable-scroll="props.enableScroll"
       :enable-zoom="props.enableZoom"
@@ -318,7 +327,6 @@ function handleRegionChange(event: any) {
       @tap="handleTap"
       @regionchange="handleRegionChange"
     />
-
     <cover-view v-if="centerPinVisible" class="tencent-map__center-pin-shell">
       <cover-image class="tencent-map__center-pin" :src="props.markerIconPath" />
     </cover-view>

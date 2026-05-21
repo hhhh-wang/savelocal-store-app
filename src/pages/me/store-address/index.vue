@@ -21,6 +21,8 @@ const mapLocation = reactive({
   longitude: 121.4737,
 })
 
+const mapScale = ref(14)
+
 function handleClose() {
   const pages = getCurrentPages()
 
@@ -121,7 +123,7 @@ function handleMapChange(payload: { latitude: number, longitude: number, address
 
           <tencent-map
             class="store-address-map"
-            height="260rpx"
+            height="500rpx"
             border-radius="20rpx"
             background="#edf5fb"
             selectable
@@ -129,7 +131,7 @@ function handleMapChange(payload: { latitude: number, longitude: number, address
             selection-mode="center"
             :latitude="mapLocation.latitude"
             :longitude="mapLocation.longitude"
-            :scale="14"
+            v-model:scale="mapScale"
             :enable-poi="true"
             :enable-scroll="true"
             :enable-zoom="true"
