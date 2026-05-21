@@ -76,7 +76,7 @@ const emit = defineEmits<{
   'update:longitude': [value: number]
 }>()
 
-const mapId = `fg-tencent-map-${++mapInstanceSeed}`
+const mapId = `tencent-map-${++mapInstanceSeed}`
 const instance = getCurrentInstance()
 const selectedLatitude = ref(props.latitude)
 const selectedLongitude = ref(props.longitude)
@@ -294,7 +294,7 @@ function handleRegionChange(event: any) {
 
 <template>
   <view
-    class="fg-tencent-map"
+    class="tencent-map"
     :style="{
       height: props.height,
       borderRadius: props.borderRadius,
@@ -303,7 +303,7 @@ function handleRegionChange(event: any) {
   >
     <map
       :id="mapId"
-      class="fg-tencent-map__inner"
+      class="tencent-map__inner"
       :latitude="selectedLatitude"
       :longitude="selectedLongitude"
       :markers="resolvedMarkers"
@@ -319,26 +319,26 @@ function handleRegionChange(event: any) {
       @regionchange="handleRegionChange"
     />
 
-    <cover-view v-if="centerPinVisible" class="fg-tencent-map__center-pin-shell">
-      <cover-image class="fg-tencent-map__center-pin" :src="props.markerIconPath" />
+    <cover-view v-if="centerPinVisible" class="tencent-map__center-pin-shell">
+      <cover-image class="tencent-map__center-pin" :src="props.markerIconPath" />
     </cover-view>
   </view>
 </template>
 
 <style scoped>
-.fg-tencent-map {
+.tencent-map {
   position: relative;
   overflow: hidden;
   width: 100%;
   box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.75);
 }
 
-.fg-tencent-map__inner {
+.tencent-map__inner {
   width: 100%;
   height: 100%;
 }
 
-.fg-tencent-map__center-pin-shell {
+.tencent-map__center-pin-shell {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -349,7 +349,7 @@ function handleRegionChange(event: any) {
   pointer-events: none;
 }
 
-.fg-tencent-map__center-pin {
+.tencent-map__center-pin {
   width: 34rpx;
   height: 40rpx;
 }

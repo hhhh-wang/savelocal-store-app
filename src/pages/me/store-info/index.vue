@@ -91,7 +91,7 @@ function openFeedback() {
 
     <view class="store-info-page__content">
       <view class="store-info-nav">
-        <fg-back-button
+        <back-button
           fallback-url="/pages/me/me"
           color="#22262d"
           background="transparent"

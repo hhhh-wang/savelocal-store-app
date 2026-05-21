@@ -110,7 +110,7 @@ function handleSubmit() {
     <view class="store-phone-page__content">
       <view class="store-phone-nav">
         <view class="store-phone-nav__left">
-          <fg-back-button
+          <back-button
             :fallback-url="fallbackUrl"
             fallback-mode="navigateTo"
             color="#23262c"

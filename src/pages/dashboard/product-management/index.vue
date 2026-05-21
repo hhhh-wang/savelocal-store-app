@@ -53,7 +53,7 @@ function handleCardTap(card: ProductCard) {
 
     <view class="product-management-page__content">
       <view class="product-management-nav">
-        <fg-back-button
+        <back-button
           fallback-url="/pages/dashboard/index"
           fallback-mode="reLaunch"
           color="#23262c"

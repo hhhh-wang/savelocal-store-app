@@ -67,7 +67,7 @@ function handleMapChange(payload: { latitude: number, longitude: number, address
     <view class="store-address-page__content">
       <view class="store-address-nav">
         <view class="store-address-nav__left">
-          <fg-back-button
+          <back-button
             :fallback-url="fallbackUrl"
             fallback-mode="navigateTo"
             color="#23262c"
@@ -119,7 +119,7 @@ function handleMapChange(payload: { latitude: number, longitude: number, address
             </text>
           </view>
 
-          <fg-tencent-map
+          <tencent-map
             class="store-address-map"
             height="260rpx"
             border-radius="20rpx"

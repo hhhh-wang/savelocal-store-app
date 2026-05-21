@@ -38,7 +38,7 @@ function handleBack() {
 
 <template>
   <view
-    class="fg-back-button"
+    class="back-button"
     :style="{
       width: props.size,
       height: props.size,
@@ -46,12 +46,12 @@ function handleBack() {
     }"
     @tap="handleBack"
   >
-    <view class="fg-back-button__icon" :style="{ borderColor: props.color }" />
+    <view class="back-button__icon" :style="{ borderColor: props.color }" />
   </view>
 </template>
 
 <style scoped>
-.fg-back-button {
+.back-button {
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -59,7 +59,7 @@ function handleBack() {
   border-radius: 50%;
 }
 
-.fg-back-button__icon {
+.back-button__icon {
   width: 20rpx;
   height: 20rpx;
   margin-left: 8rpx;

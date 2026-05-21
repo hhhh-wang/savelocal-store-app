@@ -88,7 +88,7 @@ function handleSubmit() {
     <view class="store-name-page__content">
       <view class="store-name-nav">
         <view class="store-name-nav__left">
-          <fg-back-button
+          <back-button
             :fallback-url="fallbackUrl"
             fallback-mode="navigateTo"
             color="#23262c"

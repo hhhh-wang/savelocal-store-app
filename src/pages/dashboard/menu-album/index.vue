@@ -55,7 +55,7 @@ function handleUpload() {
   <view class="menu-album-page">
     <view class="menu-album-page__content">
       <view class="menu-album-nav">
-        <fg-back-button
+        <back-button
           fallback-url="/pages/dashboard/product-management/index"
           fallback-mode="navigateTo"
           color="#23262c"
