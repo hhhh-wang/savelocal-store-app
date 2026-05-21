@@ -53,8 +53,8 @@ const props = withDefaults(defineProps<Props>(), {
   enableZoom: true,
   showLocation: false,
   markerIconPath: defaultMarkerIcon,
-  markerWidth: 150,
-  markerHeight: 150,
+  markerWidth: 50,
+  markerHeight: 50,
   selectable: false,
   selectionMode: 'center',
 })
@@ -276,8 +276,8 @@ function handleRegionChange(event: any) {
   top: 50%;
   width: 50rpx;
   height: 50rpx;
-  margin-left: -11rpx;
-  margin-top: -40rpx;
+  margin-left: -25rpx;
+  margin-top: -25rpx;
   pointer-events: none;
 }
 

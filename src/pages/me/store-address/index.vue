@@ -16,9 +16,10 @@ const form = reactive({
   address: '崧河街道新桥社区1号师范后门',
 })
 
+// 默认使用吉首的经纬度，如果用户授权获取位置后会更新为用户的实际位置
 const mapLocation = reactive({
-  latitude: 31.2304,
-  longitude: 121.4737,
+  latitude: 28.265262,
+  longitude: 109.6938658,
 })
 
 const mapScale = ref(14)
