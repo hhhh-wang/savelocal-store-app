@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+import {
+  formatBusinessHoursSummary,
+  getBusinessStatusLabel,
+  loadStoreBusinessStatus,
+} from '@/pages/me/store-status/shared'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 
 defineOptions({
@@ -23,19 +28,26 @@ interface StoreInfoRow {
 const storeNamePagePath = '/pages/me/store-name/index'
 const storePhonePagePath = '/pages/me/store-phone/index'
 const storeAddressPagePath = '/pages/me/store-address/index'
+const storeStatusPagePath = '/pages/me/store-status/index'
 
 const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
 
-const storeInfoRows: StoreInfoRow[] = [
-  { label: '门店入口图', type: 'image', imageText: '店' },
-  { label: '门店名称', value: '喵小厨美食社' },
-  { label: '营业状态', value: '已停业' },
-  { label: '营业时间', value: '未设置', muted: true },
-  { label: '门店品类', value: '快餐简餐' },
-  { label: '门店电话', value: '135 7430 0595' },
-  { label: '企业资质', value: '上传材料' },
-  { label: '门店地址', value: '崧河街道新桥社区1号师范后门' },
-]
+const storeBusinessStatus = ref(loadStoreBusinessStatus())
+
+const storeInfoRows = computed<StoreInfoRow[]>(() => {
+  const businessHoursSummary = formatBusinessHoursSummary(storeBusinessStatus.value.hours)
+
+  return [
+    { label: '门店入口图', type: 'image', imageText: '店' },
+    { label: '门店名称', value: '喵小厨美食社' },
+    { label: '营业状态', value: getBusinessStatusLabel(storeBusinessStatus.value.status) },
+    { label: '营业时间', value: businessHoursSummary, muted: businessHoursSummary === '未设置' },
+    { label: '门店品类', value: '快餐简餐' },
+    { label: '门店电话', value: '135 7430 0595' },
+    { label: '企业资质', value: '上传材料' },
+    { label: '门店地址', value: '崧河街道新桥社区1号师范后门' },
+  ]
+})
 
 function openCustomerService() {
   uni.showToast({
@@ -53,6 +65,13 @@ function openStoreName() {
 function handleRowTap(row: StoreInfoRow) {
   if (row.label === '门店名称') {
     openStoreName()
+    return
+  }
+
+  if (row.label === '营业状态' || row.label === '营业时间') {
+    uni.navigateTo({
+      url: storeStatusPagePath,
+    })
     return
   }
 
@@ -82,6 +101,10 @@ function openFeedback() {
     icon: 'none',
   })
 }
+
+onShow(() => {
+  storeBusinessStatus.value = loadStoreBusinessStatus()
+})
 </script>
 
 <template>
