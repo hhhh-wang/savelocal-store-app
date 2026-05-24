@@ -11,7 +11,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: BusinessHoursValue]
 }>()
 
-const slotMinutes = 30
+const slotMinutes = 1
 const totalMinutes = 24 * 60
 const totalSlots = totalMinutes / slotMinutes
 const defaultRangeStart = 9 * 60
@@ -24,6 +24,9 @@ const modeOptions: Array<{ label: string, value: BusinessHoursMode }> = [
 ]
 
 const timePoints = Array.from({ length: totalSlots + 1 }, (_, index) => index * slotMinutes)
+const startHourValues = Array.from({ length: 24 }, (_, index) => index)
+const endHourValues = Array.from({ length: 25 }, (_, index) => index)
+const minuteValues = Array.from({ length: 60 }, (_, index) => index)
 const activeRangeId = ref<number | null>(null)
 const nextRangeId = ref(1)
 const innerValue = ref<BusinessHoursValue>(normalizeValue(props.modelValue))
@@ -139,8 +142,57 @@ function formatTime(minutes: number) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
+function formatUnitValue(value: number) {
+  return String(value).padStart(2, '0')
+}
+
 function formatRangeLabel(range: BusinessHoursRange) {
   return `${formatTime(range.start)}-${formatTime(range.end)}`
+}
+
+function getRangeById(rangeId: number) {
+  return innerValue.value.ranges.find(range => range.id === rangeId)
+}
+
+function getRangeParts(range: BusinessHoursRange) {
+  return {
+    startHour: Math.floor(range.start / 60),
+    startMinute: range.start % 60,
+    endHour: range.end === totalMinutes ? 24 : Math.floor(range.end / 60),
+    endMinute: range.end === totalMinutes ? 0 : range.end % 60,
+  }
+}
+
+function getMinuteValueIndex(minute: number) {
+  const minuteIndex = minuteValues.indexOf(minute)
+
+  return minuteIndex === -1 ? 0 : minuteIndex
+}
+
+function buildStartTime(hour: number, minute: number) {
+  if (!startHourValues.includes(hour) || !minuteValues.includes(minute)) {
+    return null
+  }
+
+  const time = hour * 60 + minute
+
+  return time < totalMinutes ? time : null
+}
+
+function buildEndTime(hour: number, minute: number) {
+  if (!minuteValues.includes(minute)) {
+    return null
+  }
+
+  if (hour === 24) {
+    return minute === 0 ? totalMinutes : null
+  }
+
+  if (!startHourValues.includes(hour)) {
+    return null
+  }
+
+  return hour * 60 + minute
 }
 
 function buildOccupiedSlots(excludeRangeId?: number) {
@@ -214,24 +266,67 @@ function clampEnd(end: number, start: number, maxEnd: number) {
   return Math.min(Math.max(end, minEnd), maxEnd)
 }
 
-function isTimeDisabled(rangeId: number, time: number, column: 'start' | 'end') {
-  const occupiedSlots = buildOccupiedSlots(rangeId)
-
-  if (column === 'start') {
-    return !isStartAvailable(time, occupiedSlots)
-  }
-
-  const targetRange = innerValue.value.ranges.find(range => range.id === rangeId)
-  const start = targetRange?.start ?? 0
+function canUseEndTime(start: number, end: number, occupiedSlots: boolean[]) {
   const maxEnd = getMaxContinuousEnd(start, occupiedSlots)
 
-  return time <= start || time > maxEnd
+  return end > start && end <= maxEnd
+}
+
+function isStartHourDisabled(rangeId: number, hour: number) {
+  const occupiedSlots = buildOccupiedSlots(rangeId)
+
+  return !minuteValues.some((minute) => {
+    const start = buildStartTime(hour, minute)
+    return start !== null && isStartAvailable(start, occupiedSlots)
+  })
+}
+
+function isStartMinuteDisabled(rangeId: number, minute: number) {
+  const targetRange = getRangeById(rangeId)
+  const occupiedSlots = buildOccupiedSlots(rangeId)
+  const startHour = targetRange ? getRangeParts(targetRange).startHour : 0
+  const start = buildStartTime(startHour, minute)
+
+  return start === null || !isStartAvailable(start, occupiedSlots)
+}
+
+function isEndHourDisabled(rangeId: number, hour: number) {
+  const targetRange = getRangeById(rangeId)
+
+  if (!targetRange) {
+    return true
+  }
+
+  const occupiedSlots = buildOccupiedSlots(rangeId)
+
+  return !minuteValues.some((minute) => {
+    const end = buildEndTime(hour, minute)
+    return end !== null && canUseEndTime(targetRange.start, end, occupiedSlots)
+  })
+}
+
+function isEndMinuteDisabled(rangeId: number, minute: number) {
+  const targetRange = getRangeById(rangeId)
+
+  if (!targetRange) {
+    return true
+  }
+
+  const occupiedSlots = buildOccupiedSlots(rangeId)
+  const endHour = getRangeParts(targetRange).endHour
+  const end = buildEndTime(endHour, minute)
+
+  return end === null || !canUseEndTime(targetRange.start, end, occupiedSlots)
 }
 
 function getPickerValue(range: BusinessHoursRange) {
+  const { startHour, startMinute, endHour, endMinute } = getRangeParts(range)
+
   return [
-    timePoints.indexOf(range.start),
-    Math.max(timePoints.indexOf(range.end) - 1, 0),
+    startHour,
+    getMinuteValueIndex(startMinute),
+    endHour,
+    getMinuteValueIndex(endMinute),
   ]
 }
 
@@ -252,14 +347,22 @@ function updateMode(mode: BusinessHoursMode) {
 }
 
 function applyRangeValue(rangeId: number, pickerValue: number[]) {
-  const targetRange = innerValue.value.ranges.find(range => range.id === rangeId)
+  const targetRange = getRangeById(rangeId)
 
   if (!targetRange) {
     return
   }
 
+  const currentParts = getRangeParts(targetRange)
   const occupiedSlots = buildOccupiedSlots(rangeId)
-  const requestedStart = timePoints[pickerValue[0]] ?? targetRange.start
+  const requestedStartHour = startHourValues[pickerValue[0]] ?? currentParts.startHour
+  const requestedStartMinute = minuteValues[pickerValue[1]] ?? currentParts.startMinute
+  const requestedEndHour = endHourValues[pickerValue[2]] ?? currentParts.endHour
+  const requestedEndMinute = minuteValues[pickerValue[3]] ?? currentParts.endMinute
+
+  const rawRequestedStart = buildStartTime(requestedStartHour, requestedStartMinute)
+  const rawRequestedEnd = buildEndTime(requestedEndHour, requestedEndMinute)
+  const requestedStart = rawRequestedStart ?? targetRange.start
   const safeStart = findClosestAvailableStart(requestedStart, occupiedSlots)
 
   if (safeStart === null) {
@@ -271,7 +374,7 @@ function applyRangeValue(rangeId: number, pickerValue: number[]) {
   }
 
   const maxEnd = getMaxContinuousEnd(safeStart, occupiedSlots)
-  const requestedEnd = timePoints[pickerValue[1] + 1] ?? targetRange.end
+  const requestedEnd = rawRequestedEnd ?? totalMinutes
   const safeEnd = clampEnd(requestedEnd, safeStart, maxEnd)
 
   if (safeEnd === null) {
@@ -282,7 +385,10 @@ function applyRangeValue(rangeId: number, pickerValue: number[]) {
     return
   }
 
-  const hasCorrectedValue = safeStart !== requestedStart || safeEnd !== requestedEnd
+  const hasCorrectedValue = rawRequestedStart === null
+    || rawRequestedEnd === null
+    || safeStart !== requestedStart
+    || safeEnd !== requestedEnd
 
   targetRange.start = safeStart
   targetRange.end = safeEnd
@@ -348,7 +454,7 @@ function buildSuggestedStarts() {
 
 function findSuggestedRange() {
   const occupiedSlots = buildOccupiedSlots()
-  const durationCandidates = [60, slotMinutes]
+  const durationCandidates = [60, 30, slotMinutes]
   const startCandidates = buildSuggestedStarts()
 
   for (const duration of durationCandidates) {
@@ -442,8 +548,14 @@ function addRange() {
         <view v-if="activeRangeId === range.id" class="business-hours-picker__picker-wrap">
           <view class="business-hours-picker__picker-lines business-hours-picker__picker-lines--top" />
           <view class="business-hours-picker__picker-lines business-hours-picker__picker-lines--bottom" />
-          <view class="business-hours-picker__picker-separator">
+          <view class="business-hours-picker__picker-divider business-hours-picker__picker-divider--start-colon">
+            :
+          </view>
+          <view class="business-hours-picker__picker-divider business-hours-picker__picker-divider--middle">
             至
+          </view>
+          <view class="business-hours-picker__picker-divider business-hours-picker__picker-divider--end-colon">
+            :
           </view>
 
           <picker-view
@@ -455,23 +567,45 @@ function addRange() {
           >
             <picker-view-column>
               <view
-                v-for="time in timePoints.slice(0, -1)"
-                :key="`start-${range.id}-${time}`"
+                v-for="hour in startHourValues"
+                :key="`start-hour-${range.id}-${hour}`"
                 class="business-hours-picker__picker-item"
-                :class="{ 'business-hours-picker__picker-item--disabled': isTimeDisabled(range.id, time, 'start') }"
+                :class="{ 'business-hours-picker__picker-item--disabled': isStartHourDisabled(range.id, hour) }"
               >
-                {{ formatTime(time) }}
+                {{ formatUnitValue(hour) }}
               </view>
             </picker-view-column>
 
             <picker-view-column>
               <view
-                v-for="time in timePoints.slice(1)"
-                :key="`end-${range.id}-${time}`"
+                v-for="minute in minuteValues"
+                :key="`start-minute-${range.id}-${minute}`"
                 class="business-hours-picker__picker-item"
-                :class="{ 'business-hours-picker__picker-item--disabled': isTimeDisabled(range.id, time, 'end') }"
+                :class="{ 'business-hours-picker__picker-item--disabled': isStartMinuteDisabled(range.id, minute) }"
               >
-                {{ formatTime(time) }}
+                {{ formatUnitValue(minute) }}
+              </view>
+            </picker-view-column>
+
+            <picker-view-column>
+              <view
+                v-for="hour in endHourValues"
+                :key="`end-hour-${range.id}-${hour}`"
+                class="business-hours-picker__picker-item"
+                :class="{ 'business-hours-picker__picker-item--disabled': isEndHourDisabled(range.id, hour) }"
+              >
+                {{ formatUnitValue(hour) }}
+              </view>
+            </picker-view-column>
+
+            <picker-view-column>
+              <view
+                v-for="minute in minuteValues"
+                :key="`end-minute-${range.id}-${minute}`"
+                class="business-hours-picker__picker-item"
+                :class="{ 'business-hours-picker__picker-item--disabled': isEndMinuteDisabled(range.id, minute) }"
+              >
+                {{ formatUnitValue(minute) }}
               </view>
             </picker-view-column>
           </picker-view>
@@ -629,15 +763,28 @@ function addRange() {
   height: 288rpx;
 }
 
-.business-hours-picker__picker-separator {
+.business-hours-picker__picker-divider {
   position: absolute;
   top: 118rpx;
-  left: 50%;
   z-index: 3;
   color: #5b6068;
   font-size: 34rpx;
   font-weight: 600;
   line-height: 76rpx;
+}
+
+.business-hours-picker__picker-divider--start-colon {
+  left: 25%;
+  transform: translateX(-50%);
+}
+
+.business-hours-picker__picker-divider--middle {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.business-hours-picker__picker-divider--end-colon {
+  left: 75%;
   transform: translateX(-50%);
 }
 
