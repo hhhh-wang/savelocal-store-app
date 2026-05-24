@@ -1,5 +1,9 @@
 <script lang="ts" setup>
 import {
+  formatStoreCategorySummary,
+  loadStoreCategorySelection,
+} from '@/pages/me/store-category/shared'
+import {
   formatBusinessHoursSummary,
   getBusinessStatusLabel,
   loadStoreBusinessStatus,
@@ -29,10 +33,12 @@ const storeNamePagePath = '/pages/me/store-name/index'
 const storePhonePagePath = '/pages/me/store-phone/index'
 const storeAddressPagePath = '/pages/me/store-address/index'
 const storeStatusPagePath = '/pages/me/store-status/index'
+const storeCategoryPagePath = '/pages/me/store-category/index'
 
 const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
 
 const storeBusinessStatus = ref(loadStoreBusinessStatus())
+const storeCategorySelection = ref(loadStoreCategorySelection())
 
 const storeInfoRows = computed<StoreInfoRow[]>(() => {
   const businessHoursSummary = formatBusinessHoursSummary(storeBusinessStatus.value.hours)
@@ -42,7 +48,7 @@ const storeInfoRows = computed<StoreInfoRow[]>(() => {
     { label: '门店名称', value: '喵小厨美食社' },
     { label: '营业状态', value: getBusinessStatusLabel(storeBusinessStatus.value.status) },
     { label: '营业时间', value: businessHoursSummary, muted: businessHoursSummary === '未设置' },
-    { label: '门店品类', value: '快餐简餐' },
+    { label: '门店品类', value: formatStoreCategorySummary(storeCategorySelection.value) },
     { label: '门店电话', value: '135 7430 0595' },
     { label: '企业资质', value: '上传材料' },
     { label: '门店地址', value: '崧河街道新桥社区1号师范后门' },
@@ -71,6 +77,13 @@ function handleRowTap(row: StoreInfoRow) {
   if (row.label === '营业状态' || row.label === '营业时间') {
     uni.navigateTo({
       url: storeStatusPagePath,
+    })
+    return
+  }
+
+  if (row.label === '门店品类') {
+    uni.navigateTo({
+      url: storeCategoryPagePath,
     })
     return
   }
@@ -104,6 +117,7 @@ function openFeedback() {
 
 onShow(() => {
   storeBusinessStatus.value = loadStoreBusinessStatus()
+  storeCategorySelection.value = loadStoreCategorySelection()
 })
 </script>
 
