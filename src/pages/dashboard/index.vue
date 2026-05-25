@@ -40,7 +40,12 @@ const menuList: DashboardMenuItem[] = [
   },
   { title: '订单管理', short: '单', background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)' },
   { title: '财务对账', short: '¥', background: 'linear-gradient(180deg, #74dc62 0%, #42bf33 100%)' },
-  { title: '售后管理', short: '售', background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)' },
+  {
+    title: '售后管理',
+    short: '售',
+    background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)',
+    path: '/pages/dashboard/after-sales/index',
+  },
   { title: '全部', short: '全', background: 'linear-gradient(180deg, #d0d6e2 0%, #bcc4d4 100%)' },
 ]
 
