@@ -177,7 +177,7 @@ const monthPickerValue = ref([3, currentDate.month - 1])
 const recentMonthKeys = computed(() => {
   const result: string[] = []
 
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < 3; index += 1) {
     const month = currentDate.month - index
     const yearOffset = Math.floor((month - 1) / 12)
     const normalizedMonth = ((month - 1) % 12 + 12) % 12 + 1
@@ -411,7 +411,7 @@ function getBillStatusLabel(status: BillStatus) {
           </scroll-view>
 
           <view class="merchant-bill-filter__calendar" hover-class="merchant-bill-filter__calendar--hover" @tap="openMonthPicker">
-            <image class="merchant-bill-filter__calendar-icon" :src="calendarMonthIcon" mode="aspectFit" />
+            <image class="merchant-bill-filter__calendar-icon" :src="calendarMonthIcon" mode="aspectFit"  />
           </view>
         </view>
 
@@ -886,8 +886,6 @@ function getBillStatusLabel(status: BillStatus) {
   width: 62rpx;
   height: 62rpx;
   border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 10rpx 22rpx rgba(78, 83, 99, 0.07);
 }
 
 .merchant-bill-filter__calendar--hover {
@@ -895,8 +893,8 @@ function getBillStatusLabel(status: BillStatus) {
 }
 
 .merchant-bill-filter__calendar-icon {
-  width: 34rpx;
-  height: 34rpx;
+  width: 100%;
+  height: 100%;
 }
 
 .merchant-bill-list {
