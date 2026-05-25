@@ -354,7 +354,7 @@ function getBillStatusLabel(status: BillStatus) {
         </view>
       </view>
 
-      <view class="merchant-section">
+      <view class="merchant-section merchant-section--realtime">
         <text class="merchant-section__title">
           今日实时订单
         </text>
@@ -608,7 +608,7 @@ function getBillStatusLabel(status: BillStatus) {
 .merchant-nav__title {
   color: #26292f;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 400;
   text-align: center;
 }
 
@@ -622,7 +622,7 @@ function getBillStatusLabel(status: BillStatus) {
   align-items: center;
   justify-content: space-between;
   gap: 18rpx;
-  margin-top: 28rpx;
+  margin-top: 40rpx;
 }
 
 .merchant-store-row__main {
@@ -734,19 +734,25 @@ function getBillStatusLabel(status: BillStatus) {
   margin-top: 34rpx;
 }
 
+.merchant-section--realtime {
+  margin-top: 44rpx;
+}
+
 .merchant-section--bill {
   padding-bottom: 12rpx;
 }
 
 .merchant-section__head {
   justify-content: space-between;
+  
   gap: 20rpx;
 }
 
 .merchant-section__title {
   color: #26292f;
-  font-size: 52rpx;
-  font-weight: 700;
+  font-size: 40rpx;
+  font-weight: 600;
+
 }
 
 .merchant-section__toggle {
@@ -787,6 +793,10 @@ function getBillStatusLabel(status: BillStatus) {
   border-radius: 24rpx;
   background: rgba(246, 248, 252, 0.98);
   box-shadow: 0 14rpx 34rpx rgba(78, 83, 99, 0.05);
+}
+
+.merchant-section--realtime .merchant-order-card {
+  margin-top: 30rpx;
 }
 
 .merchant-order-card__row {
