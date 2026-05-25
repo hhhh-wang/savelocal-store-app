@@ -493,10 +493,10 @@ function getBillStatusLabel(status: BillStatus) {
         </text>
 
         <view class="merchant-month-picker__labels">
-          <text class="merchant-month-picker__label">
+          <text class="merchant-month-picker__label merchant-month-picker__label--year">
             年
           </text>
-          <text class="merchant-month-picker__label">
+          <text class="merchant-month-picker__label merchant-month-picker__label--month">
             月
           </text>
         </view>
@@ -513,7 +513,7 @@ function getBillStatusLabel(status: BillStatus) {
               <view
                 v-for="year in yearOptions"
                 :key="year"
-                class="merchant-month-picker__item"
+                class="merchant-month-picker__item merchant-month-picker__item--year"
               >
                 {{ year }}
               </view>
@@ -523,7 +523,7 @@ function getBillStatusLabel(status: BillStatus) {
               <view
                 v-for="month in monthOptions"
                 :key="month"
-                class="merchant-month-picker__item"
+                class="merchant-month-picker__item merchant-month-picker__item--month"
               >
                 {{ month }}
               </view>
@@ -1068,55 +1068,66 @@ function getBillStatusLabel(status: BillStatus) {
   right: 0;
   bottom: 0;
   left: 0;
-  padding: 28rpx 30rpx calc(env(safe-area-inset-bottom) + 28rpx);
-  border-radius: 28rpx 28rpx 0 0;
+  padding: 34rpx 46rpx calc(env(safe-area-inset-bottom) + 28rpx);
+  border-radius: 24rpx 24rpx 0 0;
   background: #fff;
 }
 
 .merchant-month-picker__title {
   display: block;
   color: #24282f;
-  font-size: 34rpx;
-  font-weight: 700;
+  font-size: 36rpx;
+  font-weight: 600;
   text-align: center;
 }
 
 .merchant-month-picker__labels {
-  gap: 36rpx;
-  margin-top: 42rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 44rpx;
+  margin: 60rpx;
 }
 
 .merchant-month-picker__label {
-  flex: 1;
   color: #3d4249;
   font-size: 28rpx;
-  font-weight: 600;
+  font-weight: 500;
+  text-align: left;
 }
 
 .merchant-month-picker__picker-wrap {
   position: relative;
-  margin-top: 8rpx;
+  margin-top: 20rpx;
+  padding-bottom: 30rpx;
 }
 
 .merchant-month-picker__picker {
   width: 100%;
-  height: 220rpx;
+  height: 176rpx;
 }
 
 .merchant-month-picker__item {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   height: 88rpx;
   color: #2b2f35;
   font-size: 50rpx;
-  font-weight: 500;
+  font-weight: 400;
+}
+
+.merchant-month-picker__item--year {
+  padding-left: 0;
+}
+
+.merchant-month-picker__item--month {
+  padding-left: 34rpx;
 }
 
 .merchant-month-picker__underline {
   position: absolute;
-  bottom: 16rpx;
-  width: calc(50% - 30rpx);
+  bottom: 0;
+  width: calc(50% - 22rpx);
   height: 2rpx;
   background: #cfd2d8;
 }
@@ -1131,7 +1142,7 @@ function getBillStatusLabel(status: BillStatus) {
 
 .merchant-month-picker__chevron {
   position: absolute;
-  top: 82rpx;
+  top: 80rpx;
   width: 0;
   height: 0;
   border-top: 10rpx solid #6b7078;
@@ -1140,21 +1151,21 @@ function getBillStatusLabel(status: BillStatus) {
 }
 
 .merchant-month-picker__chevron--left {
-  left: calc(25% + 68rpx);
+  left: calc(50% - 36rpx);
 }
 
 .merchant-month-picker__chevron--right {
-  left: calc(75% + 18rpx);
+  right: 12rpx;
 }
 
 .merchant-month-picker__actions {
   justify-content: flex-end;
-  gap: 72rpx;
-  margin-top: 18rpx;
+  gap: 88rpx;
+  margin-top: 34rpx;
 }
 
 .merchant-month-picker__action {
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 700;
 }
 
