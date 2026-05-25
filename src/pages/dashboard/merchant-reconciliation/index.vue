@@ -1085,19 +1085,19 @@ function getBillStatusLabel(status: BillStatus) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 44rpx;
-  margin: 60rpx;
+  margin: 48rpx 0 0;
 }
 
 .merchant-month-picker__label {
   color: #3d4249;
   font-size: 28rpx;
   font-weight: 500;
-  text-align: left;
+  text-align: center;
 }
 
 .merchant-month-picker__picker-wrap {
   position: relative;
-  margin-top: 20rpx;
+  margin-top: 12rpx;
   padding-bottom: 30rpx;
 }
 
@@ -1109,11 +1109,12 @@ function getBillStatusLabel(status: BillStatus) {
 .merchant-month-picker__item {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   height: 88rpx;
   color: #2b2f35;
   font-size: 50rpx;
   font-weight: 400;
+  text-align: center;
 }
 
 .merchant-month-picker__item--year {
@@ -1121,7 +1122,7 @@ function getBillStatusLabel(status: BillStatus) {
 }
 
 .merchant-month-picker__item--month {
-  padding-left: 34rpx;
+  padding-left: 0;
 }
 
 .merchant-month-picker__underline {
