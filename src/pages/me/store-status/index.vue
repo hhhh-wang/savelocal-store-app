@@ -312,14 +312,13 @@ onMounted(() => {
 
 .store-status-option__radio--active {
   border-color: #f4c400;
-  background: #f4c400;
 }
 
 .store-status-option__radio-dot {
   width: 14rpx;
   height: 14rpx;
   border-radius: 9999rpx;
-  background: #1f2023;
+  background: #f4c400;
 }
 
 .store-status-footer {

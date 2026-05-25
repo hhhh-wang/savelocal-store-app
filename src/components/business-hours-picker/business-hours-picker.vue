@@ -665,14 +665,13 @@ function addRange() {
 
 .business-hours-picker__radio--active {
   border-color: #f4c400;
-  background: #f4c400;
 }
 
 .business-hours-picker__radio-dot {
   width: 14rpx;
   height: 14rpx;
   border-radius: 9999rpx;
-  background: #1f2023;
+  background: #f4c400;
 }
 
 .business-hours-picker__mode-text {
