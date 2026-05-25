@@ -791,7 +791,7 @@ function getBillStatusLabel(status: BillStatus) {
   margin-top: 22rpx;
   padding: 18rpx 20rpx;
   border-radius: 24rpx;
-  background: rgba(246, 248, 252, 0.98);
+  background: rgba(245, 247, 251);
   box-shadow: 0 14rpx 34rpx rgba(78, 83, 99, 0.05);
 }
 
@@ -800,8 +800,10 @@ function getBillStatusLabel(status: BillStatus) {
 }
 
 .merchant-order-card__row {
-  justify-content: space-between;
-  gap: 16rpx;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120rpx 120rpx;
+  align-items: center;
+  column-gap: 100rpx;
   min-height: 72rpx;
 }
 
@@ -831,12 +833,12 @@ function getBillStatusLabel(status: BillStatus) {
 }
 
 .merchant-order-card__count {
-  min-width: 80rpx;
+  width: 120rpx;
   text-align: center;
 }
 
 .merchant-order-card__amount {
-  min-width: 120rpx;
+  width: 120rpx;
   text-align: right;
 }
 
