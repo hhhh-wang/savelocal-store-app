@@ -18,7 +18,6 @@ type BillStatus = 'settled' | 'pending'
 
 interface SettlementSummary {
   amount: string
-  subtitle: string
 }
 
 interface OrderStat {
@@ -58,9 +57,9 @@ const settlementTabs = [
 ] as const
 
 const settlementSummaryMap: Record<SettlementTab, SettlementSummary> = {
-  all: { amount: '86.38', subtitle: '待结算 5 笔' },
-  onsite: { amount: '14.38', subtitle: '待结算 1 笔' },
-  group: { amount: '72.00', subtitle: '待结算 4 笔' },
+  all: { amount: '86.38' },
+  onsite: { amount: '14.38' },
+  group: { amount: '72.00' },
 }
 
 const orderStatsMap: Record<SettlementTab, OrderStat[]> = {
@@ -347,9 +346,6 @@ function getBillStatusLabel(status: BillStatus) {
         <view class="merchant-balance-card__body">
           <text class="merchant-balance-card__amount">
             {{ activeSettlementSummary.amount }}
-          </text>
-          <text class="merchant-balance-card__subtitle">
-            {{ activeSettlementSummary.subtitle }}
           </text>
         </view>
       </view>
@@ -721,13 +717,6 @@ function getBillStatusLabel(status: BillStatus) {
   font-size: 76rpx;
   font-weight: 700;
   line-height: 1;
-}
-
-.merchant-balance-card__subtitle {
-  display: block;
-  margin-top: 12rpx;
-  color: #979ca5;
-  font-size: 24rpx;
 }
 
 .merchant-section {
