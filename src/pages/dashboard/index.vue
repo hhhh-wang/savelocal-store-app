@@ -38,7 +38,12 @@ const menuList: DashboardMenuItem[] = [
     background: 'linear-gradient(180deg, #ffa726 0%, #ff9300 100%)',
     path: '/pages/dashboard/product-management/index',
   },
-  { title: '订单管理', short: '单', background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)' },
+  {
+    title: '订单管理',
+    short: '单',
+    background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)',
+    path: '/pages/dashboard/order-management/index',
+  },
   {
     title: '商家对账',
     short: '¥',
