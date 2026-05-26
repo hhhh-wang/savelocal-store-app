@@ -408,8 +408,8 @@ function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) 
 
 .order-tabs {
   display: flex;
-  width: 324rpx;
-  height: 72rpx;
+  width: 400rpx;
+  height: 60rpx;
   margin: 22rpx auto 20rpx;
   overflow: hidden;
   border: 2rpx solid #f4bc1a;
@@ -464,6 +464,7 @@ function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) 
   font-size: 32rpx;
   font-weight: 500;
   line-height: 1;
+
 }
 
 .order-dropdown {
