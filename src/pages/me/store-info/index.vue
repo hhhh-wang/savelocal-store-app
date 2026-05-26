@@ -34,6 +34,7 @@ const storePhonePagePath = '/pages/me/store-phone/index'
 const storeAddressPagePath = '/pages/me/store-address/index'
 const storeStatusPagePath = '/pages/me/store-status/index'
 const storeCategoryPagePath = '/pages/me/store-category/index'
+const storeQualificationsPagePath = '/pages/me/store-qualifications/index'
 
 const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
 
@@ -91,6 +92,13 @@ function handleRowTap(row: StoreInfoRow) {
   if (row.label === '门店电话') {
     uni.navigateTo({
       url: storePhonePagePath,
+    })
+    return
+  }
+
+  if (row.label === '企业资质') {
+    uni.navigateTo({
+      url: storeQualificationsPagePath,
     })
     return
   }
