@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+import addImageIcon from '@/static/icons/add-image.png'
+import deleteIcon from '@/static/icons/delete.png'
+
 defineOptions({
   name: 'StoreQualifications',
 })
@@ -197,15 +200,14 @@ function handleDelete(title: string) {
               <view class="qualification-card__image-wrap">
                 <view class="qualification-card__image-frame">
                   <view class="qualification-card__image-photo">
+                    <image class="qualification-card__image-photo-icon" :src="addImageIcon" mode="aspectFit" />
                     <text class="qualification-card__image-photo-text">
                       {{ upload.title }}
                     </text>
                   </view>
 
                   <view class="qualification-card__delete" @tap="handleDelete(upload.title)">
-                    <text class="qualification-card__delete-icon">
-                      🗑
-                    </text>
+                    <image class="qualification-card__delete-icon" :src="deleteIcon" mode="aspectFit" />
                   </view>
 
                   <view class="qualification-card__upload-mask" @tap="handleUpload(upload.title)">
@@ -431,6 +433,7 @@ function handleDelete(title: string) {
 
 .qualification-card__image-photo {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 430rpx;
@@ -440,7 +443,13 @@ function handleDelete(title: string) {
   box-shadow: inset 0 0 0 8rpx rgba(255, 255, 255, 0.18);
 }
 
+.qualification-card__image-photo-icon {
+  width: 72rpx;
+  height: 72rpx;
+}
+
 .qualification-card__image-photo-text {
+  margin-top: 18rpx;
   color: #b58428;
   font-size: 34rpx;
   font-weight: 700;
@@ -460,8 +469,8 @@ function handleDelete(title: string) {
 }
 
 .qualification-card__delete-icon {
-  font-size: 24rpx;
-  line-height: 1;
+  width: 100%;
+  height: 100%;
 }
 
 .qualification-card__upload-mask {
