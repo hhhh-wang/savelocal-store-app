@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import arrowDownIcon from '@/static/icons/arrow-down.png'
 import productImage from '@/static/images/item-image.png'
 
 defineOptions({
@@ -238,9 +239,12 @@ function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) 
             <text class="order-filter__label">
               {{ activeTimeLabel }}
             </text>
-            <text class="order-filter__arrow">
-              {{ openDropdown === 'time' ? '⌃' : '⌄' }}
-            </text>
+            <image
+              class="order-filter__arrow"
+              :class="{ 'order-filter__arrow--open': openDropdown === 'time' }"
+              :src="arrowDownIcon"
+              mode="aspectFit"
+            />
           </view>
 
           <view v-if="openDropdown === 'time'" class="order-dropdown" @tap.stop>
@@ -266,9 +270,12 @@ function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) 
             <text class="order-filter__label">
               {{ activeStatusLabel }}
             </text>
-            <text class="order-filter__arrow">
-              {{ openDropdown === 'status' ? '⌃' : '⌄' }}
-            </text>
+            <image
+              class="order-filter__arrow"
+              :class="{ 'order-filter__arrow--open': openDropdown === 'status' }"
+              :src="arrowDownIcon"
+              mode="aspectFit"
+            />
           </view>
 
           <view v-if="openDropdown === 'status'" class="order-dropdown order-dropdown--wide" @tap.stop>
@@ -458,13 +465,25 @@ function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) 
   color: #ff7f1f;
 }
 
-.order-filter__label,
-.order-filter__arrow {
+.order-filter__label {
   color: #ff7f1f;
   font-size: 32rpx;
   font-weight: 500;
-  line-height: 1;
+}
 
+.order-filter__label {
+  line-height: 1.2;
+}
+
+.order-filter__arrow {
+  width: 20rpx;
+  height: 12rpx;
+  flex-shrink: 0;
+  margin-top: 4rpx;
+}
+
+.order-filter__arrow--open {
+  transform: rotate(180deg);
 }
 
 .order-dropdown {
