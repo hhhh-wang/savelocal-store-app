@@ -180,6 +180,12 @@ function goToRegister() {
   })
 }
 
+function goToForgotPassword() {
+  uni.navigateTo({
+    url: '/pages/forgot-password/index',
+  })
+}
+
 function navigateToResolvedUrl(url: string) {
   const normalizedUrl = url.split('?')[0]
 
@@ -358,7 +364,7 @@ async function handleLogin() {
               注册账号
             </text>
 
-            <text class="login-shortcuts__action" @tap="showPendingToast('忘记密码入口待接入')">
+            <text class="login-shortcuts__action" @tap="goToForgotPassword">
               忘记密码
             </text>
           </view>
