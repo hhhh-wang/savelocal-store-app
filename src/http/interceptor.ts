@@ -52,7 +52,7 @@ const httpInterceptor = {
     const tokenStore = useTokenStore()
     const token = tokenStore.updateNowTime().validToken
 
-    if (token) {
+    if (token && options.withAuth !== false) {
       options.header.Authorization = `Bearer ${token}`
     }
     return options

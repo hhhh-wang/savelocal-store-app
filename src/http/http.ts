@@ -21,8 +21,11 @@ export function http<T>(options: CustomRequestOptions) {
         const isTokenExpired = res.statusCode === 401 || code === 401
 
         if (isTokenExpired) {
+          if (options.skipAuthHandling) {
+            return reject(res)
+          }
           const tokenStore = useTokenStore()
-          await tokenStore.logout()
+          await tokenStore.logout(false)
           toLoginPage()
           return reject(res)
         }

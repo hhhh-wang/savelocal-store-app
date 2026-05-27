@@ -12,7 +12,7 @@ defineOptions({
 definePage({
   style: {
     navigationStyle: 'custom',
-    navigationBarTitleText: '商家登陆',
+    navigationBarTitleText: '商家登录',
   },
   excludeLoginPath: true,
 })
@@ -93,7 +93,7 @@ async function fetchCaptcha() {
 function switchTab(tab: LoginTab) {
   if (tab === 'phone') {
     uni.showToast({
-      title: '手机号登陆暂未开通',
+      title: '手机号登录暂未开通',
       icon: 'none',
     })
     return
@@ -123,7 +123,7 @@ function handleProtocolTap(protocolName: string) {
 
 function validateForm() {
   if (!form.username.trim()) {
-    showPendingToast('请输入登陆账号')
+    showPendingToast('请输入登录账号')
     return false
   }
 
@@ -196,7 +196,7 @@ async function handleLogin() {
     finishLogin()
   }
   catch (error) {
-    console.error('商家登陆失败:', error)
+    console.error('商家登录失败:', error)
     form.code = ''
 
     if (captchaEnabled.value) {
@@ -225,7 +225,7 @@ async function handleLogin() {
       <view class="login-hero__content">
         <view class="login-hero__copy">
           <text class="login-hero__title">
-            商家登陆端
+            商家登录端
           </text>
           <text class="login-hero__subtitle">
             -欢迎来到省哒-
@@ -244,13 +244,13 @@ async function handleLogin() {
             :class="{ 'login-tabs__item--active': activeTab === 'account' }"
             @tap="switchTab('account')"
           >
-            账号登陆
+            账号登录
           </view>
 
           <view class="login-tabs__divider" />
 
           <view class="login-tabs__item login-tabs__item--muted" @tap="switchTab('phone')">
-            手机登陆
+            手机登录
           </view>
         </view>
       </view>
@@ -261,7 +261,7 @@ async function handleLogin() {
           class="login-input"
           type="text"
           :maxlength="30"
-          placeholder="登陆账号"
+          placeholder="登录账号"
           placeholder-class="login-input__placeholder"
         />
 
@@ -323,7 +323,7 @@ async function handleLogin() {
           </view>
 
           <view class="login-agreement__content">
-            <text>登陆即代表同意</text>
+            <text>登录即代表同意</text>
             <text class="login-agreement__link" @tap.stop="handleProtocolTap('用户协议')">《用户协议》</text>
             <text class="login-agreement__link" @tap.stop="handleProtocolTap('隐私协议')">《隐私协议》</text>
           </view>
@@ -335,7 +335,7 @@ async function handleLogin() {
           hover-class="login-submit--hover"
           @tap="handleLogin"
         >
-          {{ isSubmitting ? '登陆中...' : '一键登陆' }}
+          {{ isSubmitting ? '登录中...' : '登录' }}
         </view>
       </view>
     </view>
@@ -343,12 +343,15 @@ async function handleLogin() {
 </template>
 
 <style lang="scss" scoped>
+
 .login-page {
   min-height: 100vh;
   background: linear-gradient(180deg, #ffcb2f 0%, #ffcb2f 400rpx, #f7f7f7 400rpx, #f7f7f7 100%);
 }
 
 .login-hero {
+  position: relative;
+  z-index: 1;
   padding: calc(env(safe-area-inset-top) + 18rpx) 20rpx 0;
   background: linear-gradient(180deg, #ffcb2f 0%, #ffcb2f 100%);
 }
@@ -359,12 +362,15 @@ async function handleLogin() {
 }
 
 .login-hero__content {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 18rpx;
   min-height: 320rpx;
   margin-top: 24rpx;
+  margin-bottom: 40rpx;
 }
 
 .login-hero__copy {
@@ -398,12 +404,15 @@ async function handleLogin() {
 }
 
 .login-panel {
+  position: relative;
+  z-index: 3;
   min-height: calc(100vh - env(safe-area-inset-top) - 360rpx);
-  margin-top: -30rpx;
-  padding: 44rpx 28rpx calc(env(safe-area-inset-bottom) + 52rpx);
-  border-top-left-radius: 44rpx;
-  border-top-right-radius: 44rpx;
+  margin-top: -82rpx;
+  padding: 74rpx 60rpx calc(env(safe-area-inset-bottom) + 52rpx);
+  border-top-left-radius: 52rpx;
+  border-top-right-radius: 52rpx;
   background: #f7f7f7;
+  box-shadow: 0 -6rpx 20rpx rgba(255, 255, 255, 0.18);
   box-sizing: border-box;
 }
 

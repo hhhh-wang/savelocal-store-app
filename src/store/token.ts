@@ -26,6 +26,7 @@ export const useTokenStore = defineStore(
 
     // 添加一个时间戳 ref 作为响应式依赖
     const nowTime = ref(Date.now())
+    let logoutTask: Promise<void> | null = null
     /**
      * 更新响应式数据:now
      * 确保 isTokenExpired 重新计算,而不是用错误过期缓存值
@@ -70,6 +71,16 @@ export const useTokenStore = defineStore(
       setTokenInfo(nextTokenInfo)
       const userStore = useUserStore()
       await userStore.fetchUserInfo()
+    }
+
+    function clearAuthState() {
+      updateNowTime()
+      uni.removeStorageSync('accessTokenExpireTime')
+      console.log('退出登录-清除用户信息')
+      tokenInfo.value = { ...tokenInfoState }
+      uni.removeStorageSync('token')
+      const userStore = useUserStore()
+      userStore.clearUserInfo()
     }
 
     /**
@@ -138,21 +149,30 @@ export const useTokenStore = defineStore(
     /**
      * 退出登录并清除用户信息
      */
-    const logout = async () => {
-      try {
-        await _logout()
+    const logout = async (notifyServer = true) => {
+      if (logoutTask) {
+        return logoutTask
       }
-      catch (error) {
-        console.error('退出登录失败:', error)
+
+      logoutTask = (async () => {
+        try {
+          if (notifyServer) {
+            await _logout()
+          }
+        }
+        catch (error) {
+          console.error('退出登录失败:', error)
+        }
+        finally {
+          clearAuthState()
+        }
+      })()
+
+      try {
+        await logoutTask
       }
       finally {
-        updateNowTime()
-        uni.removeStorageSync('accessTokenExpireTime')
-        console.log('退出登录-清除用户信息')
-        tokenInfo.value = { ...tokenInfoState }
-        uni.removeStorageSync('token')
-        const userStore = useUserStore()
-        userStore.clearUserInfo()
+        logoutTask = null
       }
     }
 
