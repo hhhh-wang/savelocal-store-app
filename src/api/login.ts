@@ -7,6 +7,8 @@ import { http } from '@/http/http'
 export interface IAccountLoginForm {
   username: string
   password: string
+  code?: string
+  uuid?: string
 }
 
 export type ILoginForm = IAccountLoginForm

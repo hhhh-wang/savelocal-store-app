@@ -14,7 +14,7 @@ interface ToLoginPageOptions {
   queryString?: string
 }
 
-// TODO: 自己增加登录页
+// 商家端登录页
 const LOGIN_PAGE = '/pages/login/index'
 
 /**

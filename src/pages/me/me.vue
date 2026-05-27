@@ -35,6 +35,7 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
+  { title: '登陆', iconText: '登', path: '/pages/login/index' },
   { title: '门店信息', iconText: '店', path: '/pages/me/store-info/index' },
   { title: '通知设置', iconText: '通' },
   { title: '我的合同', iconText: '合', path: '/pages/me/my-contracts/index' },

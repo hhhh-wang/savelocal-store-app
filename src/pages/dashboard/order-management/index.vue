@@ -588,8 +588,8 @@ function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) 
 .order-card__title {
   flex: 1;
   color: #404247;
-  font-size: 36rpx;
-  font-weight: 700;
+  font-size: 32rpx;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -629,7 +629,7 @@ function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) 
 }
 
 .order-card__time {
-  font-size: 28rpx;
+  font-size: 25rpx;
 }
 
 .order-card__count {

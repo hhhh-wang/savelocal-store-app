@@ -23,9 +23,10 @@ export interface IUserInfoRes {
  * 获取验证码
  */
 export interface ICaptcha {
-  captchaEnabled: boolean
+  captchaEnabled?: boolean
   uuid: string
-  image: string
+  image?: string
+  img?: string
 }
 /**
  * 上传成功的信息
