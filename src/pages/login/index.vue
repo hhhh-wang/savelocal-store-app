@@ -174,6 +174,12 @@ function handlePhoneHelpTap() {
   showPendingToast('短信帮助待接入')
 }
 
+function goToRegister() {
+  uni.navigateTo({
+    url: '/pages/register/index',
+  })
+}
+
 function navigateToResolvedUrl(url: string) {
   const normalizedUrl = url.split('?')[0]
 
@@ -348,7 +354,7 @@ async function handleLogin() {
               </text>
             </view>
 
-            <text class="login-shortcuts__action" @tap="showPendingToast('注册账号入口待接入')">
+            <text class="login-shortcuts__action" @tap="goToRegister">
               注册账号
             </text>
 

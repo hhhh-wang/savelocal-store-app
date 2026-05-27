@@ -24,6 +24,15 @@ export interface IAccountLoginForm {
 
 export type ILoginForm = IAccountLoginForm
 
+export interface IMerchantRegisterForm {
+  username: string
+  password: string
+  mobile: string
+  gid: string
+  code?: string
+  uuid?: string
+}
+
 /**
  * 获取验证码
  * @returns ICaptcha 验证码
@@ -52,6 +61,18 @@ export function accountLogin(loginForm: IAccountLoginForm) {
 }
 
 export const login = accountLogin
+
+/**
+ * 商家注册
+ * @param registerForm 注册表单
+ */
+export function merchantRegister(registerForm: IMerchantRegisterForm) {
+  return http.post('/merchant/auth/register', registerForm, undefined, undefined, {
+    withAuth: false,
+  })
+}
+
+export const register = merchantRegister
 
 /**
  * 获取用户信息
