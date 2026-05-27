@@ -39,6 +39,11 @@ const form = reactive<IAccountLoginForm>({
   uuid: '',
 })
 
+const phoneForm = reactive({
+  mobile: '',
+  smsCode: '',
+})
+
 onLoad((options) => {
   redirectUrl.value = typeof options?.redirect === 'string' ? options.redirect : ''
   restoreRememberedAccount()
@@ -91,14 +96,6 @@ async function fetchCaptcha() {
 }
 
 function switchTab(tab: LoginTab) {
-  if (tab === 'phone') {
-    uni.showToast({
-      title: '手机号登录暂未开通',
-      icon: 'none',
-    })
-    return
-  }
-
   activeTab.value = tab
 }
 
@@ -122,6 +119,25 @@ function handleProtocolTap(protocolName: string) {
 }
 
 function validateForm() {
+  if (activeTab.value === 'phone') {
+    if (!/^1\d{10}$/.test(phoneForm.mobile.trim())) {
+      showPendingToast('请输入正确的手机号')
+      return false
+    }
+
+    if (!phoneForm.smsCode.trim()) {
+      showPendingToast('请输入短信验证码')
+      return false
+    }
+
+    if (!agreementChecked.value) {
+      showPendingToast('请先勾选协议')
+      return false
+    }
+
+    return true
+  }
+
   if (!form.username.trim()) {
     showPendingToast('请输入登录账号')
     return false
@@ -143,6 +159,19 @@ function validateForm() {
   }
 
   return true
+}
+
+function handlePhoneCodeTap() {
+  if (!/^1\d{10}$/.test(phoneForm.mobile.trim())) {
+    showPendingToast('请先输入正确的手机号')
+    return
+  }
+
+  showPendingToast('短信验证码发送待接入')
+}
+
+function handlePhoneHelpTap() {
+  showPendingToast('短信帮助待接入')
 }
 
 function navigateToResolvedUrl(url: string) {
@@ -184,6 +213,12 @@ async function handleLogin() {
 
   try {
     isSubmitting.value = true
+
+    if (activeTab.value === 'phone') {
+      showPendingToast('手机号登录待接入')
+      return
+    }
+
     syncRememberedAccount()
 
     await tokenStore.login({
@@ -249,73 +284,108 @@ async function handleLogin() {
 
           <view class="login-tabs__divider" />
 
-          <view class="login-tabs__item login-tabs__item--muted" @tap="switchTab('phone')">
+          <view
+            class="login-tabs__item"
+            :class="{ 'login-tabs__item--active': activeTab === 'phone' }"
+            @tap="switchTab('phone')"
+          >
             手机登录
           </view>
         </view>
       </view>
 
       <view class="login-form">
-        <input
-          v-model="form.username"
-          class="login-input"
-          type="text"
-          :maxlength="30"
-          placeholder="登录账号"
-          placeholder-class="login-input__placeholder"
-        />
-
-        <input
-          v-model="form.password"
-          class="login-input login-input--spaced"
-          type="text"
-          :password="true"
-          :maxlength="30"
-          placeholder="密码"
-          placeholder-class="login-input__placeholder"
-        />
-
-        <view v-if="captchaEnabled" class="login-captcha">
-          <view class="login-captcha__preview" hover-class="login-captcha__preview--hover" @tap="fetchCaptcha">
-            <image
-              v-if="captchaImageUrl"
-              class="login-captcha__image"
-              :src="captchaImageUrl"
-              mode="aspectFill"
-            />
-            <text v-else class="login-captcha__refresh">
-              换一张
-            </text>
-          </view>
-
+        <template v-if="activeTab === 'account'">
           <input
-            v-model="form.code"
-            class="login-captcha__input"
+            v-model="form.username"
+            class="login-input"
             type="text"
-            :maxlength="10"
-            placeholder="请输入验证码"
+            :maxlength="30"
+            placeholder="登录账号"
             placeholder-class="login-input__placeholder"
           />
-        </view>
 
-        <view class="login-shortcuts">
-          <view class="login-shortcuts__remember" @tap="toggleRememberAccount">
-            <view class="login-checkbox" :class="{ 'login-checkbox--checked': rememberAccount }">
-              <text class="login-checkbox__icon">✓</text>
+          <input
+            v-model="form.password"
+            class="login-input login-input--spaced"
+            type="text"
+            :password="true"
+            :maxlength="30"
+            placeholder="密码"
+            placeholder-class="login-input__placeholder"
+          />
+
+          <view v-if="captchaEnabled" class="login-captcha">
+            <view class="login-captcha__preview" hover-class="login-captcha__preview--hover" @tap="fetchCaptcha">
+              <image
+                v-if="captchaImageUrl"
+                class="login-captcha__image"
+                :src="captchaImageUrl"
+                mode="aspectFill"
+              />
+              <text v-else class="login-captcha__refresh">
+                换一张
+              </text>
             </view>
-            <text class="login-shortcuts__text">
-              记住账号
+
+            <input
+              v-model="form.code"
+              class="login-captcha__input"
+              type="text"
+              :maxlength="10"
+              placeholder="请输入验证码"
+              placeholder-class="login-input__placeholder"
+            />
+          </view>
+
+          <view class="login-shortcuts">
+            <view class="login-shortcuts__remember" @tap="toggleRememberAccount">
+              <view class="login-checkbox" :class="{ 'login-checkbox--checked': rememberAccount }">
+                <text class="login-checkbox__icon">✓</text>
+              </view>
+              <text class="login-shortcuts__text">
+                记住账号
+              </text>
+            </view>
+
+            <text class="login-shortcuts__action" @tap="showPendingToast('注册账号入口待接入')">
+              注册账号
+            </text>
+
+            <text class="login-shortcuts__action" @tap="showPendingToast('忘记密码入口待接入')">
+              忘记密码
+            </text>
+          </view>
+        </template>
+
+        <template v-else>
+          <input
+            v-model="phoneForm.mobile"
+            class="login-input"
+            type="number"
+            :maxlength="11"
+            placeholder="输入手机号"
+            placeholder-class="login-input__placeholder"
+          />
+
+          <view class="login-phone-code">
+            <input
+              v-model="phoneForm.smsCode"
+              class="login-phone-code__input"
+              type="number"
+              :maxlength="6"
+              placeholder="输入短信验证码"
+              placeholder-class="login-input__placeholder"
+            />
+            <text class="login-phone-code__action" @tap="handlePhoneCodeTap">
+              获取验证码
             </text>
           </view>
 
-          <text class="login-shortcuts__action" @tap="showPendingToast('注册账号入口待接入')">
-            注册账号
-          </text>
-
-          <text class="login-shortcuts__action" @tap="showPendingToast('忘记密码入口待接入')">
-            忘记密码
-          </text>
-        </view>
+          <view class="login-phone-help" @tap="handlePhoneHelpTap">
+            收不到验证码？
+          </view>
+        </template>
 
         <view class="login-agreement" @tap="toggleAgreement">
           <view class="login-checkbox" :class="{ 'login-checkbox--checked': agreementChecked }">
@@ -443,10 +513,6 @@ async function handleLogin() {
   color: #ffb200;
 }
 
-.login-tabs__item--muted {
-  color: #c5c5c5;
-}
-
 .login-tabs__divider {
   width: 2rpx;
   height: 54rpx;
@@ -532,6 +598,41 @@ async function handleLogin() {
   font-size: 28rpx;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.login-phone-code {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 96rpx;
+  margin-top: 24rpx;
+  padding: 0 34rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #f7f0d0 0%, #f9f4db 100%);
+  box-sizing: border-box;
+}
+
+.login-phone-code__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  color: #353535;
+  font-size: 32rpx;
+}
+
+.login-phone-code__action {
+  flex-shrink: 0;
+  color: #ffae12;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.login-phone-help {
+  margin-top: 58rpx;
+  color: #b0b0b0;
+  font-size: 28rpx;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .login-agreement {
