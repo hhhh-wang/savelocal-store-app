@@ -40,7 +40,8 @@ export function http<T>(options: CustomRequestOptions) {
             })
             return reject(responseData.data)
           }
-          return resolve(responseData.data)
+          const hasDataField = Object.prototype.hasOwnProperty.call(responseData, 'data')
+          return resolve((hasDataField ? responseData.data : responseData) as T)
         }
 
         // 处理其他错误

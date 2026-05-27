@@ -1,6 +1,17 @@
 import type { IAuthLoginRes, ICaptcha, IUpdateInfo, IUpdatePassword, IUserInfoRes } from './types/login'
 import { http } from '@/http/http'
 
+const MERCHANT_TOKEN_EXPIRES_IN_SECONDS = 43200 * 60
+
+interface MerchantProfileResponse {
+  user?: Record<string, any>
+  userInfo?: Record<string, any>
+  merchantInfo?: Record<string, any>
+  roles?: string[]
+  permissions?: string[]
+  [key: string]: any
+}
+
 /**
  * 登录表单
  */
@@ -18,7 +29,7 @@ export type ILoginForm = IAccountLoginForm
  * @returns ICaptcha 验证码
  */
 export function getCaptcha() {
-  return http.get<ICaptcha>('/user/getCode', undefined, undefined, {
+  return http.get<ICaptcha>('/captchaImage', undefined, undefined, {
     withAuth: false,
   })
 }
@@ -30,8 +41,13 @@ export const getCode = getCaptcha
  * @param loginForm 登录表单
  */
 export function accountLogin(loginForm: IAccountLoginForm) {
-  return http.post<IAuthLoginRes>('/auth/login', loginForm, undefined, undefined, {
+  return http.post<{ token: string }>('/merchant/auth/login', loginForm, undefined, undefined, {
     withAuth: false,
+  }).then((res) => {
+    return {
+      token: res.token || '',
+      expiresIn: MERCHANT_TOKEN_EXPIRES_IN_SECONDS,
+    } satisfies IAuthLoginRes
   })
 }
 
@@ -41,7 +57,21 @@ export const login = accountLogin
  * 获取用户信息
  */
 export function getCurrentUserInfo() {
-  return http.get<IUserInfoRes>('/user/info')
+  return http.get<MerchantProfileResponse>('/merchant/auth/profile').then((res) => {
+    const source = res.userInfo || res.user || {}
+
+    return {
+      userId: Number(source.merchantUserId || source.userId || -1),
+      username: source.loginName || source.username || source.userName || '',
+      nickname: source.nickName || source.nickname || source.loginName || source.username || '',
+      avatar: source.avatar || '/static/images/default-avatar.png',
+      role: Array.isArray(res.roles) ? res.roles[0] : source.role,
+      roles: Array.isArray(res.roles) ? res.roles : source.roles,
+      permissions: Array.isArray(res.permissions) ? res.permissions : source.permissions,
+      merchantInfo: res.merchantInfo,
+      ...source,
+    } satisfies IUserInfoRes
+  })
 }
 
 export const getUserInfo = getCurrentUserInfo
@@ -50,7 +80,7 @@ export const getUserInfo = getCurrentUserInfo
  * 退出登录
  */
 export function logout() {
-  return http.get<void>('/auth/logout', undefined, undefined, {
+  return http.post<void>('/merchant/auth/logout', undefined, undefined, undefined, {
     hideErrorToast: true,
     skipAuthHandling: true,
   })
