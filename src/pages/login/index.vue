@@ -377,7 +377,7 @@ async function handleLogin() {
 
 .login-hero__title {
   color: #5d4600;
-  font-size: 68rpx;
+  font-size: 58rpx;
   font-weight: 800;
   line-height: 1.1;
 }
@@ -387,6 +387,7 @@ async function handleLogin() {
   font-size: 32rpx;
   font-weight: 700;
   line-height: 1.2;
+  text-align: center;
 }
 
 .login-hero__image {
@@ -506,7 +507,7 @@ async function handleLogin() {
   align-items: center;
   justify-content: space-between;
   gap: 18rpx;
-  margin-top: 42rpx;
+  margin-top: 68rpx;
 }
 
 .login-shortcuts__remember {
@@ -527,20 +528,18 @@ async function handleLogin() {
 .login-agreement {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 14rpx;
   margin-top: 58rpx;
-  padding: 26rpx 24rpx;
-  border-radius: 24rpx;
-  background: #ffffff;
-  box-shadow: 0 14rpx 36rpx rgba(44, 47, 54, 0.04);
+  padding: 0 12rpx;
 }
 
 .login-agreement__content {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  color: #666666;
-  font-size: 25rpx;
+  color: #8b8b8b;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
