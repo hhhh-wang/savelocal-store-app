@@ -14,13 +14,23 @@ definePage({
   },
 })
 
+type AlbumImageStatus = '通过' | '未通过'
+
 interface AlbumImage {
   id: number
   src: string
-  status: '通过' | '未通过'
+  status: AlbumImageStatus
 }
 
+const fallbackUrl = '/pages/dashboard/product-management/index'
 const storeName = '喵小厨美食社（现炒盖饭..吃）的官方相册'
+const selectMode = ref(false)
+const selectApprovedOnly = ref(false)
+type OpenerEventChannel = {
+  emit: (eventName: string, ...args: any[]) => void
+}
+
+let openerEventChannel: OpenerEventChannel | null = null
 
 const albumStats = {
   total: 50,
@@ -36,6 +46,23 @@ const albumImages: AlbumImage[] = [
   { id: 6, src: albumThumb2, status: '通过' },
 ]
 
+const approvedImages = computed(() => albumImages.filter(item => item.status === '通过'))
+const displayImages = computed(() => {
+  if (selectMode.value && selectApprovedOnly.value) {
+    return approvedImages.value
+  }
+
+  return albumImages
+})
+
+const albumHeaderTitle = computed(() => {
+  if (selectMode.value) {
+    return `已审核通过图片（${displayImages.value.length}/${albumImages.length}）`
+  }
+
+  return `${storeName}（${albumStats.selected}/${albumStats.total}）`
+})
+
 function handleDelete() {
   uni.showToast({
     title: '删除入口待接入',
@@ -49,6 +76,25 @@ function handleUpload() {
     icon: 'none',
   })
 }
+
+function handleImageTap(item: AlbumImage) {
+  if (!selectMode.value) {
+    return
+  }
+
+  openerEventChannel?.emit('selectImage', item)
+  uni.navigateBack()
+}
+
+onLoad((options) => {
+  selectMode.value = options?.mode === 'select'
+  selectApprovedOnly.value = options?.status === 'approved'
+  const currentPage = getCurrentPages()[getCurrentPages().length - 1] as {
+    getOpenerEventChannel?: () => OpenerEventChannel
+  } | undefined
+
+  openerEventChannel = currentPage?.getOpenerEventChannel?.() || null
+})
 </script>
 
 <template>
@@ -56,7 +102,7 @@ function handleUpload() {
     <view class="menu-album-page__content">
       <view class="menu-album-nav">
         <back-button
-          fallback-url="/pages/dashboard/product-management/index"
+          :fallback-url="fallbackUrl"
           fallback-mode="navigateTo"
           color="#23262c"
           background="transparent"
@@ -72,15 +118,21 @@ function handleUpload() {
       <view class="album-card">
         <view class="album-card__header">
           <text class="album-card__title">
-            {{ storeName }}（{{ albumStats.selected }}/{{ albumStats.total }}）
+            {{ albumHeaderTitle }}
+          </text>
+          <text v-if="selectMode" class="album-card__tip">
+            点击一张已审核通过的图片后将返回编辑页
           </text>
         </view>
 
         <view class="album-grid">
           <view
-            v-for="item in albumImages"
+            v-for="item in displayImages"
             :key="item.id"
             class="album-grid__item"
+            :class="{ 'album-grid__item--selectable': selectMode }"
+            hover-class="album-grid__item--hover"
+            @tap="handleImageTap(item)"
           >
             <image class="album-grid__image" :src="item.src" mode="aspectFill" />
             <view class="album-grid__status">
@@ -98,13 +150,16 @@ function handleUpload() {
         </view>
       </view>
 
-      <view class="menu-album-actions">
+      <view v-if="!selectMode" class="menu-album-actions">
         <view class="menu-album-actions__button menu-album-actions__button--delete" hover-class="menu-album-actions__button--hover" @tap="handleDelete">
           删除
         </view>
         <view class="menu-album-actions__button menu-album-actions__button--upload" hover-class="menu-album-actions__button--hover" @tap="handleUpload">
           上传图片
         </view>
+      </view>
+      <view v-else class="menu-album-select-bar">
+        仅展示审核通过图片
       </view>
     </view>
   </view>
@@ -155,6 +210,14 @@ function handleUpload() {
   line-height: 1.35;
 }
 
+.album-card__tip {
+  display: block;
+  margin-top: 8rpx;
+  color: #8a9099;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
 .album-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -168,6 +231,14 @@ function handleUpload() {
   border-radius: 8rpx;
   background: #f7f7f7;
   box-shadow: inset 0 0 0 2rpx rgba(0, 0, 0, 0.04);
+}
+
+.album-grid__item--selectable {
+  cursor: pointer;
+}
+
+.album-grid__item--hover {
+  opacity: 0.9;
 }
 
 .album-grid__image {
@@ -229,5 +300,18 @@ function handleUpload() {
 
 .menu-album-actions__button--hover {
   opacity: 0.86;
+}
+
+.menu-album-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 84rpx;
+  margin-top: 22rpx;
+  border-radius: 10rpx;
+  color: #6f7681;
+  font-size: 28rpx;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 2rpx #ececec;
 }
 </style>

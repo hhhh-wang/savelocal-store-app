@@ -12,6 +12,11 @@ definePage({
 
 type EditorMode = 'create' | 'edit'
 type ProductKind = 'single' | 'set'
+type SelectedAlbumImage = {
+  id: number
+  src: string
+  status: '通过' | '未通过'
+}
 
 const fallbackUrl = '/pages/dashboard/product-library/index'
 
@@ -21,6 +26,7 @@ const pageTitle = computed(() => editorMode.value === 'create' ? '新增商品' 
 const form = reactive({
   name: '青椒炒肉',
   imageText: '',
+  imageUrl: '',
   kind: 'single' as ProductKind,
   tag: '无',
   price: '28',
@@ -34,6 +40,7 @@ function applyMode(mode?: string) {
   if (editorMode.value === 'create') {
     form.name = ''
     form.imageText = ''
+    form.imageUrl = ''
     form.kind = 'single'
     form.tag = '无'
     form.price = ''
@@ -44,6 +51,7 @@ function applyMode(mode?: string) {
 
   form.name = '青椒炒肉'
   form.imageText = ''
+  form.imageUrl = ''
   form.kind = 'single'
   form.tag = '无'
   form.price = '28'
@@ -65,9 +73,14 @@ function handleClose() {
 }
 
 function handleSelectImage() {
-  uni.showToast({
-    title: '图片上传待接入',
-    icon: 'none',
+  uni.navigateTo({
+    url: '/pages/dashboard/menu-album/index?mode=select&status=approved',
+    events: {
+      selectImage: (image: SelectedAlbumImage) => {
+        form.imageUrl = image.src
+        form.imageText = '已选择图片'
+      },
+    },
   })
 }
 
@@ -140,7 +153,16 @@ onLoad((options) => {
             </view>
 
             <view class="product-editor-row__value-wrap">
-              <text class="product-editor-row__value" :class="{ 'product-editor-row__value--placeholder': !form.imageText }">
+              <image
+                v-if="form.imageUrl"
+                class="product-editor-row__thumb"
+                :src="form.imageUrl"
+                mode="aspectFill"
+              />
+              <text
+                class="product-editor-row__value"
+                :class="{ 'product-editor-row__value--placeholder': !form.imageText && !form.imageUrl }"
+              >
                 {{ form.imageText || '' }}
               </text>
               <text class="product-editor-row__arrow">›</text>
@@ -377,6 +399,14 @@ onLoad((options) => {
   display: flex;
   align-items: center;
   gap: 10rpx;
+}
+
+.product-editor-row__thumb {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 10rpx;
+  background: #f2f2f2;
+  flex-shrink: 0;
 }
 
 .product-editor-row__value {
