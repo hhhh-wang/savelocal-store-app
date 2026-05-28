@@ -12,6 +12,15 @@ definePage({
 
 type EditorMode = 'create' | 'edit'
 type ProductKind = 'single' | 'set'
+type ProductEditorPayload = {
+  name?: string
+  imageUrl?: string
+  kind?: ProductKind
+  tag?: string
+  price?: string
+  unit?: string
+  description?: string
+}
 type SelectedAlbumImage = {
   id: number
   src: string
@@ -20,12 +29,17 @@ type SelectedAlbumImage = {
 
 const fallbackUrl = '/pages/dashboard/product-library/index'
 const specOptions = ['锅', '包', '例', '袋', '1升桶', '玻璃瓶'] as const
-
-const editorMode = ref<EditorMode>('edit')
-const pageTitle = computed(() => editorMode.value === 'create' ? '新增商品' : '编辑菜品')
-const showSpecPicker = ref(false)
-
-const form = reactive({
+const defaultCreateForm = {
+  name: '',
+  imageText: '',
+  imageUrl: '',
+  kind: 'single' as ProductKind,
+  tag: '无',
+  price: '',
+  unit: '',
+  description: '',
+}
+const defaultEditForm = {
   name: '青椒炒肉',
   imageText: '',
   imageUrl: '',
@@ -34,31 +48,54 @@ const form = reactive({
   price: '28',
   unit: '份',
   description: '',
-})
+}
 
-function applyMode(mode?: string) {
+const editorMode = ref<EditorMode>('edit')
+const pageTitle = computed(() => editorMode.value === 'create' ? '新增商品' : '编辑菜品')
+const showSpecPicker = ref(false)
+
+const form = reactive({ ...defaultEditForm })
+
+function parseProductPayload(rawValue?: string): ProductEditorPayload | null {
+  if (!rawValue) {
+    return null
+  }
+
+  try {
+    return JSON.parse(decodeURIComponent(rawValue)) as ProductEditorPayload
+  }
+  catch (error) {
+    console.log('商品编辑页解析商品数据失败:', error)
+    return null
+  }
+}
+
+function applyFormValues(values: typeof defaultEditForm) {
+  form.name = values.name
+  form.imageText = values.imageText
+  form.imageUrl = values.imageUrl
+  form.kind = values.kind
+  form.tag = values.tag
+  form.price = values.price
+  form.unit = values.unit
+  form.description = values.description
+}
+
+function applyMode(mode?: string, productPayload?: ProductEditorPayload | null) {
   editorMode.value = mode === 'create' ? 'create' : 'edit'
 
   if (editorMode.value === 'create') {
-    form.name = ''
-    form.imageText = ''
-    form.imageUrl = ''
-    form.kind = 'single'
-    form.tag = '无'
-    form.price = ''
-    form.unit = ''
-    form.description = ''
+    applyFormValues({ ...defaultCreateForm })
     return
   }
 
-  form.name = '青椒炒肉'
-  form.imageText = ''
-  form.imageUrl = ''
-  form.kind = 'single'
-  form.tag = '无'
-  form.price = '28'
-  form.unit = '份'
-  form.description = ''
+  const nextFormValues = {
+    ...defaultEditForm,
+    ...productPayload,
+  }
+
+  nextFormValues.imageText = nextFormValues.imageUrl ? '已选择图片' : ''
+  applyFormValues(nextFormValues)
 }
 
 function handleClose() {
@@ -118,7 +155,7 @@ function handleSubmit() {
 }
 
 onLoad((options) => {
-  applyMode(options?.mode)
+  applyMode(options?.mode, parseProductPayload(options?.product))
 })
 </script>
 

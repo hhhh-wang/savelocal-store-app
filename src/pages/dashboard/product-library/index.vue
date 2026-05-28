@@ -14,6 +14,15 @@ definePage({
 
 type ProductStatus = '上架' | '下架'
 type ProductAction = '上架' | '下架'
+type ProductEditorPayload = {
+  name: string
+  imageUrl: string
+  kind: 'single' | 'set'
+  tag: string
+  price: string
+  unit: string
+  description: string
+}
 
 interface ProductItem {
   id: string
@@ -26,7 +35,7 @@ interface ProductItem {
   image: string
 }
 
-type HeaderAction = '批量下架' | '新建商品' | '编辑'
+type HeaderAction = '批量下架' | '新建商品'
 
 const fallbackUrl = '/pages/dashboard/product-management/index'
 
@@ -88,11 +97,24 @@ function handleClose() {
   })
 }
 
-function navigateToEditor(mode: 'create' | 'edit', productId?: string) {
+function buildProductEditorPayload(product: ProductItem): ProductEditorPayload {
+  return {
+    name: product.name,
+    imageUrl: product.image,
+    kind: product.unitLabel === '套餐' ? 'set' : 'single',
+    tag: '无',
+    price: product.price.split('.')[0] || product.price,
+    unit: '份',
+    description: '',
+  }
+}
+
+function navigateToEditor(mode: 'create' | 'edit', product?: ProductItem) {
   const query = [`mode=${mode}`]
 
-  if (productId) {
-    query.push(`id=${productId}`)
+  if (product) {
+    query.push(`id=${product.id}`)
+    query.push(`product=${encodeURIComponent(JSON.stringify(buildProductEditorPayload(product)))}`)
   }
 
   uni.navigateTo({
@@ -106,21 +128,22 @@ function handleHeaderAction(action: HeaderAction) {
     return
   }
 
-  if (action === '编辑') {
-    navigateToEditor('edit', products[0]?.id)
-    return
-  }
-
   uni.showToast({
     title: `${action}功能待接入`,
     icon: 'none',
   })
 }
 
-function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | ProductAction) {
-  const actionTextMap: Record<typeof action, string> = {
+function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 'edit' | ProductAction) {
+  if (action === 'edit') {
+    navigateToEditor('edit', product)
+    return
+  }
+
+  const actionTextMap: Record<'detail' | 'stock' | 'edit' | ProductAction, string> = {
     detail: '商品详情',
     stock: '库存管理',
+    edit: '商品编辑',
     上架: '商品上架',
     下架: '商品下架',
   }
@@ -178,14 +201,6 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
           >
             新建商品
           </view>
-
-          <view
-            class="product-library-toolbar__button"
-            hover-class="product-library-toolbar__button--hover"
-            @tap="handleHeaderAction('编辑')"
-          >
-            编辑
-          </view>
         </view>
       </view>
 
@@ -241,6 +256,14 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
                 </text>
 
                 <view class="product-item__actions">
+                  <view
+                    class="product-item__action-button"
+                    hover-class="product-item__action-button--hover"
+                    @tap.stop="handleProductAction(product, 'edit')"
+                  >
+                    编辑
+                  </view>
+
                   <view
                     class="product-item__action-button"
                     hover-class="product-item__action-button--hover"
