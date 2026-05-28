@@ -38,6 +38,8 @@ interface ProductItem {
 type HeaderAction = '批量下架' | '新建商品'
 
 const fallbackUrl = '/pages/dashboard/product-management/index'
+const isBatchMode = ref(false)
+const selectedProductIds = ref<string[]>([])
 
 const products: ProductItem[] = [
   {
@@ -83,6 +85,7 @@ const products: ProductItem[] = [
 ]
 
 const totalCount = computed(() => products.length)
+const selectedCount = computed(() => selectedProductIds.value.length)
 
 function handleClose() {
   const pages = getCurrentPages()
@@ -123,6 +126,16 @@ function navigateToEditor(mode: 'create' | 'edit', product?: ProductItem) {
 }
 
 function handleHeaderAction(action: HeaderAction) {
+  if (action === '批量下架') {
+    isBatchMode.value = !isBatchMode.value
+
+    if (!isBatchMode.value) {
+      selectedProductIds.value = []
+    }
+
+    return
+  }
+
   if (action === '新建商品') {
     navigateToEditor('create')
     return
@@ -135,6 +148,11 @@ function handleHeaderAction(action: HeaderAction) {
 }
 
 function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 'edit' | ProductAction) {
+  if (isBatchMode.value) {
+    toggleProductSelection(product.id)
+    return
+  }
+
   if (action === 'edit') {
     navigateToEditor('edit', product)
     return
@@ -152,6 +170,15 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
     title: `${product.name}${actionTextMap[action]}待接入`,
     icon: 'none',
   })
+}
+
+function toggleProductSelection(productId: string) {
+  if (selectedProductIds.value.includes(productId)) {
+    selectedProductIds.value = selectedProductIds.value.filter(id => id !== productId)
+    return
+  }
+
+  selectedProductIds.value = [...selectedProductIds.value, productId]
 }
 </script>
 
@@ -182,19 +209,21 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
 
       <view class="product-library-toolbar">
         <text class="product-library-toolbar__count">
-          {{ totalCount }}个商品
+          {{ isBatchMode ? `已选择${selectedCount}个` : `${totalCount}个商品` }}
         </text>
 
         <view class="product-library-toolbar__actions">
           <view
             class="product-library-toolbar__button"
             hover-class="product-library-toolbar__button--hover"
+            :class="{ 'product-library-toolbar__button--active': isBatchMode }"
             @tap="handleHeaderAction('批量下架')"
           >
-            批量下架
+            {{ isBatchMode ? '完成' : '批量下架' }}
           </view>
 
           <view
+            v-if="!isBatchMode"
             class="product-library-toolbar__button"
             hover-class="product-library-toolbar__button--hover"
             @tap="handleHeaderAction('新建商品')"
@@ -209,9 +238,18 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
           v-for="product in products"
           :key="product.id"
           class="product-item"
+          :class="{ 'product-item--batch': isBatchMode }"
           hover-class="product-item--hover"
           @tap="handleProductAction(product, 'detail')"
         >
+          <view
+            v-if="isBatchMode"
+            class="product-item__checkbox"
+            :class="{ 'product-item__checkbox--checked': selectedProductIds.includes(product.id) }"
+          >
+            <text class="product-item__checkbox-icon">✓</text>
+          </view>
+
           <image class="product-item__image" :src="product.image" mode="aspectFill" />
 
           <view class="product-item__content">
@@ -255,7 +293,7 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
                   已{{ product.status }}
                 </text>
 
-                <view class="product-item__actions">
+                <view v-if="!isBatchMode" class="product-item__actions">
                   <view
                     class="product-item__action-button"
                     hover-class="product-item__action-button--hover"
@@ -378,6 +416,12 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
   opacity: 0.86;
 }
 
+.product-library-toolbar__button--active {
+  color: #ffffff;
+  border-color: #ff8b1f;
+  background: #ff8b1f;
+}
+
 .product-library-list {
   background: #ffffff;
 }
@@ -389,8 +433,40 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
   border-bottom: 2rpx solid #f4f4f4;
 }
 
+.product-item--batch {
+  align-items: center;
+}
+
 .product-item--hover {
   opacity: 0.94;
+}
+
+.product-item__checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36rpx;
+  height: 36rpx;
+  flex-shrink: 0;
+  margin-top: 6rpx;
+  border: 2rpx solid #d3d7dd;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.product-item__checkbox--checked {
+  border-color: #ff8b1f;
+  background: #ff8b1f;
+}
+
+.product-item__checkbox-icon {
+  color: transparent;
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.product-item__checkbox--checked .product-item__checkbox-icon {
+  color: #ffffff;
 }
 
 .product-item__image {

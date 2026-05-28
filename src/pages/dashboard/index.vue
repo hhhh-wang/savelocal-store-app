@@ -1,6 +1,11 @@
 <script lang="ts" setup>
+import afterSalesIcon from '@/static/icons/dashboard/after-sales.png'
+import allIcon from '@/static/icons/dashboard/all.png'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
+import merchantReconciliationIcon from '@/static/icons/dashboard/merchant-reconciliation.png'
+import orderManagementIcon from '@/static/icons/dashboard/order-management.png'
+import productManagementIcon from '@/static/icons/dashboard/product-management.png'
 
 defineOptions({
   name: 'Home',
@@ -26,37 +31,32 @@ const stats = [
 
 interface DashboardMenuItem {
   title: string
-  short: string
-  background: string
+  icon: string
   path?: string
 }
 
 const menuList: DashboardMenuItem[] = [
   {
     title: '商品管理',
-    short: '商',
-    background: 'linear-gradient(180deg, #ffa726 0%, #ff9300 100%)',
+    icon: productManagementIcon,
     path: '/pages/dashboard/product-management/index',
   },
   {
     title: '订单管理',
-    short: '单',
-    background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)',
+    icon: orderManagementIcon,
     path: '/pages/dashboard/order-management/index',
   },
   {
     title: '商家对账',
-    short: '¥',
-    background: 'linear-gradient(180deg, #74dc62 0%, #42bf33 100%)',
+    icon: merchantReconciliationIcon,
     path: '/pages/dashboard/merchant-reconciliation/index',
   },
   {
     title: '售后管理',
-    short: '售',
-    background: 'linear-gradient(180deg, #5ea8ff 0%, #3a8cff 100%)',
+    icon: afterSalesIcon,
     path: '/pages/dashboard/after-sales/index',
   },
-  { title: '全部', short: '全', background: 'linear-gradient(180deg, #d0d6e2 0%, #bcc4d4 100%)' },
+  { title: '全部', icon: allIcon },
 ]
 
 const assistantTabs = [
@@ -160,9 +160,7 @@ function handleMenuTap(item: DashboardMenuItem) {
             hover-class="menu-grid__item--hover"
             @tap="handleMenuTap(item)"
           >
-            <view class="menu-grid__icon" :style="{ background: item.background }">
-              {{ item.short }}
-            </view>
+            <image class="menu-grid__icon" :src="item.icon" mode="aspectFit" />
             <text class="menu-grid__title">
               {{ item.title }}
             </text>
@@ -391,16 +389,8 @@ function handleMenuTap(item: DashboardMenuItem) {
 }
 
 .menu-grid__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 60rpx;
-  height: 60rpx;
-  border-radius: 16rpx;
-  color: #fff;
-  font-size: 28rpx;
-  font-weight: 700;
-  box-shadow: 0 10rpx 20rpx rgba(74, 102, 153, 0.12);
+  width: 72rpx;
+  height: 72rpx;
 }
 
 .menu-grid__title {
