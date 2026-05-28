@@ -26,6 +26,8 @@ interface ProductItem {
   image: string
 }
 
+type HeaderAction = '批量下架' | '新建商品' | '编辑'
+
 const fallbackUrl = '/pages/dashboard/product-management/index'
 
 const products: ProductItem[] = [
@@ -86,7 +88,29 @@ function handleClose() {
   })
 }
 
-function handleHeaderAction(action: string) {
+function navigateToEditor(mode: 'create' | 'edit', productId?: string) {
+  const query = [`mode=${mode}`]
+
+  if (productId) {
+    query.push(`id=${productId}`)
+  }
+
+  uni.navigateTo({
+    url: `/pages/dashboard/product-editor/index?${query.join('&')}`,
+  })
+}
+
+function handleHeaderAction(action: HeaderAction) {
+  if (action === '新建商品') {
+    navigateToEditor('create')
+    return
+  }
+
+  if (action === '编辑') {
+    navigateToEditor('edit', products[0]?.id)
+    return
+  }
+
   uni.showToast({
     title: `${action}功能待接入`,
     icon: 'none',
@@ -391,7 +415,7 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
   min-width: 0;
   overflow: hidden;
   color: #33363d;
-  font-size: 40rpx;
+  font-size: 35rpx;
   font-weight: 700;
   line-height: 1.28;
   text-overflow: ellipsis;
