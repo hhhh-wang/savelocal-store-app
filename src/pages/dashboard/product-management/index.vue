@@ -27,6 +27,7 @@ const productCards: ProductCard[] = [
     subtitle: '管理门店所有上线菜品信息',
     image: dishLibraryImage,
     themeClass: 'product-management-card--library',
+    path: '/pages/dashboard/product-library/index',
   },
   {
     title: '商品图片',

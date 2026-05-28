@@ -353,6 +353,7 @@ async function handleRegister() {
   flex-direction: column;
   gap: 18rpx;
   padding: 0 12rpx 96rpx;
+  text-align: center;
 }
 
 .register-hero__title {
