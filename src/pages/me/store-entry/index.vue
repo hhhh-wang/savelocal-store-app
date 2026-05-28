@@ -75,36 +75,7 @@ function handleActionTap(card: typeof actionCards[number]) {
       <view class="store-entry-layout">
         <view class="store-entry-demo">
           <view class="store-entry-demo__phone">
-            <image class="store-entry-demo__image" :src="storeEntryBanner" mode="aspectFill" />
-
-            <view class="store-entry-demo__focus">
-              <view class="store-entry-demo__focus-thumb" />
-
-              <view class="store-entry-demo__focus-body">
-                <text class="store-entry-demo__focus-title">
-                  示例门店
-                </text>
-
-                <view class="store-entry-demo__focus-row">
-                  <text class="store-entry-demo__focus-stars">★★★★★</text>
-                  <text class="store-entry-demo__focus-score">5.0</text>
-                  <text class="store-entry-demo__focus-meta">999条</text>
-                  <text class="store-entry-demo__focus-meta">¥87/人</text>
-                </view>
-
-                <view class="store-entry-demo__focus-row store-entry-demo__focus-row--muted">
-                  <text class="store-entry-demo__focus-tag">
-                    火锅
-                  </text>
-                  <text class="store-entry-demo__focus-meta">
-                    步步高
-                  </text>
-                  <text class="store-entry-demo__focus-meta">
-                    100m
-                  </text>
-                </view>
-              </view>
-            </view>
+            <image class="store-entry-demo__image" :src="storeEntryBanner" mode="widthFix" />
           </view>
 
           <text class="store-entry-demo__caption">
@@ -209,93 +180,15 @@ function handleActionTap(card: typeof actionCards[number]) {
 .store-entry-demo__phone {
   position: relative;
   overflow: hidden;
-  height: 804rpx;
+  min-height: 920rpx;
   border-radius: 18rpx;
-  background: #5d5d5d;
-  box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.1);
+  background: #f4f4f4;
+  box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.08);
 }
 
 .store-entry-demo__image {
+  display: block;
   width: 100%;
-  height: 100%;
-  filter: saturate(0) brightness(0.56) blur(1.2rpx);
-  transform: scale(1.02);
-}
-
-.store-entry-demo__focus {
-  position: absolute;
-  right: 0;
-  bottom: 214rpx;
-  left: 0;
-  display: flex;
-  gap: 14rpx;
-  margin: 0 14rpx;
-  padding: 16rpx 16rpx 18rpx;
-  border: 4rpx solid #ffcb12;
-  border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.12);
-}
-
-.store-entry-demo__focus-thumb {
-  flex-shrink: 0;
-  width: 88rpx;
-  height: 88rpx;
-  border-radius: 12rpx;
-  background:
-    radial-gradient(circle at 30% 30%, rgba(255, 228, 135, 0.7), transparent 36%),
-    linear-gradient(135deg, #cb3528 0%, #ef9543 54%, #f8d26c 100%);
-}
-
-.store-entry-demo__focus-body {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.store-entry-demo__focus-title {
-  color: #2b2d31;
-  font-size: 26rpx;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.store-entry-demo__focus-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8rpx;
-}
-
-.store-entry-demo__focus-row--muted {
-  gap: 10rpx;
-}
-
-.store-entry-demo__focus-stars {
-  color: #ff4b3a;
-  font-size: 18rpx;
-  letter-spacing: 2rpx;
-}
-
-.store-entry-demo__focus-score {
-  color: #ff4b3a;
-  font-size: 22rpx;
-  font-weight: 700;
-}
-
-.store-entry-demo__focus-meta {
-  color: #767a82;
-  font-size: 18rpx;
-}
-
-.store-entry-demo__focus-tag {
-  padding: 3rpx 8rpx;
-  border-radius: 8rpx;
-  color: #f37c2e;
-  font-size: 18rpx;
-  background: #fff1e3;
 }
 
 .store-entry-demo__caption {
