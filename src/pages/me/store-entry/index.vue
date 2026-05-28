@@ -13,6 +13,8 @@ definePage({
 })
 
 const fallbackUrl = '/pages/me/store-info/index'
+const storeEntryImagePagePath = '/pages/me/store-entry-image/index'
+const storeEntryMainPagePath = '/pages/me/store-entry-main/index'
 const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
 
 const actionCards = [
@@ -40,10 +42,19 @@ function openPreview() {
 }
 
 function handleActionTap(card: typeof actionCards[number]) {
-  uni.showToast({
-    title: `${card.title}设置待接入`,
-    icon: 'none',
-  })
+  if (card.key === 'entry') {
+    uni.navigateTo({
+      url: storeEntryImagePagePath,
+    })
+    return
+  }
+
+  if (card.key === 'main') {
+    uni.navigateTo({
+      url: storeEntryMainPagePath,
+    })
+    return
+  }
 }
 </script>
 
