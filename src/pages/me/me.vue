@@ -1,6 +1,12 @@
 <script lang="ts" setup>
-import customerServiceIcon from '@/static/icons/customer-service.png'
+import aboutUsIcon from '@/static/icons/me/about-us.png'
+import customerServiceIcon from '@/static/icons/me/customer-service.png'
+import myContractsIcon from '@/static/icons/me/my-contracts.png'
+import notificationSettingsIcon from '@/static/icons/me/notification-settings.png'
+import rulesCenterIcon from '@/static/icons/me/rules-center.png'
 import settingIcon from '@/static/icons/setting.png'
+import storeInfoIcon from '@/static/icons/me/store-info.png'
+import violationRecordsIcon from '@/static/icons/me/violation-records.png'
 
 defineOptions({
   name: 'Me',
@@ -29,20 +35,18 @@ const walletItems = [
 
 interface MenuItem {
   title: string
-  iconText: string
-  iconImage?: string
+  icon: string
   path?: string
 }
 
 const menuItems: MenuItem[] = [
-  { title: '登陆', iconText: '登', path: '/pages/login/index' },
-  { title: '门店信息', iconText: '店', path: '/pages/me/store-info/index' },
-  { title: '通知设置', iconText: '通' },
-  { title: '我的合同', iconText: '合', path: '/pages/me/my-contracts/index' },
-  { title: '联系客服', iconText: '服', iconImage: customerServiceIcon },
-  { title: '违规记录', iconText: '违' },
-  { title: '规则中心', iconText: '规' },
-  { title: '关于我们', iconText: '关' },
+  { title: '门店信息', icon: storeInfoIcon, path: '/pages/me/store-info/index' },
+  { title: '通知设置', icon: notificationSettingsIcon },
+  { title: '我的合同', icon: myContractsIcon, path: '/pages/me/my-contracts/index' },
+  { title: '联系客服', icon: customerServiceIcon },
+  { title: '违规记录', icon: violationRecordsIcon },
+  { title: '规则中心', icon: rulesCenterIcon },
+  { title: '关于我们', icon: aboutUsIcon },
 ]
 
 function openSettings() {
@@ -133,12 +137,7 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
             hover-class="menu-grid__item--hover"
             @tap="handleMenuItemTap(item)"
           >
-            <view class="menu-grid__icon-shell">
-              <image v-if="item.iconImage" class="menu-grid__icon-image" :src="item.iconImage" mode="aspectFit" />
-              <text v-else class="menu-grid__icon-text">
-                {{ item.iconText }}
-              </text>
-            </view>
+            <image class="menu-grid__icon-image" :src="item.icon" mode="aspectFit" />
             <text class="menu-grid__title">
               {{ item.title }}
             </text>
@@ -353,26 +352,9 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
   opacity: 0.84;
 }
 
-.menu-grid__icon-shell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 84rpx;
-  height: 84rpx;
-  border: 2rpx solid #23262c;
-  border-radius: 26rpx;
-  background: #fff;
-}
-
-.menu-grid__icon-text {
-  color: #23262c;
-  font-size: 30rpx;
-  font-weight: 700;
-}
-
 .menu-grid__icon-image {
-  width: 40rpx;
-  height: 40rpx;
+  width: 72rpx;
+  height: 72rpx;
 }
 
 .menu-grid__title {
