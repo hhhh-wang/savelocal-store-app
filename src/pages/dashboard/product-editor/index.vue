@@ -19,9 +19,11 @@ type SelectedAlbumImage = {
 }
 
 const fallbackUrl = '/pages/dashboard/product-library/index'
+const specOptions = ['锅', '包', '例', '袋', '1升桶', '玻璃瓶'] as const
 
 const editorMode = ref<EditorMode>('edit')
 const pageTitle = computed(() => editorMode.value === 'create' ? '新增商品' : '编辑菜品')
+const showSpecPicker = ref(false)
 
 const form = reactive({
   name: '青椒炒肉',
@@ -89,10 +91,23 @@ function handleSelectKind(kind: ProductKind) {
 }
 
 function handleAddSpec() {
-  uni.showToast({
-    title: '添加规格待接入',
-    icon: 'none',
-  })
+  showSpecPicker.value = true
+}
+
+function handleCloseSpecPicker() {
+  showSpecPicker.value = false
+}
+
+function handleSelectSpec(option: string) {
+  form.unit = option
+  showSpecPicker.value = false
+}
+
+function handlePriceInput(event: { detail?: { value?: string } }) {
+  const rawValue = event.detail?.value || ''
+  const sanitizedValue = rawValue.replace(/[^\d]/g, '')
+
+  form.price = sanitizedValue
 }
 
 function handleSubmit() {
@@ -221,8 +236,10 @@ onLoad((options) => {
                 <input
                   v-model="form.price"
                   class="product-editor-spec__input"
+                  type="number"
                   placeholder="0"
                   placeholder-class="product-editor-spec__placeholder"
+                  @input="handlePriceInput"
                 />
               </view>
 
@@ -265,6 +282,34 @@ onLoad((options) => {
     <view class="product-editor-footer">
       <view class="product-editor-footer__button" hover-class="product-editor-footer__button--hover" @tap="handleSubmit">
         确定
+      </view>
+    </view>
+
+    <view v-if="showSpecPicker" class="product-editor-picker">
+      <view class="product-editor-picker__mask" @tap="handleCloseSpecPicker" />
+
+      <view class="product-editor-picker__panel">
+        <view class="product-editor-picker__header">
+          <text class="product-editor-picker__title">
+            选择规格
+          </text>
+
+          <text class="product-editor-picker__close" @tap="handleCloseSpecPicker">
+            ×
+          </text>
+        </view>
+
+        <view class="product-editor-picker__list">
+          <view
+            v-for="option in specOptions"
+            :key="option"
+            class="product-editor-picker__item"
+            hover-class="product-editor-picker__item--hover"
+            @tap="handleSelectSpec(option)"
+          >
+            {{ option }}
+          </view>
+        </view>
       </view>
     </view>
   </view>
@@ -553,5 +598,73 @@ onLoad((options) => {
 
 .product-editor-footer__button--hover {
   opacity: 0.9;
+}
+
+.product-editor-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.product-editor-picker__mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.product-editor-picker__panel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  border-radius: 24rpx 24rpx 0 0;
+  background: #ffffff;
+}
+
+.product-editor-picker__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88rpx;
+  border-bottom: 2rpx solid #f0f0f0;
+}
+
+.product-editor-picker__title {
+  color: #32363d;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.product-editor-picker__close {
+  position: absolute;
+  top: 50%;
+  right: 26rpx;
+  color: #4b5058;
+  font-size: 40rpx;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.product-editor-picker__list {
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+.product-editor-picker__item {
+  display: flex;
+  align-items: center;
+  min-height: 88rpx;
+  padding: 0 28rpx;
+  color: #4b5058;
+  font-size: 30rpx;
+  border-bottom: 2rpx solid #f4f4f4;
+  box-sizing: border-box;
+}
+
+.product-editor-picker__item--hover {
+  background: #f8f8f8;
 }
 </style>
