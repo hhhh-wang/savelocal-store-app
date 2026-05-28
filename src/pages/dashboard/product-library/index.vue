@@ -179,20 +179,31 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
             <view class="product-item__main">
               <view class="product-item__top">
                 <view class="product-item__info">
-                  <text class="product-item__name">
-                    {{ product.name }}
-                  </text>
+                  <view class="product-item__headline">
+                    <text class="product-item__name">
+                      {{ product.name }}
+                    </text>
+
+                    <text class="product-item__chevron">
+                      ›
+                    </text>
+                  </view>
+
                   <text class="product-item__stock">
                     库存 {{ product.stock }}
                   </text>
-                  <text class="product-item__unit">
-                    ({{ product.unitLabel }})
-                  </text>
+
+                  <view class="product-item__meta">
+                    <text class="product-item__unit">
+                      ({{ product.unitLabel }})
+                    </text>
+
+                    <text class="product-item__price">
+                      ¥{{ product.price }}
+                    </text>
+                  </view>
                 </view>
 
-                <text class="product-item__chevron">
-                  ›
-                </text>
               </view>
 
               <view class="product-item__bottom">
@@ -206,10 +217,6 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
                 </text>
 
                 <view class="product-item__actions">
-                  <text class="product-item__price">
-                    ¥{{ product.price }}
-                  </text>
-
                   <view
                     class="product-item__action-button"
                     hover-class="product-item__action-button--hover"
@@ -314,7 +321,7 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
   border: 2rpx solid #d8d8d8;
   border-radius: 12rpx;
   color: #33363d;
-  font-size: 30rpx;
+  font-size: 26rpx;
   font-weight: 600;
   background: #ffffff;
   box-sizing: border-box;
@@ -373,10 +380,18 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
   flex-direction: column;
 }
 
+.product-item__headline {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .product-item__name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: #33363d;
-  font-size: 42rpx;
+  font-size: 40rpx;
   font-weight: 700;
   line-height: 1.28;
   text-overflow: ellipsis;
@@ -391,17 +406,23 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
 }
 
 .product-item__unit {
-  margin-top: 12rpx;
   color: #9ca1aa;
   font-size: 28rpx;
   line-height: 1.2;
 }
 
+.product-item__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 12rpx;
+}
+
 .product-item__chevron {
   flex-shrink: 0;
-  margin-top: 4rpx;
   color: #898e96;
-  font-size: 46rpx;
+  font-size: 50rpx;
   line-height: 1;
 }
 
@@ -434,7 +455,7 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
 
 .product-item__price {
   color: #ff3b30;
-  font-size: 50rpx;
+  font-size: 40rpx;
   font-weight: 600;
   line-height: 1;
 }
