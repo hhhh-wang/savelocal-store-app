@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import storeEntryBackgroundPreview from '@/static/images/store-entry-background.png'
+
 defineOptions({
   name: 'StoreEntryMain',
 })
@@ -80,6 +82,10 @@ function handleBackgroundSlotTap(slot: typeof backgroundSlots[number]) {
             <text class="store-entry-main-section__tip">
               不支持上传GIF格式。
             </text>
+          </view>
+
+          <view class="store-entry-main-example">
+            <image class="store-entry-main-example__image" :src="storeEntryBackgroundPreview" mode="widthFix" />
           </view>
 
           <view class="store-entry-main-background">
@@ -216,6 +222,19 @@ function handleBackgroundSlotTap(slot: typeof backgroundSlots[number]) {
   color: #a1a6af;
   font-size: 25rpx;
   line-height: 1.46;
+}
+
+.store-entry-main-example {
+  margin-top: 24rpx;
+}
+
+
+.store-entry-main-example__image {
+  display: block;
+  width: 100%;
+  margin-top: 16rpx;
+  border-radius: 26rpx;
+  box-shadow: 0 18rpx 36rpx rgba(44, 48, 58, 0.1);
 }
 
 .store-entry-main-background {
