@@ -29,6 +29,10 @@ const storeName = computed(() => `${merchantFoodStore.currentStore?.storeName ||
 const selectMode = ref(false)
 const selectApprovedOnly = ref(false)
 const selectedImageIds = ref<number[]>([])
+const isDeleting = ref(false)
+const albumUploadFormData = reactive<{ bizType: string, storeId?: number }>({
+  bizType: 'MERCHANT_FOOD_ALBUM',
+})
 interface OpenerEventChannel {
   emit: (eventName: string, ...args: any[]) => void
 }
@@ -71,11 +75,32 @@ async function handleDelete() {
     uni.showToast({ title: '请先选择要删除的图片', icon: 'none' })
     return
   }
-  const storeId = await merchantFoodStore.ensureCurrentStoreId()
-  await Promise.all(selectedImageIds.value.map(imageId => deleteMerchantFoodAlbumImage(storeId, imageId)))
-  selectedImageIds.value = []
-  await loadAlbum()
-  uni.showToast({ title: '删除成功', icon: 'success' })
+  if (isDeleting.value)
+    return
+
+  const modalResult = await new Promise<UniApp.ShowModalRes>((resolve) => {
+    uni.showModal({
+      title: '删除图片',
+      content: `确认删除选中的 ${selectedImageIds.value.length} 张图片吗？`,
+      confirmColor: '#d94141',
+      success: resolve,
+    })
+  })
+  if (!modalResult.confirm)
+    return
+
+  const imageIds = [...selectedImageIds.value]
+  isDeleting.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await Promise.all(imageIds.map(imageId => deleteMerchantFoodAlbumImage(storeId, imageId)))
+    selectedImageIds.value = []
+    await loadAlbum()
+    uni.showToast({ title: `已删除 ${imageIds.length} 张图片`, icon: 'success' })
+  }
+  finally {
+    isDeleting.value = false
+  }
 }
 
 function uploadedUrl(result: any) {
@@ -84,6 +109,7 @@ function uploadedUrl(result: any) {
 
 const { run: selectAndUpload } = useUpload<'image'>({
   fileType: 'image',
+  formData: albumUploadFormData,
   success: async (result) => {
     const imageUrl = uploadedUrl(result)
     if (!imageUrl) {
@@ -97,8 +123,14 @@ const { run: selectAndUpload } = useUpload<'image'>({
   },
 })
 
-function handleUpload() {
-  selectAndUpload()
+async function handleUpload() {
+  try {
+    albumUploadFormData.storeId = await merchantFoodStore.ensureCurrentStoreId()
+    selectAndUpload()
+  }
+  catch (err: any) {
+    uni.showToast({ title: err?.message || '无法获取当前门店', icon: 'none' })
+  }
 }
 
 function handleImageTap(item: AlbumImage) {
@@ -156,12 +188,21 @@ onLoad((options) => {
           <view
             v-for="item in displayImages"
             :key="item.id"
-            class="album-grid__item"
-            :class="{ 'album-grid__item--selectable': selectMode || selectedImageIds.includes(item.id) }"
+            class="album-grid__item album-grid__item--selectable"
+            :class="{
+              'album-grid__item--selected': !selectMode && selectedImageIds.includes(item.id),
+            }"
             hover-class="album-grid__item--hover"
             @tap="handleImageTap(item)"
           >
             <image class="album-grid__image" :src="item.src" mode="aspectFill" />
+            <view
+              v-if="!selectMode"
+              class="album-grid__checkbox"
+              :class="{ 'album-grid__checkbox--checked': selectedImageIds.includes(item.id) }"
+            >
+              <text class="album-grid__checkbox-icon">✓</text>
+            </view>
             <view class="album-grid__status">
               <text class="album-grid__status-text">
                 {{ item.status }}
@@ -178,8 +219,14 @@ onLoad((options) => {
       </view>
 
       <view v-if="!selectMode" class="menu-album-actions">
-        <view class="menu-album-actions__button menu-album-actions__button--delete" hover-class="menu-album-actions__button--hover" @tap="handleDelete">
-          删除
+        <view
+          class="menu-album-actions__button menu-album-actions__button--delete"
+          :class="{ 'menu-album-actions__button--disabled': !selectedImageIds.length || isDeleting }"
+          hover-class="menu-album-actions__button--hover"
+          @tap="handleDelete"
+        >
+          <text v-if="isDeleting">删除中...</text>
+          <text v-else>删除（{{ selectedImageIds.length }}）</text>
         </view>
         <view class="menu-album-actions__button menu-album-actions__button--upload" hover-class="menu-album-actions__button--hover" @tap="handleUpload">
           上传图片
@@ -263,6 +310,10 @@ onLoad((options) => {
   cursor: pointer;
 }
 
+.album-grid__item--selected {
+  box-shadow: inset 0 0 0 6rpx #ff8b1f;
+}
+
 .album-grid__item--hover {
   opacity: 0.9;
 }
@@ -270,6 +321,38 @@ onLoad((options) => {
 .album-grid__image {
   width: 100%;
   height: 100%;
+}
+
+.album-grid__checkbox {
+  position: absolute;
+  top: 12rpx;
+  right: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38rpx;
+  height: 38rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: rgba(35, 38, 44, 0.38);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.18);
+}
+
+.album-grid__checkbox--checked {
+  border-color: #ff8b1f;
+  background: #ff8b1f;
+}
+
+.album-grid__checkbox-icon {
+  color: transparent;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.album-grid__checkbox--checked .album-grid__checkbox-icon {
+  color: #ffffff;
 }
 
 .album-grid__status {
@@ -322,6 +405,12 @@ onLoad((options) => {
 .menu-album-actions__button--upload {
   color: #1c1c1c;
   background: linear-gradient(180deg, #ffd82f 0%, #f5c400 100%);
+}
+
+.menu-album-actions__button--disabled {
+  color: #9a9da3;
+  border-color: #dddddd;
+  background: #f5f5f5;
 }
 
 .menu-album-actions__button--hover {
