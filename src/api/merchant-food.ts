@@ -25,6 +25,8 @@ import type {
   MerchantFoodStore,
   MerchantFoodStorePhone,
   MerchantFoodStoreProfile,
+  MerchantQualificationPayload,
+  MerchantQualifications,
 } from './types/merchant-food'
 import { http } from '@/http/http'
 
@@ -76,6 +78,22 @@ export function getMerchantFoodQualifications(storeId: number) {
 
 export function updateMerchantFoodQualifications(storeId: number, payload: MerchantFoodQualificationPayload[]) {
   return http.put<void>(`${storeBase}/${storeId}/qualifications`, payload as unknown as Record<string, any>)
+}
+
+export function getMerchantQualifications(scope: '1' | '2' = '1') {
+  return http.get<MerchantQualifications>('/merchant/onboarding/qualifications', { scope })
+}
+
+export function createMerchantQualification(payload: MerchantQualificationPayload) {
+  return http.post<void>('/merchant/onboarding/qualifications', payload as unknown as Record<string, any>)
+}
+
+export function updateMerchantQualification(qualificationId: number, payload: MerchantQualificationPayload) {
+  return http.put<void>(`/merchant/onboarding/qualifications/${qualificationId}`, payload)
+}
+
+export function deleteMerchantQualification(qualificationId: number) {
+  return http.delete<void>(`/merchant/onboarding/qualifications/${qualificationId}`)
 }
 
 export function getMerchantFoodAlbumPage(storeId: number, params: MerchantFoodPageParams & { auditStatus?: MerchantFoodAuditStatus }) {

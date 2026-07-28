@@ -1,10 +1,16 @@
 <script lang="ts" setup>
-import type { MerchantFoodQualification, MerchantFoodQualificationPayload } from '@/api/types/merchant-food'
-import { getMerchantFoodQualifications, updateMerchantFoodQualifications } from '@/api/merchant-food'
+import type { QualificationSection } from './shared'
+import type { MerchantFoodQualification, MerchantFoodQualificationType, MerchantQualificationPayload } from '@/api/types/merchant-food'
+import {
+  createMerchantQualification,
+  deleteMerchantQualification,
+  getMerchantQualifications,
+  updateMerchantQualification,
+} from '@/api/merchant-food'
 import useUpload from '@/hooks/useUpload'
 import addImageIcon from '@/static/icons/add-image.png'
 import deleteIcon from '@/static/icons/delete.png'
-import { useMerchantFoodStore } from '@/store'
+import { buildQualificationSections, mergeQualificationCatalogs } from './shared'
 
 defineOptions({
   name: 'StoreQualifications',
@@ -17,34 +23,9 @@ definePage({
   },
 })
 
-interface QualificationField {
-  label: string
-  value?: string
-  required?: boolean
-  toggle?: boolean
-  toggleActive?: boolean
-  muted?: boolean
-}
-
-interface QualificationUpload {
-  key: string
-  title: string
-  required?: boolean
-}
-
-interface QualificationSection {
-  id: string
-  title: string
-  required?: boolean
-  statusText?: string
-  showSectionWarn?: boolean
-  uploads: QualificationUpload[]
-  fields: QualificationField[]
-}
-
 const fallbackUrl = '/pages/me/store-info/index'
-const merchantFoodStore = useMerchantFoodStore()
 const qualificationSections = ref<QualificationSection[]>([])
+const qualificationTemplates = ref<MerchantFoodQualificationType[]>([])
 const qualifications = ref<MerchantFoodQualification[]>([])
 const selectedQualificationCode = ref('')
 
@@ -52,42 +33,35 @@ function imageUrls(item: MerchantFoodQualification | undefined) {
   return (item?.qualificationImages || '').split(',').filter(Boolean)
 }
 
-function toPayload(item: MerchantFoodQualification): MerchantFoodQualificationPayload {
+function toPayload(item: MerchantFoodQualification): MerchantQualificationPayload {
   return {
     qualificationCode: item.qualificationCode,
+    qualificationScope: item.qualificationScope === '2' ? '2' : '1',
     qualificationNo: item.qualificationNo,
-    qualificationImages: imageUrls(item),
+    qualificationImages: imageUrls(item).join(','),
     validFrom: item.validFrom,
     validTo: item.validTo,
   }
 }
 
-async function saveQualifications() {
-  const storeId = await merchantFoodStore.ensureCurrentStoreId()
-  await updateMerchantFoodQualifications(storeId, qualifications.value.map(toPayload))
+async function saveQualification(item: MerchantFoodQualification) {
+  if (item.qualificationId) {
+    await updateMerchantQualification(item.qualificationId, toPayload(item))
+  }
+  else {
+    await createMerchantQualification(toPayload(item))
+  }
   await loadQualifications()
 }
 
 async function loadQualifications() {
-  const storeId = await merchantFoodStore.ensureCurrentStoreId()
-  const result = await getMerchantFoodQualifications(storeId)
-  qualifications.value = result.qualifications
-  qualificationSections.value = result.types.map((type) => {
-    const item = result.qualifications.find(value => value.qualificationCode === type.qualificationCode)
-    const statusText = item?.auditStatus === '1' ? '已生效' : item?.auditStatus === '2' ? '已驳回' : '待提交/审核'
-    return {
-      id: type.qualificationCode,
-      title: type.qualificationName,
-      required: type.isRequired === '1',
-      statusText,
-      showSectionWarn: item?.auditStatus === '2',
-      uploads: [{ key: type.qualificationCode, title: type.qualificationName, required: type.isRequired === '1' }],
-      fields: [
-        { label: '证件编号', value: item?.qualificationNo || '未填写', muted: !item?.qualificationNo },
-        { label: '有效期', value: item?.validTo || '长期有效', muted: !item?.validTo },
-      ],
-    }
-  })
+  const result = mergeQualificationCatalogs(
+    await getMerchantQualifications('1'),
+    await getMerchantQualifications('2'),
+  )
+  qualificationTemplates.value = result.templates as MerchantFoodQualificationType[]
+  qualifications.value = result.records as MerchantFoodQualification[]
+  qualificationSections.value = buildQualificationSections(result.templates, result.records)
 }
 
 function uploadedUrl(result: any) {
@@ -102,7 +76,7 @@ const { run: selectAndUpload } = useUpload<'image'>({
     if (!imageUrl || !item)
       return
     item.qualificationImages = [...imageUrls(item), imageUrl].join(',')
-    await saveQualifications()
+    await saveQualification(item)
     uni.showToast({ title: '资质图片已提交', icon: 'success' })
   },
 })
@@ -131,6 +105,7 @@ function handleUpload(title: string) {
       qualificationId: 0,
       qualificationCode: section.id,
       qualificationName: section.title,
+      qualificationScope: qualificationTemplates.value.find(type => type.qualificationCode === section.id)?.qualificationScope,
       qualificationImages: '',
     }
     qualifications.value.push(item)
@@ -143,8 +118,8 @@ async function handleDelete(title: string) {
   const item = qualifications.value.find(value => value.qualificationCode === section?.id)
   if (!item)
     return
-  item.qualificationImages = ''
-  await saveQualifications()
+  await deleteMerchantQualification(item.qualificationId)
+  await loadQualifications()
   uni.showToast({ title: '资质图片已删除', icon: 'success' })
 }
 

@@ -133,6 +133,22 @@ export interface MerchantFoodQualifications {
   qualifications: MerchantFoodQualification[]
 }
 
+export interface MerchantQualifications {
+  templates: MerchantFoodQualificationType[]
+  qualificationTypeOptions: MerchantFoodQualificationType[]
+  records: MerchantFoodQualification[]
+}
+
+export interface MerchantQualificationPayload {
+  qualificationCode: string
+  qualificationScope: '1' | '2'
+  qualificationNo?: string
+  qualificationImages: string
+  validFrom?: string
+  validTo?: string
+  remark?: string
+}
+
 export interface MerchantFoodQualificationPayload {
   qualificationCode: string
   qualificationNo?: string

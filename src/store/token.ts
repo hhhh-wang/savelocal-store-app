@@ -6,9 +6,9 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
   accountLogin as _accountLogin,
-  getWxCode,
   logout as _logout,
   wxLogin as _wxLogin,
+  getWxCode,
 } from '@/api/login'
 import { useUserStore } from './user'
 
@@ -67,10 +67,12 @@ export const useTokenStore = defineStore(
      * 登录成功后处理逻辑
      * @param nextTokenInfo 登录返回的 token 信息
      */
-    async function _postLogin(nextTokenInfo: IAuthLoginRes) {
+    function _postLogin(nextTokenInfo: IAuthLoginRes) {
       setTokenInfo(nextTokenInfo)
       const userStore = useUserStore()
-      await userStore.fetchUserInfo()
+      void userStore.fetchUserInfo().catch((error) => {
+        console.error('登录后获取用户信息失败:', error)
+      })
     }
 
     function clearAuthState() {
@@ -92,7 +94,7 @@ export const useTokenStore = defineStore(
       try {
         const res = await _accountLogin(loginForm)
         console.log('普通登录-res: ', res)
-        await _postLogin(res)
+        _postLogin(res)
         uni.showToast({
           title: '登录成功',
           icon: 'success',
@@ -126,7 +128,7 @@ export const useTokenStore = defineStore(
         console.log('微信登录-code: ', code)
         const res = await _wxLogin({ code: code.code })
         console.log('微信登录-res: ', res)
-        await _postLogin(res)
+        _postLogin(res)
         uni.showToast({
           title: '登录成功',
           icon: 'success',
