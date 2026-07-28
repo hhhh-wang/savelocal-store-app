@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import storeEntryMainImage from '@/static/images/store-entry-avatar.png'
+import { updateMerchantFoodEntryImages } from '@/api/merchant-food'
+import useUpload from '@/hooks/useUpload'
+import storeEntryMainImageFallback from '@/static/images/store-entry-avatar.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'StoreEntryImage',
@@ -13,14 +16,37 @@ definePage({
 })
 
 const fallbackUrl = '/pages/me/store-entry/index'
-const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
+const merchantFoodStore = useMerchantFoodStore()
+const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
+const storeEntryMainImage = computed(() => merchantFoodStore.profile?.store.coverImage || storeEntryMainImageFallback)
+
+function uploadedUrl(result: any) {
+  return typeof result === 'string' ? result : result?.url || result?.fileUrl || result?.path || ''
+}
+
+const { run: selectAndUpload } = useUpload<'image'>({
+  fileType: 'image',
+  success: async (result) => {
+    const coverImage = uploadedUrl(result)
+    if (!coverImage) {
+      uni.showToast({ title: '上传结果缺少图片地址', icon: 'none' })
+      return
+    }
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const galleryImages = (merchantFoodStore.profile?.store.galleryImages || '').split(',').filter(Boolean)
+    await updateMerchantFoodEntryImages(storeId, { coverImage, galleryImages })
+    await merchantFoodStore.loadProfile(true)
+    uni.showToast({ title: '入口图已更新', icon: 'success' })
+  },
+})
 
 function handleChangeAvatar() {
-  uni.showToast({
-    title: '更换图片待接入',
-    icon: 'none',
-  })
+  selectAndUpload()
 }
+
+onMounted(() => {
+  merchantFoodStore.loadProfile(true).catch(() => {})
+})
 </script>
 
 <template>

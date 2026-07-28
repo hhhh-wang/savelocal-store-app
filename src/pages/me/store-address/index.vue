@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+import { submitMerchantFoodProfileChange } from '@/api/merchant-food'
+import { useMerchantFoodStore } from '@/store'
+
 defineOptions({
   name: 'StoreAddress',
 })
@@ -11,20 +14,22 @@ definePage({
 })
 
 const fallbackUrl = '/pages/me/store-info/index'
+const merchantFoodStore = useMerchantFoodStore()
+const submitting = ref(false)
+const regionCodes = reactive({ provinceCode: '', cityCode: '', districtCode: '' })
 
 const form = reactive({
-  address: '崧河街道新桥社区1号师范后门',
+  address: '',
 })
 
-// 默认使用吉首的经纬度，如果用户授权获取位置后会更新为用户的实际位置
 const mapLocation = reactive({
-  latitude: 28.265262,
-  longitude: 109.6938658,
+  latitude: 0,
+  longitude: 0,
 })
 
 const mapScale = ref(14)
 
-type MapChangePayload = {
+interface MapChangePayload {
   latitude: number
   longitude: number
   source?: 'init' | 'poi' | 'tap' | 'regionchange'
@@ -61,7 +66,7 @@ function loadUserLocation() {
   })
 }
 
-function handleSubmit() {
+async function handleSubmit() {
   if (!form.address.trim()) {
     uni.showToast({
       title: '请填写门店地址',
@@ -70,10 +75,28 @@ function handleSubmit() {
     return
   }
 
-  uni.showToast({
-    title: '提交成功，等待审核',
-    icon: 'none',
-  })
+  if (!regionCodes.provinceCode || !regionCodes.cityCode || !regionCodes.districtCode) {
+    uni.showToast({ title: '门店地区编码不完整，请联系管理员', icon: 'none' })
+    return
+  }
+  if (submitting.value)
+    return
+  submitting.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await submitMerchantFoodProfileChange(storeId, {
+      changeType: 'ADDRESS',
+      ...regionCodes,
+      addressDetail: form.address.trim(),
+      longitude: mapLocation.longitude,
+      latitude: mapLocation.latitude,
+    })
+    await merchantFoodStore.loadProfile(true)
+    uni.showToast({ title: '已提交审核', icon: 'success' })
+  }
+  finally {
+    submitting.value = false
+  }
 }
 
 function handleMapChange(payload: MapChangePayload) {
@@ -88,8 +111,19 @@ function handleMapChange(payload: MapChangePayload) {
   }
 }
 
-onMounted(() => {
-  loadUserLocation()
+onMounted(async () => {
+  try {
+    const { store } = await merchantFoodStore.loadProfile(true)
+    form.address = store.addressDetail || ''
+    regionCodes.provinceCode = store.provinceCode || ''
+    regionCodes.cityCode = store.cityCode || ''
+    regionCodes.districtCode = store.districtCode || ''
+    mapLocation.latitude = Number(store.latitude || 0)
+    mapLocation.longitude = Number(store.longitude || 0)
+    if (!mapLocation.latitude || !mapLocation.longitude)
+      loadUserLocation()
+  }
+  catch {}
 })
 </script>
 
@@ -140,7 +174,7 @@ onMounted(() => {
             class="store-address-field__input"
             placeholder="请输入门店地址"
             placeholder-class="store-address-field__placeholder"
-          />
+          >
         </view>
 
         <view class="store-address-map-section">
@@ -154,6 +188,7 @@ onMounted(() => {
           </view>
 
           <tencent-map
+            v-model:scale="mapScale"
             class="store-address-map"
             height="500rpx"
             border-radius="20rpx"
@@ -162,7 +197,6 @@ onMounted(() => {
             selection-mode="center"
             :latitude="mapLocation.latitude"
             :longitude="mapLocation.longitude"
-            v-model:scale="mapScale"
             :enable-poi="true"
             :enable-scroll="true"
             :enable-zoom="true"

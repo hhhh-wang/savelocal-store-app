@@ -1,6 +1,9 @@
 <script lang="ts" setup>
+import type { MerchantFoodOrder } from '@/api/types/merchant-food'
+import { getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage } from '@/api/merchant-food'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
 import productImage from '@/static/images/item-image.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'OrderManagementPage',
@@ -20,7 +23,8 @@ type TodoAction = '联系客户' | '拒绝退款' | '确认退款'
 type NormalAction = '联系客户' | '订单详情'
 
 interface OrderItem {
-  id: string
+  id: number
+  scene: 'ONSITE' | 'GROUP_BUY'
   orderNo: string
   productName: string
   orderTime: string
@@ -34,6 +38,7 @@ interface OrderItem {
 }
 
 const fallbackUrl = '/pages/dashboard/index'
+const merchantFoodStore = useMerchantFoodStore()
 
 const topTabs = [
   { key: 'all', label: '全部' },
@@ -51,78 +56,43 @@ const statusOptions = [
   { key: 'cancelled', label: '已取消' },
 ] as const
 
-const allOrders: OrderItem[] = [
-  {
-    id: 'order-001',
-    orderNo: '4592365565621',
-    productName: '优惠团购三人餐',
-    orderTime: '2026/5/25    15:30',
-    amount: '366',
-    quantity: 1,
-    status: 'pending',
-    statusText: '客户申请退款',
-    isTodo: true,
-    image: productImage,
-    actions: ['联系客户', '拒绝退款', '确认退款'],
-  },
-  {
-    id: 'order-002',
-    orderNo: '4595563565621',
-    productName: '优惠团购三人餐',
-    orderTime: '2026/5/25    15:30',
-    amount: '366',
-    quantity: 1,
-    status: 'completed',
-    statusText: '已完成',
-    isTodo: false,
-    image: productImage,
-    actions: ['联系客户', '订单详情'],
-  },
-  {
-    id: 'order-003',
-    orderNo: '4595565522621',
-    productName: '优惠团购三人餐',
-    orderTime: '2026/5/25    15:30',
-    amount: '366',
-    quantity: 1,
-    status: 'refunded',
-    statusText: '已退款',
-    isTodo: false,
-    image: productImage,
-    actions: ['联系客户', '订单详情'],
-  },
-  {
-    id: 'order-004',
-    orderNo: '4598865522688',
-    productName: '豪华双人套餐',
-    orderTime: '2026/4/18    12:06',
-    amount: '198',
-    quantity: 1,
-    status: 'cancelled',
-    statusText: '已取消',
-    isTodo: false,
-    image: productImage,
-    actions: ['联系客户', '订单详情'],
-  },
-  {
-    id: 'order-005',
-    orderNo: '4587665522602',
-    productName: '招牌单人餐',
-    orderTime: '2026/3/30    18:22',
-    amount: '89',
-    quantity: 2,
-    status: 'pending',
-    statusText: '客户申请退款',
-    isTodo: true,
-    image: productImage,
-    actions: ['联系客户', '拒绝退款', '确认退款'],
-  },
-]
-
+const allOrders = ref<OrderItem[]>([])
 const activeTab = ref<OrderTab>('all')
 const activeTimeFilter = ref<TimeFilter>('all')
 const activeStatusFilter = ref<OrderStatus>('all')
 const openDropdown = ref<'time' | 'status' | ''>('')
+
+function mapOrder(order: MerchantFoodOrder): OrderItem {
+  const status = order.orderStatus.toLowerCase() as Exclude<OrderStatus, 'all'>
+  return {
+    id: order.orderId,
+    scene: order.scene,
+    orderNo: order.orderNo,
+    productName: order.productName || '订单商品',
+    orderTime: '--',
+    amount: String(order.amount ?? 0),
+    quantity: order.quantity || 1,
+    status,
+    statusText: order.statusText,
+    isTodo: order.todo,
+    image: order.imageUrl || productImage,
+    actions: order.todo ? ['联系客户', '拒绝退款', '确认退款'] : ['联系客户', '订单详情'],
+  }
+}
+
+async function loadOrders() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const result = await getMerchantFoodOrdersPage({
+    storeId,
+    pageNum: 1,
+    pageSize: 100,
+    scene: 'ALL',
+    todoOnly: activeTab.value === 'todo' ? true : undefined,
+    timeRange: activeTimeFilter.value === 'quarter' ? 'QUARTER' : undefined,
+    orderStatus: activeStatusFilter.value === 'all' ? undefined : activeStatusFilter.value.toUpperCase(),
+  })
+  allOrders.value = result.rows.map(mapOrder)
+}
 
 const activeTimeLabel = computed(() => {
   return timeOptions.find(option => option.key === activeTimeFilter.value)?.label || timeOptions[0].label
@@ -132,15 +102,7 @@ const activeStatusLabel = computed(() => {
   return statusOptions.find(option => option.key === activeStatusFilter.value)?.label || statusOptions[0].label
 })
 
-const filteredOrders = computed(() => {
-  return allOrders.filter((order) => {
-    const matchTab = activeTab.value === 'all' || order.isTodo
-    const matchTime = activeTimeFilter.value === 'all' || isRecentThreeMonths(order.orderTime)
-    const matchStatus = activeStatusFilter.value === 'all' || order.status === activeStatusFilter.value
-
-    return matchTab && matchTime && matchStatus
-  })
-})
+const filteredOrders = computed(() => allOrders.value)
 
 function isRecentThreeMonths(orderTime: string) {
   const [datePart] = orderTime.split(' ')
@@ -168,6 +130,7 @@ function handleClose() {
 
 function switchTab(tab: OrderTab) {
   activeTab.value = tab
+  loadOrders().catch(() => {})
 }
 
 function toggleDropdown(type: 'time' | 'status') {
@@ -177,23 +140,37 @@ function toggleDropdown(type: 'time' | 'status') {
 function selectTimeFilter(filter: TimeFilter) {
   activeTimeFilter.value = filter
   openDropdown.value = ''
+  loadOrders().catch(() => {})
 }
 
 function selectStatusFilter(filter: OrderStatus) {
   activeStatusFilter.value = filter
   openDropdown.value = ''
+  loadOrders().catch(() => {})
 }
 
 function closeDropdown() {
   openDropdown.value = ''
 }
 
-function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) {
-  uni.showToast({
-    title: `${action}：${order.orderNo}`,
-    icon: 'none',
-  })
+async function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) {
+  if (action === '联系客户') {
+    const result = await getMerchantFoodOrderContact(order.scene, order.id)
+    uni.showModal({ title: '客户联系方式', content: result.contact, showCancel: false })
+    return
+  }
+  if (action === '订单详情') {
+    const detail = await getMerchantFoodOrderDetail(order.scene, order.id)
+    const items = detail.items?.map(item => `${item.productNameSnapshot} x${item.quantity}`).join('\n')
+    uni.showModal({ title: `订单 ${detail.orderNo}`, content: items || `${detail.productName} x${detail.quantity}`, showCancel: false })
+    return
+  }
+  uni.navigateTo({ url: `/pages/dashboard/after-sales/index?keyword=${encodeURIComponent(order.orderNo)}` })
 }
+
+onShow(() => {
+  loadOrders().catch(() => {})
+})
 </script>
 
 <template>

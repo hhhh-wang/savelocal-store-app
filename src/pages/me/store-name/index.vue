@@ -1,5 +1,7 @@
 <script lang="ts" setup>
+import { submitMerchantFoodProfileChange } from '@/api/merchant-food'
 import previewImage from '@/static/images/item-image.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'StoreName',
@@ -14,12 +16,14 @@ definePage({
 
 const fallbackUrl = '/pages/me/store-info/index'
 
-const reviewStatus = ref<'rejected' | 'editing'>('rejected')
-const rejectReason = ref('门店名称需与营业执照主体保持一致，请修改后重新提交。')
+const merchantFoodStore = useMerchantFoodStore()
+const reviewStatus = ref<'rejected' | 'editing'>('editing')
+const rejectReason = ref('')
+const submitting = ref(false)
 
 const form = reactive({
-  storeName: '喵小厨美食社',
-  branchName: '现炒盖饭·油炸小吃',
+  storeName: '',
+  branchName: '',
 })
 
 const previewStats = {
@@ -36,7 +40,7 @@ const previewTags = [
   { text: '免配送费', tone: 'highlight' },
 ]
 
-const previewStoreName = computed(() => { 
+const previewStoreName = computed(() => {
   const storeName = form.storeName.trim()
   const branchName = form.branchName.trim()
 
@@ -64,7 +68,7 @@ function handleClose() {
   })
 }
 
-function handleSubmit() {
+async function handleSubmit() {
   if (!form.storeName.trim()) {
     uni.showToast({
       title: '请填写门店名称',
@@ -73,11 +77,35 @@ function handleSubmit() {
     return
   }
 
-  uni.showToast({
-    title: '提交成功，等待审核',
-    icon: 'none',
-  })
+  if (submitting.value)
+    return
+  submitting.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await submitMerchantFoodProfileChange(storeId, {
+      changeType: 'NAME',
+      storeName: form.storeName.trim(),
+      shortName: form.branchName.trim(),
+    })
+    await merchantFoodStore.loadProfile(true)
+    uni.showToast({ title: '已提交审核', icon: 'success' })
+  }
+  finally {
+    submitting.value = false
+  }
 }
+
+onMounted(async () => {
+  try {
+    const profile = await merchantFoodStore.loadProfile(true)
+    form.storeName = profile.store.storeName || ''
+    form.branchName = profile.store.shortName || ''
+    const rejected = [...profile.pendingChanges].reverse().find(item => item.changeType === 'NAME' && item.auditStatus === '2')
+    reviewStatus.value = rejected ? 'rejected' : 'editing'
+    rejectReason.value = rejected?.rejectReason || ''
+  }
+  catch {}
+})
 </script>
 
 <template>
@@ -134,7 +162,7 @@ function handleSubmit() {
             :maxlength="20"
             placeholder="请输入门店名称"
             placeholder-class="store-name-field__placeholder"
-          />
+          >
         </view>
 
         <view class="store-name-field">
@@ -148,7 +176,7 @@ function handleSubmit() {
             :maxlength="20"
             placeholder="请输入分店名称"
             placeholder-class="store-name-field__placeholder"
-          />
+          >
         </view>
 
         <view class="store-name-preview">

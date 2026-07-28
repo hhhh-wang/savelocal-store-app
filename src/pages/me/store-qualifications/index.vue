@@ -1,6 +1,10 @@
 <script lang="ts" setup>
+import type { MerchantFoodQualification, MerchantFoodQualificationPayload } from '@/api/types/merchant-food'
+import { getMerchantFoodQualifications, updateMerchantFoodQualifications } from '@/api/merchant-food'
+import useUpload from '@/hooks/useUpload'
 import addImageIcon from '@/static/icons/add-image.png'
 import deleteIcon from '@/static/icons/delete.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'StoreQualifications',
@@ -39,62 +43,69 @@ interface QualificationSection {
 }
 
 const fallbackUrl = '/pages/me/store-info/index'
+const merchantFoodStore = useMerchantFoodStore()
+const qualificationSections = ref<QualificationSection[]>([])
+const qualifications = ref<MerchantFoodQualification[]>([])
+const selectedQualificationCode = ref('')
 
-const qualificationSections: QualificationSection[] = [
-  {
-    id: 'food-service-license',
-    title: '餐饮服务许可证',
-    statusText: '已生效',
-    uploads: [
-      { key: 'food-service-license-main', title: '餐饮服务许可证' },
-    ],
-    fields: [
-      { label: '有效期限', value: '永久' },
-      { label: '长期有效', toggle: true, toggleActive: true },
-      { label: '起始日期', value: '2025-04-24', muted: true },
-    ],
+function imageUrls(item: MerchantFoodQualification | undefined) {
+  return (item?.qualificationImages || '').split(',').filter(Boolean)
+}
+
+function toPayload(item: MerchantFoodQualification): MerchantFoodQualificationPayload {
+  return {
+    qualificationCode: item.qualificationCode,
+    qualificationNo: item.qualificationNo,
+    qualificationImages: imageUrls(item),
+    validFrom: item.validFrom,
+    validTo: item.validTo,
+  }
+}
+
+async function saveQualifications() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  await updateMerchantFoodQualifications(storeId, qualifications.value.map(toPayload))
+  await loadQualifications()
+}
+
+async function loadQualifications() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const result = await getMerchantFoodQualifications(storeId)
+  qualifications.value = result.qualifications
+  qualificationSections.value = result.types.map((type) => {
+    const item = result.qualifications.find(value => value.qualificationCode === type.qualificationCode)
+    const statusText = item?.auditStatus === '1' ? '已生效' : item?.auditStatus === '2' ? '已驳回' : '待提交/审核'
+    return {
+      id: type.qualificationCode,
+      title: type.qualificationName,
+      required: type.isRequired === '1',
+      statusText,
+      showSectionWarn: item?.auditStatus === '2',
+      uploads: [{ key: type.qualificationCode, title: type.qualificationName, required: type.isRequired === '1' }],
+      fields: [
+        { label: '证件编号', value: item?.qualificationNo || '未填写', muted: !item?.qualificationNo },
+        { label: '有效期', value: item?.validTo || '长期有效', muted: !item?.validTo },
+      ],
+    }
+  })
+}
+
+function uploadedUrl(result: any) {
+  return typeof result === 'string' ? result : result?.url || result?.fileUrl || result?.path || ''
+}
+
+const { run: selectAndUpload } = useUpload<'image'>({
+  fileType: 'image',
+  success: async (result) => {
+    const imageUrl = uploadedUrl(result)
+    const item = qualifications.value.find(value => value.qualificationCode === selectedQualificationCode.value)
+    if (!imageUrl || !item)
+      return
+    item.qualificationImages = [...imageUrls(item), imageUrl].join(',')
+    await saveQualifications()
+    uni.showToast({ title: '资质图片已提交', icon: 'success' })
   },
-  {
-    id: 'food-business-license',
-    title: '食品经营许可证',
-    statusText: '已生效',
-    uploads: [
-      { key: 'food-business-license-main', title: '食品经营许可证' },
-    ],
-    fields: [],
-  },
-  {
-    id: 'business-license',
-    title: '营业执照',
-    required: true,
-    statusText: '已生效',
-    uploads: [
-      { key: 'business-license-main', title: '营业执照' },
-    ],
-    fields: [
-      { label: '法定代表人/经营者', value: '饶靖', required: true },
-      { label: '执照类型', value: '个体工商户', required: true },
-      { label: '经营场所/住所', value: '首市石家冲街道人民南路51号', required: true },
-      { label: '有效期', value: '长期有效', required: true },
-      { label: '长期有效', toggle: true, toggleActive: true },
-    ],
-  },
-  {
-    id: 'personal-id',
-    title: '个人证件',
-    showSectionWarn: false,
-    uploads: [
-      { key: 'personal-id-emblem', title: '个人证件国徽面', required: true },
-      { key: 'personal-id-portrait', title: '个人证件头像面', required: true },
-    ],
-    fields: [
-      { label: '姓名', value: '饶靖', required: true },
-      { label: '个人证件号', value: '43310119940102101X', required: true },
-      { label: '地址', value: '计吉首市峒河街道光明社区姚家岭巷13号', required: true },
-      { label: '签发机关', value: '吉首市公安局', required: true },
-    ],
-  },
-]
+})
 
 function handleClose() {
   const pages = getCurrentPages()
@@ -110,18 +121,36 @@ function handleClose() {
 }
 
 function handleUpload(title: string) {
-  uni.showToast({
-    title: `${title}上传待接入`,
-    icon: 'none',
-  })
+  const section = qualificationSections.value.find(item => item.title === title)
+  if (!section)
+    return
+  selectedQualificationCode.value = section.id
+  let item = qualifications.value.find(value => value.qualificationCode === section.id)
+  if (!item) {
+    item = {
+      qualificationId: 0,
+      qualificationCode: section.id,
+      qualificationName: section.title,
+      qualificationImages: '',
+    }
+    qualifications.value.push(item)
+  }
+  selectAndUpload()
 }
 
-function handleDelete(title: string) {
-  uni.showToast({
-    title: `${title}删除待接入`,
-    icon: 'none',
-  })
+async function handleDelete(title: string) {
+  const section = qualificationSections.value.find(item => item.title === title)
+  const item = qualifications.value.find(value => value.qualificationCode === section?.id)
+  if (!item)
+    return
+  item.qualificationImages = ''
+  await saveQualifications()
+  uni.showToast({ title: '资质图片已删除', icon: 'success' })
 }
+
+onMounted(() => {
+  loadQualifications().catch(() => {})
+})
 </script>
 
 <template>

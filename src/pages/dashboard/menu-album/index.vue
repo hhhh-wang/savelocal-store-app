@@ -1,7 +1,8 @@
 <script lang="ts" setup>
+import { addMerchantFoodAlbumImage, deleteMerchantFoodAlbumImage, getMerchantFoodAlbumPage } from '@/api/merchant-food'
+import useUpload from '@/hooks/useUpload'
 import questionIcon from '@/static/icons/question-icon.png'
-import albumThumb1 from '@/static/images/dish-library.png'
-import albumThumb2 from '@/static/images/item-image.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'MenuAlbum',
@@ -23,62 +24,86 @@ interface AlbumImage {
 }
 
 const fallbackUrl = '/pages/dashboard/product-management/index'
-const storeName = '喵小厨美食社（现炒盖饭..吃）的官方相册'
+const merchantFoodStore = useMerchantFoodStore()
+const storeName = computed(() => `${merchantFoodStore.currentStore?.storeName || '餐饮门店'}的官方相册`)
 const selectMode = ref(false)
 const selectApprovedOnly = ref(false)
-type OpenerEventChannel = {
+const selectedImageIds = ref<number[]>([])
+interface OpenerEventChannel {
   emit: (eventName: string, ...args: any[]) => void
 }
 
 let openerEventChannel: OpenerEventChannel | null = null
 
-const albumStats = {
-  total: 50,
-  selected: 2,
-}
+const albumImages = ref<AlbumImage[]>([])
+const albumTotal = ref(0)
 
-const albumImages: AlbumImage[] = [
-  { id: 1, src: albumThumb1, status: '未通过' },
-  { id: 2, src: albumThumb2, status: '未通过' },
-  { id: 3, src: albumThumb1, status: '通过' },
-  { id: 4, src: albumThumb2, status: '通过' },
-  { id: 5, src: albumThumb1, status: '未通过' },
-  { id: 6, src: albumThumb2, status: '通过' },
-]
-
-const approvedImages = computed(() => albumImages.filter(item => item.status === '通过'))
+const approvedImages = computed(() => albumImages.value.filter(item => item.status === '通过'))
 const displayImages = computed(() => {
   if (selectMode.value && selectApprovedOnly.value) {
     return approvedImages.value
   }
 
-  return albumImages
+  return albumImages.value
 })
 
 const albumHeaderTitle = computed(() => {
   if (selectMode.value) {
-    return `已审核通过图片（${displayImages.value.length}/${albumImages.length}）`
+    return `已审核通过图片（${displayImages.value.length}/${albumImages.value.length}）`
   }
 
-  return `${storeName}（${albumStats.selected}/${albumStats.total}）`
+  return `${storeName.value}（${approvedImages.value.length}/${albumTotal.value}）`
 })
 
-function handleDelete() {
-  uni.showToast({
-    title: '删除入口待接入',
-    icon: 'none',
-  })
+async function loadAlbum() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const result = await getMerchantFoodAlbumPage(storeId, { pageNum: 1, pageSize: 100 })
+  albumTotal.value = result.total
+  albumImages.value = result.rows.map(item => ({
+    id: item.imageId,
+    src: item.imageUrl,
+    status: item.auditStatus === '1' ? '通过' : '未通过',
+  }))
 }
 
+async function handleDelete() {
+  if (!selectedImageIds.value.length) {
+    uni.showToast({ title: '请先选择要删除的图片', icon: 'none' })
+    return
+  }
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  await Promise.all(selectedImageIds.value.map(imageId => deleteMerchantFoodAlbumImage(storeId, imageId)))
+  selectedImageIds.value = []
+  await loadAlbum()
+  uni.showToast({ title: '删除成功', icon: 'success' })
+}
+
+function uploadedUrl(result: any) {
+  return typeof result === 'string' ? result : result?.url || result?.fileUrl || result?.path || ''
+}
+
+const { run: selectAndUpload } = useUpload<'image'>({
+  fileType: 'image',
+  success: async (result) => {
+    const imageUrl = uploadedUrl(result)
+    if (!imageUrl)
+      return
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await addMerchantFoodAlbumImage(storeId, imageUrl)
+    await loadAlbum()
+    uni.showToast({ title: '已上传，等待审核', icon: 'success' })
+  },
+})
+
 function handleUpload() {
-  uni.showToast({
-    title: '上传入口待接入',
-    icon: 'none',
-  })
+  selectAndUpload()
 }
 
 function handleImageTap(item: AlbumImage) {
   if (!selectMode.value) {
+    selectedImageIds.value = selectedImageIds.value.includes(item.id)
+      ? selectedImageIds.value.filter(id => id !== item.id)
+      : [...selectedImageIds.value, item.id]
     return
   }
 
@@ -94,6 +119,7 @@ onLoad((options) => {
   } | undefined
 
   openerEventChannel = currentPage?.getOpenerEventChannel?.() || null
+  loadAlbum().catch(() => {})
 })
 </script>
 
@@ -112,7 +138,6 @@ onLoad((options) => {
         <text class="menu-album-nav__title">
           商品相册
         </text>
-
       </view>
 
       <view class="album-card">
@@ -130,7 +155,7 @@ onLoad((options) => {
             v-for="item in displayImages"
             :key="item.id"
             class="album-grid__item"
-            :class="{ 'album-grid__item--selectable': selectMode }"
+            :class="{ 'album-grid__item--selectable': selectMode || selectedImageIds.includes(item.id) }"
             hover-class="album-grid__item--hover"
             @tap="handleImageTap(item)"
           >
@@ -189,7 +214,6 @@ onLoad((options) => {
   font-weight: 700;
   text-align: center;
 }
-
 
 .album-card {
   min-height: calc(100vh - 268rpx);

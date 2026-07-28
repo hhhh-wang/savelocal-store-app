@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+import type { MerchantFoodProduct } from '@/api/types/merchant-food'
+import { createMerchantFoodProduct, getMerchantFoodProductDetail, updateMerchantFoodProduct } from '@/api/merchant-food'
+import { useMerchantFoodStore } from '@/store'
+
 defineOptions({
   name: 'ProductEditorPage',
 })
@@ -12,7 +16,7 @@ definePage({
 
 type EditorMode = 'create' | 'edit'
 type ProductKind = 'single' | 'set'
-type ProductEditorPayload = {
+interface ProductEditorPayload {
   name?: string
   imageUrl?: string
   kind?: ProductKind
@@ -21,33 +25,40 @@ type ProductEditorPayload = {
   unit?: string
   description?: string
 }
-type SelectedAlbumImage = {
+interface SelectedAlbumImage {
   id: number
   src: string
   status: '通过' | '未通过'
 }
 
 const fallbackUrl = '/pages/dashboard/product-library/index'
+const merchantFoodStore = useMerchantFoodStore()
+const productId = ref<number>()
+const submitting = ref(false)
 const specOptions = ['锅', '包', '例', '袋', '1升桶', '玻璃瓶'] as const
 const defaultCreateForm = {
   name: '',
   imageText: '',
   imageUrl: '',
+  coverImageId: 0,
   kind: 'single' as ProductKind,
   tag: '无',
   price: '',
   unit: '',
   description: '',
+  stockQuantity: 9999,
 }
 const defaultEditForm = {
   name: '青椒炒肉',
   imageText: '',
   imageUrl: '',
+  coverImageId: 0,
   kind: 'single' as ProductKind,
   tag: '无',
   price: '28',
   unit: '份',
   description: '',
+  stockQuantity: 9999,
 }
 
 const editorMode = ref<EditorMode>('edit')
@@ -74,11 +85,29 @@ function applyFormValues(values: typeof defaultEditForm) {
   form.name = values.name
   form.imageText = values.imageText
   form.imageUrl = values.imageUrl
+  form.coverImageId = values.coverImageId
   form.kind = values.kind
   form.tag = values.tag
   form.price = values.price
   form.unit = values.unit
   form.description = values.description
+  form.stockQuantity = values.stockQuantity
+}
+
+function applyProduct(product: MerchantFoodProduct) {
+  const spec = product.specs?.[0]
+  applyFormValues({
+    name: product.productName,
+    imageText: product.coverImageUrl ? '已选择图片' : '',
+    imageUrl: product.coverImageUrl || '',
+    coverImageId: product.coverImageId,
+    kind: product.productType === 'SET' ? 'set' : 'single',
+    tag: product.tagText || '无',
+    price: String(spec?.salePrice ?? ''),
+    unit: spec?.unitName || '',
+    description: product.productDesc || '',
+    stockQuantity: spec?.stockQuantity ?? 9999,
+  })
 }
 
 function applyMode(mode?: string, productPayload?: ProductEditorPayload | null) {
@@ -117,6 +146,7 @@ function handleSelectImage() {
     events: {
       selectImage: (image: SelectedAlbumImage) => {
         form.imageUrl = image.src
+        form.coverImageId = image.id
         form.imageText = '已选择图片'
       },
     },
@@ -142,20 +172,61 @@ function handleSelectSpec(option: string) {
 
 function handlePriceInput(event: { detail?: { value?: string } }) {
   const rawValue = event.detail?.value || ''
-  const sanitizedValue = rawValue.replace(/[^\d]/g, '')
+  const sanitizedValue = rawValue.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
 
   form.price = sanitizedValue
 }
 
-function handleSubmit() {
-  uni.showToast({
-    title: editorMode.value === 'create' ? '商品创建待接入' : '商品保存待接入',
-    icon: 'none',
-  })
+async function handleSubmit() {
+  if (!form.name.trim() || !form.coverImageId || !form.price || !form.unit.trim()) {
+    uni.showToast({ title: '请完整填写商品名称、图片、价格和单位', icon: 'none' })
+    return
+  }
+  if (submitting.value)
+    return
+  submitting.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const payload = {
+      productName: form.name.trim(),
+      productType: form.kind === 'set' ? 'SET' as const : 'SINGLE' as const,
+      coverImageId: form.coverImageId,
+      tagText: form.tag === '无' ? '' : form.tag,
+      productDesc: form.description.trim(),
+      specs: [{
+        specName: '默认规格',
+        salePrice: Number(form.price),
+        unitName: form.unit.trim(),
+        stockQuantity: form.stockQuantity,
+        display: true,
+        sortNum: 0,
+      }],
+    }
+    if (editorMode.value === 'create') {
+      await createMerchantFoodProduct(storeId, payload)
+    }
+    else if (productId.value) {
+      await updateMerchantFoodProduct(storeId, productId.value, payload)
+    }
+    uni.showToast({ title: editorMode.value === 'create' ? '商品创建成功' : '商品保存成功', icon: 'success' })
+    setTimeout(handleClose, 320)
+  }
+  finally {
+    submitting.value = false
+  }
 }
 
-onLoad((options) => {
+onLoad(async (options) => {
   applyMode(options?.mode, parseProductPayload(options?.product))
+  const parsedId = Number(options?.id)
+  if (editorMode.value === 'edit' && parsedId) {
+    productId.value = parsedId
+    try {
+      const storeId = await merchantFoodStore.ensureCurrentStoreId()
+      applyProduct(await getMerchantFoodProductDetail(storeId, parsedId))
+    }
+    catch {}
+  }
 })
 </script>
 
@@ -195,7 +266,7 @@ onLoad((options) => {
               class="product-editor-row__input product-editor-row__input--align-right"
               placeholder="请输入菜品名称"
               placeholder-class="product-editor-row__placeholder product-editor-row__placeholder--align-right"
-            />
+            >
           </view>
 
           <view class="product-editor-row product-editor-row--clickable" @tap="handleSelectImage">
@@ -277,7 +348,7 @@ onLoad((options) => {
                   placeholder="0"
                   placeholder-class="product-editor-spec__placeholder"
                   @input="handlePriceInput"
-                />
+                >
               </view>
 
               <input
@@ -285,7 +356,7 @@ onLoad((options) => {
                 class="product-editor-spec__field product-editor-spec__input product-editor-spec__field--unit"
                 placeholder="份"
                 placeholder-class="product-editor-spec__placeholder"
-              />
+              >
             </view>
 
             <text class="product-editor-spec__hint">

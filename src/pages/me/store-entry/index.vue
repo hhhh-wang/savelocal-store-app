@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import storeEntryBanner from '@/static/images/store-entry-banner.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'StoreEntry',
@@ -15,7 +16,8 @@ definePage({
 const fallbackUrl = '/pages/me/store-info/index'
 const storeEntryImagePagePath = '/pages/me/store-entry-image/index'
 const storeEntryMainPagePath = '/pages/me/store-entry-main/index'
-const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
+const merchantFoodStore = useMerchantFoodStore()
+const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 
 const actionCards = [
   {
@@ -56,6 +58,10 @@ function handleActionTap(card: typeof actionCards[number]) {
     return
   }
 }
+
+onShow(() => {
+  merchantFoodStore.loadProfile(true).catch(() => {})
+})
 </script>
 
 <template>
@@ -73,8 +79,6 @@ function handleActionTap(card: typeof actionCards[number]) {
         <text class="store-entry-nav__title">
           门店入口
         </text>
-
-
       </view>
 
       <view class="store-entry-store">
@@ -127,7 +131,13 @@ function handleActionTap(card: typeof actionCards[number]) {
 .store-entry-page {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, rgba(0, 0, 0, 0.035) 0, rgba(0, 0, 0, 0.035) 1rpx, transparent 1rpx, transparent 100%),
+    radial-gradient(
+      circle at top,
+      rgba(0, 0, 0, 0.035) 0,
+      rgba(0, 0, 0, 0.035) 1rpx,
+      transparent 1rpx,
+      transparent 100%
+    ),
     #ffffff;
   background-size: 8rpx 8rpx;
 }
@@ -152,9 +162,6 @@ function handleActionTap(card: typeof actionCards[number]) {
   text-align: center;
 }
 
-
-
-
 .store-entry-store {
   display: inline-flex;
   align-items: center;
@@ -173,8 +180,6 @@ function handleActionTap(card: typeof actionCards[number]) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-
 
 .store-entry-layout {
   display: grid;

@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import storeEntryBackgroundPreview from '@/static/images/store-entry-background.png'
+import { updateMerchantFoodEntryImages } from '@/api/merchant-food'
+import useUpload from '@/hooks/useUpload'
+import storeEntryBackgroundFallback from '@/static/images/store-entry-background.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'StoreEntryMain',
@@ -13,28 +16,72 @@ definePage({
 })
 
 const fallbackUrl = '/pages/me/store-entry/index'
-const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
+const merchantFoodStore = useMerchantFoodStore()
+const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
+const galleryImages = computed(() => (merchantFoodStore.profile?.store.galleryImages || '').split(',').filter(Boolean))
+const storeEntryBackgroundPreview = computed(() => galleryImages.value[0] || storeEntryBackgroundFallback)
 
-const backgroundSlots = [
-  { key: 'bg-1', filled: false },
-  { key: 'bg-2', filled: false },
-  { key: 'bg-3', filled: false },
-  { key: 'bg-4', filled: false },
-  { key: 'bg-5', filled: true },
-] as const
+const backgroundSlots = computed(() => Array.from({ length: 5 }, (_, index) => ({
+  key: `bg-${index + 1}`,
+  filled: Boolean(galleryImages.value[index]),
+})))
 
-function handleUploadBackground() {
-  uni.showToast({
-    title: '上传图片待接入',
-    icon: 'none',
-  })
+function uploadedUrl(result: any) {
+  return typeof result === 'string' ? result : result?.url || result?.fileUrl || result?.path || ''
 }
 
-function handleBackgroundSlotTap(slot: typeof backgroundSlots[number]) {
-  uni.showToast({
-    title: slot.filled ? '背景图片待接入' : '新增背景图待接入',
-    icon: 'none',
+const { run: selectAndUpload } = useUpload<'image'>({
+  fileType: 'image',
+  success: async (result) => {
+    const imageUrl = uploadedUrl(result)
+    if (!imageUrl) {
+      uni.showToast({ title: '上传结果缺少图片地址', icon: 'none' })
+      return
+    }
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const nextGallery = [...galleryImages.value, imageUrl].slice(0, 5)
+    const coverImage = merchantFoodStore.profile?.store.coverImage
+    if (!coverImage) {
+      uni.showToast({ title: '请先设置门店入口图', icon: 'none' })
+      return
+    }
+    await updateMerchantFoodEntryImages(storeId, { coverImage, galleryImages: nextGallery })
+    await merchantFoodStore.loadProfile(true)
+    uni.showToast({ title: '主图已更新', icon: 'success' })
+  },
+})
+
+function handleUploadBackground() {
+  if (galleryImages.value.length >= 5) {
+    uni.showToast({ title: '门店主图最多5张', icon: 'none' })
+    return
+  }
+  selectAndUpload()
+}
+
+onMounted(() => {
+  merchantFoodStore.loadProfile(true).catch(() => {})
+})
+
+async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
+  if (!slot.filled) {
+    handleUploadBackground()
+    return
+  }
+  const index = Number(slot.key.replace('bg-', '')) - 1
+  const result = await new Promise<UniApp.ShowModalRes>((resolve) => {
+    uni.showModal({ title: '删除主图', content: '确认删除这张门店主图吗？', success: resolve })
   })
+  if (!result.confirm)
+    return
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const coverImage = merchantFoodStore.profile?.store.coverImage
+  if (!coverImage)
+    return
+  const nextGallery = galleryImages.value.filter((_, imageIndex) => imageIndex !== index)
+  await updateMerchantFoodEntryImages(storeId, { coverImage, galleryImages: nextGallery })
+  await merchantFoodStore.loadProfile(true)
+  uni.showToast({ title: '主图已删除', icon: 'success' })
 }
 </script>
 
@@ -227,7 +274,6 @@ function handleBackgroundSlotTap(slot: typeof backgroundSlots[number]) {
 .store-entry-main-example {
   margin-top: 24rpx;
 }
-
 
 .store-entry-main-example__image {
   display: block;

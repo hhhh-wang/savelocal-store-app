@@ -1,3 +1,4 @@
+import type { MerchantFoodBusinessTime } from '@/api/types/merchant-food'
 import type { BusinessHoursRange, BusinessHoursValue, BusinessStatus, StoreBusinessStatusPayload } from '@/components/business-hours-picker/types'
 
 export const storeBusinessStatusStorageKey = 'store-business-status'
@@ -121,4 +122,47 @@ export function loadStoreBusinessStatus() {
 
 export function saveStoreBusinessStatus(payload: StoreBusinessStatusPayload) {
   uni.setStorageSync(storeBusinessStatusStorageKey, cloneStoreBusinessStatus(payload))
+}
+
+function parseTime(value: string) {
+  const [hour, minute] = value.split(':').map(Number)
+  return (hour || 0) * 60 + (minute || 0)
+}
+
+export function fromMerchantFoodBusinessTimes(storeStatus: string | undefined, businessTimes: MerchantFoodBusinessTime[]): StoreBusinessStatusPayload {
+  const uniqueRanges = new Map<string, BusinessHoursRange>()
+  businessTimes.forEach((item) => {
+    const key = `${item.startTime}-${item.endTime}`
+    if (!uniqueRanges.has(key)) {
+      uniqueRanges.set(key, {
+        id: uniqueRanges.size + 1,
+        start: parseTime(item.startTime),
+        end: parseTime(item.endTime) || 24 * 60,
+      })
+    }
+  })
+  const ranges = Array.from(uniqueRanges.values())
+  const allDay = ranges.length === 1 && ranges[0].start === 0 && ranges[0].end >= 23 * 60 + 59
+  return {
+    status: storeStatus === '1' ? 'pause' : 'normal',
+    hours: {
+      mode: allDay ? 'all-day' : 'custom',
+      ranges: ranges.length ? ranges : createDefaultBusinessHours().ranges,
+    },
+  }
+}
+
+export function toMerchantFoodBusinessTimes(hours: BusinessHoursValue): MerchantFoodBusinessTime[] {
+  const ranges = hours.mode === 'all-day'
+    ? [{ id: 1, start: 0, end: 23 * 60 + 59 }]
+    : hours.mode === 'closed'
+      ? [{ id: 1, start: 0, end: 23 * 60 + 59 }]
+      : hours.ranges
+  return Array.from({ length: 7 }, (_, day) => ranges.map(range => ({
+    dayOfWeek: day + 1,
+    startTime: formatTime(range.start),
+    endTime: formatTime(Math.min(range.end, 23 * 60 + 59)),
+    crossDay: '0',
+    status: '0',
+  }))).flat()
 }

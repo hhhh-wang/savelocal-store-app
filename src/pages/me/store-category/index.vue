@@ -1,11 +1,11 @@
 <script lang="ts" setup>
 import type { StoreCategoryPrimaryOption, StoreCategorySecondaryOption, StoreCategorySelection } from './shared'
+import { updateMerchantFoodStoreCategory } from '@/api/merchant-food'
+import { useMerchantFoodStore } from '@/store'
 import {
   createDefaultStoreCategorySelection,
   formatStoreCategoryPath,
-  loadStoreCategorySelection,
   normalizeStoreCategorySelection,
-  saveStoreCategorySelection,
   storeCategoryOptions,
 } from './shared'
 
@@ -26,6 +26,8 @@ const searchKeyword = ref('')
 const savedSelection = ref<StoreCategorySelection>(createDefaultStoreCategorySelection())
 const draftSelection = ref<StoreCategorySelection>(createDefaultStoreCategorySelection())
 const activePrimaryId = ref('')
+const merchantFoodStore = useMerchantFoodStore()
+const submitting = ref(false)
 
 const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase())
 
@@ -97,8 +99,12 @@ const filteredSecondaryOptions = computed<StoreCategorySecondaryOption[]>(() => 
 const savedCategoryPath = computed(() => formatStoreCategoryPath(savedSelection.value))
 const currentCategoryPath = computed(() => formatStoreCategoryPath(draftSelection.value))
 
-function syncStateFromStorage() {
-  const storedSelection = loadStoreCategorySelection()
+async function syncStateFromServer() {
+  const profile = await merchantFoodStore.loadProfile(true)
+  const storedSelection = normalizeStoreCategorySelection({
+    primaryId: 'FOOD',
+    secondaryId: profile.store.mainIndustryCode,
+  })
 
   savedSelection.value = storedSelection
   draftSelection.value = normalizeStoreCategorySelection(storedSelection)
@@ -144,22 +150,27 @@ function clearSearch() {
   }
 }
 
-function handleSubmit() {
-  saveStoreCategorySelection(draftSelection.value)
-  savedSelection.value = normalizeStoreCategorySelection(draftSelection.value)
+async function handleSubmit() {
+  if (submitting.value)
+    return
+  submitting.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await updateMerchantFoodStoreCategory(storeId, draftSelection.value.secondaryId)
+    savedSelection.value = normalizeStoreCategorySelection(draftSelection.value)
+    await merchantFoodStore.loadProfile(true)
 
-  uni.showToast({
-    title: '提交成功',
-    icon: 'none',
-  })
+    uni.showToast({ title: '提交成功', icon: 'success' })
 
-  setTimeout(() => {
-    handleClose()
-  }, 320)
+    setTimeout(handleClose, 320)
+  }
+  finally {
+    submitting.value = false
+  }
 }
 
 onMounted(() => {
-  syncStateFromStorage()
+  syncStateFromServer().catch(() => {})
 })
 </script>
 
@@ -205,7 +216,7 @@ onMounted(() => {
             placeholder="请输入搜索的商户分类"
             placeholder-class="store-category-search__placeholder"
             confirm-type="search"
-          />
+          >
         </view>
 
         <text class="store-category-search__cancel" @tap="clearSearch">

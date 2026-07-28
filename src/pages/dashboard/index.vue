@@ -1,11 +1,12 @@
 <script lang="ts" setup>
+import customerServiceIcon from '@/static/icons/customer-service.png'
 import afterSalesIcon from '@/static/icons/dashboard/after-sales.png'
 import allIcon from '@/static/icons/dashboard/all.png'
-import customerServiceIcon from '@/static/icons/customer-service.png'
-import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
 import merchantReconciliationIcon from '@/static/icons/dashboard/merchant-reconciliation.png'
 import orderManagementIcon from '@/static/icons/dashboard/order-management.png'
 import productManagementIcon from '@/static/icons/dashboard/product-management.png'
+import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'Home',
@@ -21,7 +22,12 @@ definePage({
   },
 })
 
-const storeName = ref('喵小厨美食社（盖饭·油炸小吃）')
+const merchantFoodStore = useMerchantFoodStore()
+const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
+
+onShow(() => {
+  merchantFoodStore.loadProfile(true).catch(() => {})
+})
 
 const stats = [
   { label: '实收金额', value: '¥0', subtext: '昨日 ¥--' },

@@ -4,9 +4,10 @@ import customerServiceIcon from '@/static/icons/me/customer-service.png'
 import myContractsIcon from '@/static/icons/me/my-contracts.png'
 import notificationSettingsIcon from '@/static/icons/me/notification-settings.png'
 import rulesCenterIcon from '@/static/icons/me/rules-center.png'
-import settingIcon from '@/static/icons/setting.png'
 import storeInfoIcon from '@/static/icons/me/store-info.png'
 import violationRecordsIcon from '@/static/icons/me/violation-records.png'
+import settingIcon from '@/static/icons/setting.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'Me',
@@ -19,12 +20,16 @@ definePage({
   },
 })
 
-const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
+const merchantFoodStore = useMerchantFoodStore()
+const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 
-const storeStatus = {
-  label: '营业中',
-  color: '#6bc93f',
-}
+const storeStatus = computed(() => merchantFoodStore.currentStore?.storeStatus === '1'
+  ? { label: '暂停营业', color: '#a0a4ab' }
+  : { label: '营业中', color: '#6bc93f' })
+
+onShow(() => {
+  merchantFoodStore.loadProfile(true).catch(() => {})
+})
 
 const walletItems = [
   { label: '今日到账', value: '25.9', subtext: '去查看' },

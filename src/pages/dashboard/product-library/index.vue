@@ -1,5 +1,12 @@
 <script lang="ts" setup>
+import type { MerchantFoodProduct } from '@/api/types/merchant-food'
+import {
+  batchOffShelfMerchantFoodProducts,
+  getMerchantFoodProductsPage,
+  updateMerchantFoodProductStatus,
+} from '@/api/merchant-food'
 import productImage from '@/static/images/item-image.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'ProductLibraryPage',
@@ -14,7 +21,7 @@ definePage({
 
 type ProductStatus = '上架' | '下架'
 type ProductAction = '上架' | '下架'
-type ProductEditorPayload = {
+interface ProductEditorPayload {
   name: string
   imageUrl: string
   kind: 'single' | 'set'
@@ -25,7 +32,7 @@ type ProductEditorPayload = {
 }
 
 interface ProductItem {
-  id: string
+  id: number
   name: string
   stock: number
   unitLabel: string
@@ -38,53 +45,33 @@ interface ProductItem {
 type HeaderAction = '批量下架' | '新建商品'
 
 const fallbackUrl = '/pages/dashboard/product-management/index'
+const merchantFoodStore = useMerchantFoodStore()
 const isBatchMode = ref(false)
-const selectedProductIds = ref<string[]>([])
+const selectedProductIds = ref<number[]>([])
 
-const products: ProductItem[] = [
-  {
-    id: 'product-001',
-    name: '现炒青椒炒黄牛肉盖码饭',
-    stock: 9999,
-    unitLabel: '单品',
-    price: '25.90',
-    status: '上架',
-    actionLabel: '下架',
-    image: productImage,
-  },
-  {
-    id: 'product-002',
-    name: '现炒青椒炒黄牛肉盖码饭',
-    stock: 9999,
-    unitLabel: '套餐',
-    price: '25.90',
-    status: '下架',
-    actionLabel: '上架',
-    image: productImage,
-  },
-  {
-    id: 'product-003',
-    name: '招牌小炒肉双拼盖饭',
-    stock: 9999,
-    unitLabel: '单品',
-    price: '32.90',
-    status: '上架',
-    actionLabel: '下架',
-    image: productImage,
-  },
-  {
-    id: 'product-004',
-    name: '香辣鸡腿堡欢乐套餐',
-    stock: 888,
-    unitLabel: '套餐',
-    price: '19.90',
-    status: '下架',
-    actionLabel: '上架',
-    image: productImage,
-  },
-]
+const products = ref<ProductItem[]>([])
 
-const totalCount = computed(() => products.length)
+function mapProduct(product: MerchantFoodProduct): ProductItem {
+  const firstSpec = product.specs?.[0]
+  return {
+    id: product.productId,
+    name: product.productName,
+    stock: firstSpec?.stockQuantity || 0,
+    unitLabel: product.productType === 'SET' ? '套餐' : '单品',
+    price: String(firstSpec?.salePrice ?? '0.00'),
+    status: product.saleStatus === 'ON_SALE' ? '上架' : '下架',
+    actionLabel: product.saleStatus === 'ON_SALE' ? '下架' : '上架',
+    image: product.coverImageUrl || productImage,
+  }
+}
+
+async function loadProducts() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const result = await getMerchantFoodProductsPage(storeId, { pageNum: 1, pageSize: 100 })
+  products.value = result.rows.map(mapProduct)
+}
+
+const totalCount = computed(() => products.value.length)
 const selectedCount = computed(() => selectedProductIds.value.length)
 
 function handleClose() {
@@ -117,7 +104,6 @@ function navigateToEditor(mode: 'create' | 'edit', product?: ProductItem) {
 
   if (product) {
     query.push(`id=${product.id}`)
-    query.push(`product=${encodeURIComponent(JSON.stringify(buildProductEditorPayload(product)))}`)
   }
 
   uni.navigateTo({
@@ -125,8 +111,17 @@ function navigateToEditor(mode: 'create' | 'edit', product?: ProductItem) {
   })
 }
 
-function handleHeaderAction(action: HeaderAction) {
+async function handleHeaderAction(action: HeaderAction) {
   if (action === '批量下架') {
+    if (isBatchMode.value && selectedProductIds.value.length) {
+      const storeId = await merchantFoodStore.ensureCurrentStoreId()
+      await batchOffShelfMerchantFoodProducts(storeId, selectedProductIds.value)
+      selectedProductIds.value = []
+      isBatchMode.value = false
+      await loadProducts()
+      uni.showToast({ title: '批量下架成功', icon: 'success' })
+      return
+    }
     isBatchMode.value = !isBatchMode.value
 
     if (!isBatchMode.value) {
@@ -147,14 +142,27 @@ function handleHeaderAction(action: HeaderAction) {
   })
 }
 
-function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 'edit' | ProductAction) {
+async function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 'edit' | ProductAction) {
   if (isBatchMode.value) {
     toggleProductSelection(product.id)
     return
   }
 
-  if (action === 'edit') {
+  if (action === 'edit' || action === 'detail') {
     navigateToEditor('edit', product)
+    return
+  }
+
+  if (action === 'stock') {
+    navigateToEditor('edit', product)
+    return
+  }
+
+  if (action === '上架' || action === '下架') {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await updateMerchantFoodProductStatus(storeId, product.id, action === '上架' ? 'ON_SALE' : 'OFF_SHELF')
+    await loadProducts()
+    uni.showToast({ title: `${action}成功`, icon: 'success' })
     return
   }
 
@@ -172,7 +180,7 @@ function handleProductAction(product: ProductItem, action: 'detail' | 'stock' | 
   })
 }
 
-function toggleProductSelection(productId: string) {
+function toggleProductSelection(productId: number) {
   if (selectedProductIds.value.includes(productId)) {
     selectedProductIds.value = selectedProductIds.value.filter(id => id !== productId)
     return
@@ -180,6 +188,10 @@ function toggleProductSelection(productId: string) {
 
   selectedProductIds.value = [...selectedProductIds.value, productId]
 }
+
+onShow(() => {
+  loadProducts().catch(() => {})
+})
 </script>
 
 <template>
@@ -280,7 +292,6 @@ function toggleProductSelection(productId: string) {
                     </text>
                   </view>
                 </view>
-
               </view>
 
               <view class="product-item__bottom">
@@ -336,8 +347,13 @@ function toggleProductSelection(productId: string) {
 .product-library-page__content {
   min-height: 100vh;
   padding: calc(env(safe-area-inset-top) + 18rpx) 18rpx calc(env(safe-area-inset-bottom) + 36rpx);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 160rpx, #fdfdfd 160rpx, #fdfdfd 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(255, 255, 255, 0.98) 160rpx,
+    #fdfdfd 160rpx,
+    #fdfdfd 100%
+  );
 }
 
 .product-library-nav {

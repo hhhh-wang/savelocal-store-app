@@ -1,4 +1,12 @@
 <script lang="ts" setup>
+import {
+  addMerchantFoodStorePhone,
+  deleteMerchantFoodStorePhone,
+  getMerchantFoodStorePhones,
+  updateMerchantFoodStorePhone,
+} from '@/api/merchant-food'
+import { useMerchantFoodStore } from '@/store'
+
 defineOptions({
   name: 'StorePhone',
 })
@@ -20,12 +28,12 @@ interface PhoneItem {
   auditStatus: PhoneAuditStatus
 }
 
-let nextPhoneId = 3
+let nextPhoneId = -1
+const merchantFoodStore = useMerchantFoodStore()
+const removedPhoneIds = ref<number[]>([])
+const submitting = ref(false)
 
-const phoneNumbers = ref<PhoneItem[]>([
-  { id: 1, value: '13574300595', auditStatus: 'approved' },
-  { id: 2, value: '18512341234', auditStatus: 'approved' },
-])
+const phoneNumbers = ref<PhoneItem[]>([])
 
 const canAddPhone = computed(() => {
   const lastPhone = phoneNumbers.value[phoneNumbers.value.length - 1]
@@ -60,7 +68,7 @@ function addPhone() {
   }
 
   phoneNumbers.value.push({
-    id: nextPhoneId++,
+    id: nextPhoneId--,
     value: '',
     auditStatus: 'pending',
   })
@@ -71,7 +79,9 @@ function removePhone(index: number) {
     return
   }
 
-  phoneNumbers.value.splice(index, 1)
+  const [removed] = phoneNumbers.value.splice(index, 1)
+  if (removed.id > 0)
+    removedPhoneIds.value.push(removed.id)
 }
 
 function markPhonePending(index: number) {
@@ -84,7 +94,7 @@ function markPhonePending(index: number) {
   currentPhone.auditStatus = 'pending'
 }
 
-function handleSubmit() {
+async function handleSubmit() {
   const validPhones = phoneNumbers.value.filter(phone => phone.value.trim())
 
   if (!validPhones.length) {
@@ -95,11 +105,44 @@ function handleSubmit() {
     return
   }
 
-  uni.showToast({
-    title: '提交成功，等待审核',
-    icon: 'none',
-  })
+  if (submitting.value)
+    return
+  submitting.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await Promise.all(removedPhoneIds.value.map(phoneId => deleteMerchantFoodStorePhone(storeId, phoneId)))
+    await Promise.all(validPhones.map((phone, index) => phone.id > 0
+      ? updateMerchantFoodStorePhone(storeId, phone.id, { phoneNumber: phone.value.trim(), sortNum: index })
+      : addMerchantFoodStorePhone(storeId, { phoneNumber: phone.value.trim(), sortNum: index })))
+    const phones = await getMerchantFoodStorePhones(storeId)
+    phoneNumbers.value = phones.map(phone => ({
+      id: phone.phoneId,
+      value: phone.phoneNumber,
+      auditStatus: phone.auditStatus === '1' ? 'approved' : phone.auditStatus === '2' ? 'rejected' : 'pending',
+    }))
+    removedPhoneIds.value = []
+    await merchantFoodStore.loadProfile(true)
+    uni.showToast({ title: '已提交审核', icon: 'success' })
+  }
+  finally {
+    submitting.value = false
+  }
 }
+
+onMounted(async () => {
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const phones = await getMerchantFoodStorePhones(storeId)
+    phoneNumbers.value = phones.map(phone => ({
+      id: phone.phoneId,
+      value: phone.phoneNumber,
+      auditStatus: phone.auditStatus === '1' ? 'approved' : phone.auditStatus === '2' ? 'rejected' : 'pending',
+    }))
+    if (!phoneNumbers.value.length)
+      addPhone()
+  }
+  catch {}
+})
 </script>
 
 <template>
@@ -158,7 +201,7 @@ function handleSubmit() {
               placeholder="请输入门店电话"
               placeholder-class="store-phone-item__placeholder"
               @input="markPhonePending(index)"
-            />
+            >
           </view>
 
           <view

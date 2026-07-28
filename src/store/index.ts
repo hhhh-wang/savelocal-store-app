@@ -15,6 +15,7 @@ setActivePinia(store)
 
 export default store
 
+export * from './merchant-food'
 // 模块统一导出
 export * from './token'
 export * from './user'

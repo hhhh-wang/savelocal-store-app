@@ -1,10 +1,12 @@
 <script lang="ts" setup>
 import type { BusinessStatus, StoreBusinessStatusPayload } from '@/components/business-hours-picker/types'
+import { updateMerchantFoodStoreBusinessStatus } from '@/api/merchant-food'
+import { useMerchantFoodStore } from '@/store'
 import {
   cloneStoreBusinessStatus,
   createDefaultStoreBusinessStatus,
-  loadStoreBusinessStatus,
-  saveStoreBusinessStatus,
+  fromMerchantFoodBusinessTimes,
+  toMerchantFoodBusinessTimes,
 } from './shared'
 
 defineOptions({
@@ -34,9 +36,12 @@ const businessStatusOptions: Array<{ value: BusinessStatus, title: string, descr
 ]
 
 const form = reactive<StoreBusinessStatusPayload>(createDefaultStoreBusinessStatus())
+const merchantFoodStore = useMerchantFoodStore()
+const submitting = ref(false)
 
-function syncForm() {
-  const storedValue = loadStoreBusinessStatus()
+async function syncForm() {
+  const profile = await merchantFoodStore.loadProfile(true)
+  const storedValue = fromMerchantFoodBusinessTimes(profile.store.storeStatus, profile.businessTimes)
 
   form.status = storedValue.status
   form.hours = cloneStoreBusinessStatus(storedValue).hours
@@ -59,21 +64,29 @@ function selectStatus(status: BusinessStatus) {
   form.status = status
 }
 
-function handleSubmit() {
-  saveStoreBusinessStatus(cloneStoreBusinessStatus(form))
+async function handleSubmit() {
+  if (submitting.value)
+    return
+  submitting.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await updateMerchantFoodStoreBusinessStatus(storeId, {
+      storeStatus: form.status === 'pause' ? '1' : '0',
+      businessTimes: toMerchantFoodBusinessTimes(form.hours),
+    })
+    await merchantFoodStore.loadProfile(true)
 
-  uni.showToast({
-    title: '提交成功',
-    icon: 'none',
-  })
+    uni.showToast({ title: '提交成功', icon: 'success' })
 
-  setTimeout(() => {
-    handleClose()
-  }, 320)
+    setTimeout(handleClose, 320)
+  }
+  finally {
+    submitting.value = false
+  }
 }
 
 onMounted(() => {
-  syncForm()
+  syncForm().catch(() => {})
 })
 </script>
 

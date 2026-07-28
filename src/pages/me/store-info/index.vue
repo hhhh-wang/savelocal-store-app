@@ -1,14 +1,15 @@
 <script lang="ts" setup>
 import {
   formatStoreCategorySummary,
-  loadStoreCategorySelection,
+  normalizeStoreCategorySelection,
 } from '@/pages/me/store-category/shared'
 import {
   formatBusinessHoursSummary,
+  fromMerchantFoodBusinessTimes,
   getBusinessStatusLabel,
-  loadStoreBusinessStatus,
 } from '@/pages/me/store-status/shared'
 import customerServiceIcon from '@/static/icons/customer-service.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'StoreInfo',
@@ -37,23 +38,29 @@ const storeCategoryPagePath = '/pages/me/store-category/index'
 const storeQualificationsPagePath = '/pages/me/store-qualifications/index'
 const storeEntryPagePath = '/pages/me/store-entry/index'
 
-const storeName = ref('喵小厨美食社（现炒盖饭·油炸小吃）')
-
-const storeBusinessStatus = ref(loadStoreBusinessStatus())
-const storeCategorySelection = ref(loadStoreCategorySelection())
+const merchantFoodStore = useMerchantFoodStore()
+const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
+const storeBusinessStatus = computed(() => fromMerchantFoodBusinessTimes(
+  merchantFoodStore.profile?.store.storeStatus,
+  merchantFoodStore.profile?.businessTimes || [],
+))
+const storeCategorySelection = computed(() => normalizeStoreCategorySelection({
+  primaryId: 'FOOD',
+  secondaryId: merchantFoodStore.profile?.store.mainIndustryCode,
+}))
 
 const storeInfoRows = computed<StoreInfoRow[]>(() => {
   const businessHoursSummary = formatBusinessHoursSummary(storeBusinessStatus.value.hours)
 
   return [
-    { label: '门店入口图', type: 'image', imageText: '店' },
-    { label: '门店名称', value: '喵小厨美食社' },
+    { label: '门店入口图', type: 'image', imageText: merchantFoodStore.profile?.store.coverImage ? '已设置' : '未设置' },
+    { label: '门店名称', value: merchantFoodStore.profile?.store.storeName || '未设置' },
     { label: '营业状态', value: getBusinessStatusLabel(storeBusinessStatus.value.status) },
     { label: '营业时间', value: businessHoursSummary, muted: businessHoursSummary === '未设置' },
     { label: '门店品类', value: formatStoreCategorySummary(storeCategorySelection.value) },
-    { label: '门店电话', value: '135 7430 0595' },
+    { label: '门店电话', value: merchantFoodStore.profile?.phones.map(item => item.phoneNumber).join('、') || '未设置' },
     { label: '企业资质', value: '上传材料' },
-    { label: '门店地址', value: '崧河街道新桥社区1号师范后门' },
+    { label: '门店地址', value: merchantFoodStore.profile?.store.addressDetail || '未设置' },
   ]
 })
 
@@ -132,8 +139,7 @@ function openFeedback() {
 }
 
 onShow(() => {
-  storeBusinessStatus.value = loadStoreBusinessStatus()
-  storeCategorySelection.value = loadStoreCategorySelection()
+  merchantFoodStore.loadProfile(true).catch(() => {})
 })
 </script>
 

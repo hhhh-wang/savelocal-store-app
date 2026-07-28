@@ -1,6 +1,9 @@
 <script lang="ts" setup>
+import type { MerchantFoodBill, MerchantFoodReconciliationStat } from '@/api/types/merchant-food'
+import { getMerchantFoodBillsPage, getMerchantFoodReconciliationOverview } from '@/api/merchant-food'
 import calendarMonthIcon from '@/static/icons/calendar-month.png'
 import storeIcon from '@/static/icons/store-icon.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'MerchantReconciliation',
@@ -42,11 +45,13 @@ interface BillItem {
 }
 
 const fallbackUrl = '/pages/dashboard/index'
-const storeName = '饱藏食坊（现炒盖饭·中式简餐）'
+const merchantFoodStore = useMerchantFoodStore()
+const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
+const now = new Date()
 const currentDate = {
-  year: 2026,
-  month: 5,
-  day: 25,
+  year: now.getFullYear(),
+  month: now.getMonth() + 1,
+  day: now.getDate(),
 }
 const todayBillDate = `${currentDate.year}-${String(currentDate.month).padStart(2, '0')}-${String(currentDate.day).padStart(2, '0')}`
 
@@ -56,110 +61,29 @@ const settlementTabs = [
   { key: 'group', label: '团购' },
 ] as const
 
-const settlementSummaryMap: Record<SettlementTab, SettlementSummary> = {
-  all: { amount: '86.38' },
-  onsite: { amount: '14.38' },
-  group: { amount: '72.00' },
-}
+const settlementSummaryMap = reactive<Record<SettlementTab, SettlementSummary>>({
+  all: { amount: '0.00' },
+  onsite: { amount: '0.00' },
+  group: { amount: '0.00' },
+})
 
-const orderStatsMap: Record<SettlementTab, OrderStat[]> = {
-  all: [
-    { key: 'completed', label: '已完成', count: '3单', amount: '¥128.38', dotColor: '#ff8a3d' },
-    { key: 'onsite', label: '到店订单', count: '1单', amount: '¥14.38', dotColor: '#bdbfc6' },
-    { key: 'progress', label: '进行中', count: '1单', amount: '¥0', dotColor: '#2f86ff' },
-    { key: 'today', label: '今日下单', count: '2单', amount: '¥52.00', dotColor: '#bdbfc6' },
-    { key: 'history', label: '历史下单', count: '18单', amount: '¥986.00', dotColor: '#bdbfc6' },
-  ],
-  onsite: [
-    { key: 'completed', label: '已完成', count: '1单', amount: '¥14.38', dotColor: '#ff8a3d' },
-    { key: 'onsite', label: '到店订单', count: '1单', amount: '¥14.38', dotColor: '#bdbfc6' },
-    { key: 'progress', label: '进行中', count: '0单', amount: '¥0', dotColor: '#2f86ff' },
-    { key: 'today', label: '今日下单', count: '1单', amount: '¥14.38', dotColor: '#bdbfc6' },
-    { key: 'history', label: '历史下单', count: '6单', amount: '¥238.00', dotColor: '#bdbfc6' },
-  ],
-  group: [
-    { key: 'completed', label: '已完成', count: '2单', amount: '¥114.00', dotColor: '#ff8a3d' },
+function createEmptyOrderStats(): OrderStat[] {
+  return [
+    { key: 'completed', label: '已完成', count: '0单', amount: '¥0.00', dotColor: '#ff8a3d' },
     { key: 'onsite', label: '到店订单', count: '0单', amount: '¥0.00', dotColor: '#bdbfc6' },
-    { key: 'progress', label: '进行中', count: '1单', amount: '¥0', dotColor: '#2f86ff' },
-    { key: 'today', label: '今日下单', count: '1单', amount: '¥37.62', dotColor: '#bdbfc6' },
-    { key: 'history', label: '历史下单', count: '12单', amount: '¥748.00', dotColor: '#bdbfc6' },
-  ],
+    { key: 'progress', label: '进行中', count: '0单', amount: '¥0.00', dotColor: '#2f86ff' },
+    { key: 'today', label: '今日下单', count: '0单', amount: '¥0.00', dotColor: '#bdbfc6' },
+    { key: 'history', label: '历史下单', count: '0单', amount: '¥0.00', dotColor: '#bdbfc6' },
+  ]
 }
 
-const billList: BillItem[] = [
-  {
-    id: 'bill-001',
-    date: '2026-05-25',
-    status: 'pending',
-    summaryAmount: '24.90',
-    description: '付款成功至银行卡 xxxx 2912，结算中',
-    referenceNo: '付款单号：300000000515558973',
-    transferDate: '2026-05-25',
-    transferLabel: '待平台结算',
-    transferAmount: '24.90',
-    settlementType: 'group',
-  },
-  {
-    id: 'bill-002',
-    date: '2026-05-24',
-    status: 'settled',
-    summaryAmount: '14.38',
-    description: '付款成功至银行卡 xxxx 2912，付款成功',
-    referenceNo: '付款单号：300000000515558972',
-    transferDate: '2026-05-23',
-    transferLabel: '秒速到账',
-    transferAmount: '14.38',
-    settlementType: 'onsite',
-  },
-  {
-    id: 'bill-003',
-    date: '2026-04-18',
-    status: 'settled',
-    summaryAmount: '36.00',
-    description: '付款成功至银行卡 xxxx 2912，付款成功',
-    referenceNo: '付款单号：300000000515558860',
-    transferDate: '2026-04-17',
-    transferLabel: '秒速到账',
-    transferAmount: '36.00',
-    settlementType: 'group',
-  },
-  {
-    id: 'bill-004',
-    date: '2026-03-09',
-    status: 'settled',
-    summaryAmount: '18.80',
-    description: '付款成功至银行卡 xxxx 2912，付款成功',
-    referenceNo: '付款单号：300000000515558751',
-    transferDate: '2026-03-08',
-    transferLabel: '秒速到账',
-    transferAmount: '18.80',
-    settlementType: 'onsite',
-  },
-  {
-    id: 'bill-005',
-    date: '2026-02-27',
-    status: 'settled',
-    summaryAmount: '58.80',
-    description: '付款成功至银行卡 xxxx 2912，付款成功',
-    referenceNo: '付款单号：300000000515558640',
-    transferDate: '2026-02-27',
-    transferLabel: '秒速到账',
-    transferAmount: '58.80',
-    settlementType: 'group',
-  },
-  {
-    id: 'bill-006',
-    date: '2025-12-12',
-    status: 'settled',
-    summaryAmount: '42.00',
-    description: '付款成功至银行卡 xxxx 2912，付款成功',
-    referenceNo: '付款单号：300000000515558418',
-    transferDate: '2025-12-11',
-    transferLabel: '秒速到账',
-    transferAmount: '42.00',
-    settlementType: 'group',
-  },
-]
+const orderStatsMap = reactive<Record<SettlementTab, OrderStat[]>>({
+  all: createEmptyOrderStats(),
+  onsite: createEmptyOrderStats(),
+  group: createEmptyOrderStats(),
+})
+
+const billList = reactive<BillItem[]>([])
 
 const activeSettlementTab = ref<SettlementTab>('onsite')
 const onlyTodayBills = ref(false)
@@ -233,18 +157,65 @@ function handleClose() {
   })
 }
 
+function sceneParam(tab: SettlementTab) {
+  return tab === 'onsite' ? 'ONSITE' as const : tab === 'group' ? 'GROUP_BUY' as const : 'ALL' as const
+}
+
+function applyStat(tab: SettlementTab, stat: MerchantFoodReconciliationStat) {
+  settlementSummaryMap[tab].amount = Number(stat.settlementAmount || 0).toFixed(2)
+  orderStatsMap[tab] = [
+    { key: 'completed', label: '已完成', count: `${stat.completedCount || 0}单`, amount: `¥${Number(stat.completedAmount || 0).toFixed(2)}`, dotColor: '#ff8a3d' },
+    { key: 'onsite', label: '到店订单', count: `${stat.onsiteCount || 0}单`, amount: `¥${Number(stat.onsiteAmount || 0).toFixed(2)}`, dotColor: '#bdbfc6' },
+    { key: 'progress', label: '进行中', count: `${stat.progressCount || 0}单`, amount: `¥${Number(stat.progressAmount || 0).toFixed(2)}`, dotColor: '#2f86ff' },
+    { key: 'today', label: '今日下单', count: `${stat.todayCount || 0}单`, amount: `¥${Number(stat.todayAmount || 0).toFixed(2)}`, dotColor: '#bdbfc6' },
+    { key: 'history', label: '历史下单', count: `${stat.historyCount || 0}单`, amount: `¥${Number(stat.historyAmount || 0).toFixed(2)}`, dotColor: '#bdbfc6' },
+  ]
+}
+
+function mapBill(item: MerchantFoodBill): BillItem {
+  const settled = item.settlementStatus === '1' || item.settlementStatus === 'SETTLED'
+  return {
+    id: String(item.settlementId),
+    date: '--',
+    status: settled ? 'settled' : 'pending',
+    summaryAmount: Number(item.settlementAmount || 0).toFixed(2),
+    description: settled ? '平台已完成结算' : '平台结算处理中',
+    referenceNo: `结算单号：${item.settlementNo}`,
+    transferDate: '--',
+    transferLabel: settled ? '已结算' : '待平台结算',
+    transferAmount: Number(item.settlementAmount || 0).toFixed(2),
+    settlementType: item.scene === 'ONSITE' ? 'onsite' : 'group',
+  }
+}
+
+async function loadReconciliation() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const scene = sceneParam(activeSettlementTab.value)
+  const month = activeBillFilter.value === 'all' ? undefined : activeBillFilter.value
+  const [overview, bills] = await Promise.all([
+    getMerchantFoodReconciliationOverview({ storeId, scene, month, todayOnly: onlyTodayBills.value }),
+    getMerchantFoodBillsPage({ storeId, scene, month, todayOnly: onlyTodayBills.value, pageNum: 1, pageSize: 100 }),
+  ])
+  applyStat('all', overview.all)
+  applyStat('onsite', overview.onsite)
+  applyStat('group', overview.groupBuy)
+  billList.splice(0, billList.length, ...bills.rows.map(mapBill))
+}
+
 function switchSettlementTab(tab: SettlementTab) {
   activeSettlementTab.value = tab
+  loadReconciliation().catch(() => {})
 }
 
 function switchBillFilter(filterKey: string) {
   activeBillFilter.value = filterKey
+  loadReconciliation().catch(() => {})
 }
 
 function toggleTodayBills() {
   onlyTodayBills.value = !onlyTodayBills.value
+  loadReconciliation().catch(() => {})
 }
-
 
 function openMonthPicker() {
   const monthKey = activeBillFilter.value === 'all'
@@ -276,11 +247,18 @@ function confirmMonthPicker() {
   customMonthKey.value = nextMonthKey
   activeBillFilter.value = nextMonthKey
   monthPickerVisible.value = false
+  loadReconciliation().catch(() => {})
 }
 
 function formatBillDate(date: string) {
+  if (date === '--')
+    return '--'
   return date.slice(5).replace('-', '-')
 }
+
+onShow(() => {
+  loadReconciliation().catch(() => {})
+})
 
 function getBillStatusLabel(status: BillStatus) {
   return status === 'settled' ? '已结算' : '待结算'
@@ -407,7 +385,7 @@ function getBillStatusLabel(status: BillStatus) {
           </scroll-view>
 
           <view class="merchant-bill-filter__calendar" hover-class="merchant-bill-filter__calendar--hover" @tap="openMonthPicker">
-            <image class="merchant-bill-filter__calendar-icon" :src="calendarMonthIcon" mode="aspectFit"  />
+            <image class="merchant-bill-filter__calendar-icon" :src="calendarMonthIcon" mode="aspectFit" />
           </view>
         </view>
 
@@ -644,7 +622,6 @@ function getBillStatusLabel(status: BillStatus) {
   white-space: nowrap;
 }
 
-
 .merchant-balance-card {
   margin-top: 24rpx;
   padding: 22rpx 22rpx 26rpx;
@@ -733,7 +710,7 @@ function getBillStatusLabel(status: BillStatus) {
 
 .merchant-section__head {
   justify-content: space-between;
-  
+
   gap: 20rpx;
 }
 
@@ -741,7 +718,6 @@ function getBillStatusLabel(status: BillStatus) {
   color: #26292f;
   font-size: 40rpx;
   font-weight: 600;
-
 }
 
 .merchant-section__toggle {

@@ -1,5 +1,13 @@
 <script lang="ts" setup>
+import type { MerchantFoodRefund } from '@/api/types/merchant-food'
+import {
+  approveMerchantFoodRefund,
+  getMerchantFoodRefundDetail,
+  getMerchantFoodRefundsPage,
+  rejectMerchantFoodRefund,
+} from '@/api/merchant-food'
 import productImage from '@/static/images/item-image.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'AfterSalesPage',
@@ -33,6 +41,7 @@ interface AfterSalesOrder {
 }
 
 const fallbackUrl = '/pages/dashboard/index'
+const merchantFoodStore = useMerchantFoodStore()
 
 const refundTabs = [
   { key: 'before', label: '消费前退款' },
@@ -54,87 +63,59 @@ const statusLabelMap: Record<RefundStatus, string> = {
   cancelled: '已取消',
 }
 
-const orders: AfterSalesOrder[] = [
-  {
-    id: 'refund-001',
-    orderNo: 'TK202605250001',
-    storeName: '小龙坎火锅',
-    storeInitial: '火',
-    productName: '优惠团购三人餐',
-    orderTime: '2026/5/25 15:30',
-    amount: '366',
-    quantity: 1,
-    refundType: 'before',
-    status: 'pending',
-    image: productImage,
-    actions: ['联系客户', '拒绝退款', '确认退款'],
-  },
-  {
-    id: 'refund-002',
-    orderNo: 'TK202605250002',
-    storeName: '小龙坎火锅',
-    storeInitial: '火',
-    productName: '优惠团购三人餐',
-    orderTime: '2026/5/25 15:30',
-    amount: '366',
-    quantity: 1,
-    refundType: 'before',
-    status: 'approved',
-    image: productImage,
-    actions: ['联系客户'],
-  },
-  {
-    id: 'refund-003',
-    orderNo: 'TK202605240018',
-    storeName: '小龙坎火锅',
-    storeInitial: '火',
-    productName: '精品双人肥牛套餐',
-    orderTime: '2026/5/24 18:20',
-    amount: '268',
-    quantity: 1,
-    refundType: 'before',
-    status: 'rejected',
-    image: productImage,
-    actions: ['联系客户'],
-  },
-  {
-    id: 'refund-004',
-    orderNo: 'TK202605230006',
-    storeName: '小龙坎火锅',
-    storeInitial: '火',
-    productName: '周末欢聚四人餐',
-    orderTime: '2026/5/23 12:08',
-    amount: '458',
-    quantity: 1,
-    refundType: 'after',
-    status: 'cancelled',
-    image: productImage,
-    actions: ['联系客户'],
-  },
-  {
-    id: 'refund-005',
-    orderNo: 'TK202605220011',
-    storeName: '小龙坎火锅',
-    storeInitial: '火',
-    productName: '招牌毛肚单人餐',
-    orderTime: '2026/5/22 19:16',
-    amount: '129',
-    quantity: 2,
-    refundType: 'after',
-    status: 'pending',
-    image: productImage,
-    actions: ['联系客户', '拒绝退款', '确认退款'],
-  },
-]
-
+const orders = ref<AfterSalesOrder[]>([])
 const activeRefundType = ref<RefundType>('before')
 const activeStatus = ref<RefundFilterStatus>('all')
 const searchKeyword = ref('')
 
+function mapRefund(refund: MerchantFoodRefund): AfterSalesOrder {
+  const status: RefundStatus = refund.refundStatus === '0'
+    ? 'pending'
+    : refund.refundStatus === '4'
+      ? 'rejected'
+      : refund.refundStatus === '5'
+        ? 'cancelled'
+        : 'approved'
+  return {
+    id: String(refund.refundId),
+    orderNo: refund.orderNo,
+    storeName: refund.storeName,
+    storeInitial: refund.storeName.slice(0, 1) || '店',
+    productName: refund.productSummary || refund.productName || '退款商品',
+    orderTime: '--',
+    amount: String(refund.refundAmount ?? 0),
+    quantity: refund.quantity || 1,
+    refundType: refund.refundType === 'AFTER' ? 'after' : 'before',
+    status,
+    image: refund.productImage || productImage,
+    actions: status === 'pending' ? ['联系客户', '拒绝退款', '确认退款'] : ['联系客户'],
+  }
+}
+
+async function loadRefunds() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const statusCode = activeStatus.value === 'pending'
+    ? '0'
+    : activeStatus.value === 'rejected'
+      ? '4'
+      : activeStatus.value === 'cancelled'
+        ? '5'
+        : undefined
+  const result = await getMerchantFoodRefundsPage({
+    storeId,
+    pageNum: 1,
+    pageSize: 100,
+    refundType: activeRefundType.value === 'after' ? 'AFTER' : 'BEFORE',
+    refundStatus: statusCode,
+    keyword: searchKeyword.value.trim() || undefined,
+  })
+  orders.value = result.rows.map(mapRefund).filter(item => activeStatus.value !== 'approved' || item.status === 'approved')
+}
+
 const filteredOrders = computed(() => {
   const keyword = searchKeyword.value.trim()
 
-  return orders.filter((order) => {
+  return orders.value.filter((order) => {
     const matchType = order.refundType === activeRefundType.value
     const matchStatus = activeStatus.value === 'all' || order.status === activeStatus.value
     const matchKeyword = !keyword || order.productName.includes(keyword) || order.orderNo.includes(keyword)
@@ -145,10 +126,12 @@ const filteredOrders = computed(() => {
 
 function switchRefundType(type: RefundType) {
   activeRefundType.value = type
+  loadRefunds().catch(() => {})
 }
 
 function switchStatus(status: RefundFilterStatus) {
   activeStatus.value = status
+  loadRefunds().catch(() => {})
 }
 
 function handleClose() {
@@ -166,14 +149,31 @@ function handleClose() {
 
 function handleSearch() {
   uni.hideKeyboard()
+  loadRefunds().catch(() => {})
 }
 
-function handleOrderAction(action: OrderAction, order: AfterSalesOrder) {
-  uni.showToast({
-    title: `${action}：${order.orderNo}`,
-    icon: 'none',
-  })
+async function handleOrderAction(action: OrderAction, order: AfterSalesOrder) {
+  const refundId = Number(order.id)
+  if (action === '联系客户') {
+    const detail = await getMerchantFoodRefundDetail(refundId)
+    uni.showModal({ title: '客户联系方式', content: detail.memberMobileMask || '暂无联系方式', showCancel: false })
+    return
+  }
+  if (action === '确认退款')
+    await approveMerchantFoodRefund(refundId)
+  if (action === '拒绝退款')
+    await rejectMerchantFoodRefund(refundId)
+  await loadRefunds()
+  uni.showToast({ title: action === '确认退款' ? '已同意退款' : '已拒绝退款', icon: 'success' })
 }
+
+onLoad((options) => {
+  searchKeyword.value = options?.keyword ? decodeURIComponent(options.keyword) : ''
+})
+
+onShow(() => {
+  loadRefunds().catch(() => {})
+})
 </script>
 
 <template>
@@ -214,7 +214,7 @@ function handleOrderAction(action: OrderAction, order: AfterSalesOrder) {
             placeholder-class="after-sales-search__placeholder"
             confirm-type="search"
             @confirm="handleSearch"
-          />
+          >
         </view>
 
         <view class="after-sales-search__action" hover-class="after-sales-search__action--hover" @tap="handleSearch">
