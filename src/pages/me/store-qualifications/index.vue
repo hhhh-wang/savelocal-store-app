@@ -70,6 +70,9 @@ function uploadedUrl(result: any) {
 
 const { run: selectAndUpload } = useUpload<'image'>({
   fileType: 'image',
+  formData: {
+    bizType: 'MERCHANT_QUALIFICATION',
+  },
   success: async (result) => {
     const imageUrl = uploadedUrl(result)
     const item = qualifications.value.find(value => value.qualificationCode === selectedQualificationCode.value)
@@ -203,12 +206,18 @@ onMounted(() => {
 
               <view class="qualification-card__image-wrap">
                 <view class="qualification-card__image-frame">
-                  <view class="qualification-card__image-photo">
+                  <view v-if="!upload.imageUrls.length" class="qualification-card__image-photo">
                     <image class="qualification-card__image-photo-icon" :src="addImageIcon" mode="aspectFit" />
                     <text class="qualification-card__image-photo-text">
                       {{ upload.title }}
                     </text>
                   </view>
+
+                  <swiper v-else class="qualification-card__image-swiper" :indicator-dots="upload.imageUrls.length > 1">
+                    <swiper-item v-for="imageUrl in upload.imageUrls" :key="imageUrl">
+                      <image class="qualification-card__image" :src="imageUrl" mode="aspectFit" />
+                    </swiper-item>
+                  </swiper>
 
                   <view class="qualification-card__delete" @tap="handleDelete(upload.title)">
                     <image class="qualification-card__delete-icon" :src="deleteIcon" mode="aspectFit" />
@@ -445,6 +454,17 @@ onMounted(() => {
   border: 2rpx solid #d8c9a8;
   background: linear-gradient(180deg, #f8f0de 0%, #e6d7b8 100%);
   box-shadow: inset 0 0 0 8rpx rgba(255, 255, 255, 0.18);
+}
+
+.qualification-card__image-swiper {
+  width: 100%;
+  height: 340rpx;
+}
+
+.qualification-card__image {
+  width: 100%;
+  height: 100%;
+  background: #f6f7f9;
 }
 
 .qualification-card__image-photo-icon {

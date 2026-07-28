@@ -9,6 +9,7 @@ export interface QualificationRecord {
   qualificationCode: string
   qualificationScope?: string
   qualificationNo?: string
+  qualificationImages?: string
   validTo?: string
   auditStatus?: string
 }
@@ -26,6 +27,7 @@ export interface QualificationUpload {
   key: string
   title: string
   required?: boolean
+  imageUrls: string[]
 }
 
 export interface QualificationSection {
@@ -66,6 +68,7 @@ export function buildQualificationSections(
     const item = qualifications.find(value => value.qualificationCode === type.qualificationCode)
     const required = type.isRequired === '1' || type.isRequired === 'Y'
     const statusText = item?.auditStatus === '1' ? '已生效' : item?.auditStatus === '2' ? '已驳回' : '待提交/审核'
+    const imageUrls = (item?.qualificationImages || '').split(',').map(value => value.trim()).filter(Boolean)
 
     return {
       id: type.qualificationCode,
@@ -73,7 +76,7 @@ export function buildQualificationSections(
       required,
       statusText,
       showSectionWarn: item?.auditStatus === '2',
-      uploads: [{ key: type.qualificationCode, title: type.qualificationName, required }],
+      uploads: [{ key: type.qualificationCode, title: type.qualificationName, required, imageUrls }],
       fields: [
         { label: '证件编号', value: item?.qualificationNo || '未填写', muted: !item?.qualificationNo },
         { label: '有效期', value: item?.validTo || '长期有效', muted: !item?.validTo },
