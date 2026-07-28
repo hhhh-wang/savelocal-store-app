@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { getEnvBaseUrl } from '@/utils/index'
 
-const VITE_UPLOAD_BASEURL = `${getEnvBaseUrl()}/upload`
+const VITE_UPLOAD_BASEURL = `${getEnvBaseUrl()}/common/upload`
 
 type TfileType = 'image' | 'file'
 type TImage = 'png' | 'jpg' | 'jpeg' | 'webp' | '*'
@@ -30,6 +30,18 @@ export default function useUpload<T extends TfileType>(options: TOptions<T> = {}
   const error = ref<Error | null>(null)
   const data = ref<any>(null)
 
+  const handleUploadError = (err: any) => {
+    const uploadError = err instanceof Error
+      ? err
+      : new Error(err?.msg || err?.message || err?.errMsg || '上传失败')
+    error.value = uploadError
+    uni.showToast({
+      title: uploadError.message || '上传失败',
+      icon: 'none',
+    })
+    onError?.(uploadError)
+  }
+
   const handleFileChoose = ({ tempFilePath, size }: { tempFilePath: string, size: number }) => {
     if (size > maxSize) {
       uni.showToast({
@@ -54,27 +66,11 @@ export default function useUpload<T extends TfileType>(options: TOptions<T> = {}
     uploadFile({
       tempFilePath,
       formData,
-      onSuccess: (res) => {
-        // 修改这里的解析逻辑，适应不同平台的返回格式
-        let parsedData = res
-        try {
-          // 尝试解析为JSON
-          const jsonData = JSON.parse(res)
-          // 检查是否包含data字段
-          parsedData = jsonData.data || jsonData
-        }
-        catch (e) {
-          // 如果解析失败，使用原始数据
-          console.log('Response is not JSON, using raw data:', res)
-        }
-        data.value = parsedData
-        // console.log('上传成功', res)
-        success?.(parsedData)
+      onSuccess: (result) => {
+        data.value = result
+        success?.(result)
       },
-      onError: (err) => {
-        error.value = err
-        onError?.(err)
-      },
+      onError: handleUploadError,
       onComplete: () => {
         loading.value = false
       },
@@ -155,8 +151,28 @@ async function uploadFile({
     formData,
     success: (uploadFileRes) => {
       try {
-        const data = uploadFileRes.data
-        onSuccess(data)
+        let parsedData: any
+        try {
+          parsedData = typeof uploadFileRes.data === 'string'
+            ? JSON.parse(uploadFileRes.data)
+            : uploadFileRes.data
+        }
+        catch {
+          throw new Error(`上传失败：服务器响应格式异常（HTTP ${uploadFileRes.statusCode}）`)
+        }
+
+        if (uploadFileRes.statusCode < 200 || uploadFileRes.statusCode >= 300) {
+          throw new Error(parsedData?.msg || parsedData?.message || `上传失败（HTTP ${uploadFileRes.statusCode}）`)
+        }
+
+        if (parsedData?.code !== undefined && parsedData?.code !== 0 && parsedData?.code !== 200) {
+          throw new Error(parsedData?.msg || parsedData?.message || '上传失败')
+        }
+
+        const result = Object.prototype.hasOwnProperty.call(parsedData, 'data')
+          ? parsedData.data
+          : parsedData
+        onSuccess(result)
       }
       catch (err) {
         onError(err)

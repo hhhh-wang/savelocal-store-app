@@ -86,8 +86,10 @@ const { run: selectAndUpload } = useUpload<'image'>({
   fileType: 'image',
   success: async (result) => {
     const imageUrl = uploadedUrl(result)
-    if (!imageUrl)
+    if (!imageUrl) {
+      uni.showToast({ title: '上传结果缺少图片地址', icon: 'none' })
       return
+    }
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     await addMerchantFoodAlbumImage(storeId, imageUrl)
     await loadAlbum()
