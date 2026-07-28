@@ -23,6 +23,7 @@ dist
 
 .stylelintcache
 .eslintcache
+.worktrees/
 
 docs/.vitepress/dist
 docs/.vitepress/cache
