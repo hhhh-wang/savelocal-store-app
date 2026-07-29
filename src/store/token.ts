@@ -104,8 +104,8 @@ export const useTokenStore = defineStore(
       catch (error) {
         console.error('登录失败:', error)
         uni.showToast({
-          title: '登录失败，请重试',
-          icon: 'error',
+          title: error instanceof Error ? error.message : '登录失败，请重试',
+          icon: 'none',
         })
         throw error
       }

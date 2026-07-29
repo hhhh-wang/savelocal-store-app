@@ -34,11 +34,22 @@ export function http<T>(options: CustomRequestOptions) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           // 处理业务逻辑错误
           if (code !== ResultEnum.Success0 && code !== ResultEnum.Success200) {
+            const errorMessage = responseData.msg || responseData.message || '请求错误'
+            const errorData = responseData.data
+            const requestError = Object.assign(
+              new Error(errorMessage),
+              errorData && typeof errorData === 'object' ? errorData : {},
+              responseData,
+              {
+                msg: errorMessage,
+                message: errorMessage,
+              },
+            )
             uni.showToast({
               icon: 'none',
-              title: responseData.msg || responseData.message || '请求错误',
+              title: errorMessage,
             })
-            return reject(responseData.data)
+            return reject(requestError)
           }
           const hasDataField = Object.prototype.hasOwnProperty.call(responseData, 'data')
           return resolve((hasDataField ? responseData.data : responseData) as T)
