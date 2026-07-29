@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { MerchantMessage, MerchantMessageSummary } from '@/api/types/merchant-message'
+import { getMerchantMessages, getMerchantMessageSummary } from '@/api/merchant-message'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import afterSalesIcon from '@/static/icons/dashboard/after-sales.png'
 import allIcon from '@/static/icons/dashboard/all.png'
@@ -7,6 +9,8 @@ import orderManagementIcon from '@/static/icons/dashboard/order-management.png'
 import productManagementIcon from '@/static/icons/dashboard/product-management.png'
 import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
 import { useMerchantFoodStore } from '@/store'
+import { categoryForTab } from './message-shared'
+import type { AssistantTabKey } from './message-shared'
 
 defineOptions({
   name: 'Home',
@@ -19,6 +23,7 @@ definePage({
     // 'custom' 表示开启自定义导航栏，默认 'default'
     navigationStyle: 'custom',
     navigationBarTitleText: '工作台',
+    enablePullDownRefresh: true,
   },
 })
 
@@ -27,6 +32,12 @@ const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '�
 
 onShow(() => {
   merchantFoodStore.loadProfile(true).catch(() => {})
+  loadMessageSummary()
+})
+
+onPullDownRefresh(async () => {
+  await Promise.allSettled([merchantFoodStore.loadProfile(true), loadMessageSummary()])
+  uni.stopPullDownRefresh()
 })
 
 const stats = [
@@ -72,21 +83,23 @@ const assistantTabs = [
   { key: 'messages', label: '重要消息', emptyText: '无消息' },
 ] as const
 
-type AssistantTabKey = typeof assistantTabs[number]['key']
-
-const assistantData: Record<AssistantTabKey, unknown[]> = {
+const assistantData = reactive<Record<AssistantTabKey, MerchantMessage[]>>({
   orders: [],
   reviews: [],
   todos: [],
   messages: [],
-}
+})
+
+const assistantCounts = reactive<Record<AssistantTabKey, number>>({ orders: 0, reviews: 0, todos: 0, messages: 0 })
+const assistantLoading = ref(false)
+const assistantError = ref(false)
 
 const activeTab = ref<AssistantTabKey>('orders')
 
 const assistantTabList = computed(() => {
   return assistantTabs.map(tab => ({
     ...tab,
-    count: assistantData[tab.key].length,
+    count: assistantCounts[tab.key],
   }))
 })
 
@@ -94,8 +107,41 @@ const activeTabConfig = computed(() => {
   return assistantTabList.value.find(tab => tab.key === activeTab.value) || assistantTabList.value[0]
 })
 
-function switchTab(tabKey: AssistantTabKey) {
+const activeMessages = computed(() => assistantData[activeTab.value])
+
+async function loadMessageSummary() {
+  assistantLoading.value = true
+  assistantError.value = false
+  try {
+    const summary: MerchantMessageSummary = await getMerchantMessageSummary()
+    for (const tab of assistantTabs) {
+      assistantCounts[tab.key] = summary[tab.key]?.count || 0
+      assistantData[tab.key] = summary[tab.key]?.items || []
+    }
+  }
+  catch {
+    assistantError.value = true
+  }
+  finally {
+    assistantLoading.value = false
+  }
+}
+
+async function switchTab(tabKey: AssistantTabKey) {
   activeTab.value = tabKey
+  if (assistantData[tabKey].length || assistantCounts[tabKey] === 0)
+    return
+  try {
+    const result = await getMerchantMessages(categoryForTab(tabKey))
+    assistantData[tabKey] = result.rows
+  }
+  catch {
+    assistantError.value = true
+  }
+}
+
+function openMessage(message: MerchantMessage) {
+  uni.navigateTo({ url: `/pages/dashboard/message-detail/index?messageId=${encodeURIComponent(message.messageId)}` })
 }
 
 function openCustomerService() {
@@ -201,7 +247,35 @@ function handleMenuTap(item: DashboardMenuItem) {
           </view>
         </view>
 
-        <view class="assistant-empty">
+        <view v-if="assistantLoading" class="assistant-state">
+          <text class="assistant-state__text">正在加载</text>
+        </view>
+
+        <view v-else-if="assistantError" class="assistant-state">
+          <text class="assistant-state__text">消息暂时无法加载</text>
+          <view class="assistant-state__retry" hover-class="assistant-state__retry--hover" @tap="loadMessageSummary">
+            重新加载
+          </view>
+        </view>
+
+        <view v-else-if="activeMessages.length" class="assistant-list">
+          <view
+            v-for="message in activeMessages"
+            :key="message.messageId"
+            class="assistant-message"
+            hover-class="assistant-message--hover"
+            @tap="openMessage(message)"
+          >
+            <view class="assistant-message__indicator" :class="{ 'assistant-message__indicator--read': !message.unread }" />
+            <view class="assistant-message__content">
+              <text class="assistant-message__title">{{ message.title }}</text>
+              <text class="assistant-message__summary">{{ message.summary || message.content || '点击查看详情' }}</text>
+            </view>
+            <text class="assistant-message__arrow">›</text>
+          </view>
+        </view>
+
+        <view v-else class="assistant-empty">
           <image class="assistant-empty__image" :src="emptyNoDataIcon" mode="aspectFit" />
           <text class="assistant-empty__text">
             {{ activeTabConfig.emptyText }}
@@ -481,5 +555,90 @@ function handleMenuTap(item: DashboardMenuItem) {
   margin-top: 16rpx;
   color: #8a909b;
   font-size: 30rpx;
+}
+
+.assistant-state {
+  display: flex;
+  min-height: 260rpx;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22rpx;
+}
+
+.assistant-state__text {
+  color: #8a909b;
+  font-size: 28rpx;
+}
+
+.assistant-state__retry {
+  padding: 14rpx 28rpx;
+  border: 2rpx solid #d7d9df;
+  border-radius: 16rpx;
+  color: #4d525b;
+  font-size: 26rpx;
+}
+
+.assistant-state__retry--hover,
+.assistant-message--hover {
+  opacity: 0.78;
+}
+
+.assistant-list {
+  margin-top: 18rpx;
+  border-top: 2rpx solid #f1f2f5;
+}
+
+.assistant-message {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  min-height: 118rpx;
+  padding: 18rpx 8rpx;
+  border-bottom: 2rpx solid #f1f2f5;
+}
+
+.assistant-message__indicator {
+  width: 14rpx;
+  height: 14rpx;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ff5b4d;
+}
+
+.assistant-message__indicator--read {
+  background: #c9ccd3;
+}
+
+.assistant-message__content {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.assistant-message__title,
+.assistant-message__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-message__title {
+  color: #292d34;
+  font-size: 29rpx;
+  font-weight: 700;
+}
+
+.assistant-message__summary {
+  color: #8a909b;
+  font-size: 25rpx;
+}
+
+.assistant-message__arrow {
+  flex-shrink: 0;
+  color: #9da1aa;
+  font-size: 38rpx;
 }
 </style>
