@@ -480,6 +480,7 @@ function handleMenuTap(item: DashboardMenuItem) {
 }
 
 .section-card--assistant {
+  min-height: 580rpx;
   padding: 28rpx 18rpx 20rpx;
 }
 

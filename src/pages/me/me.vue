@@ -8,6 +8,7 @@ import storeInfoIcon from '@/static/icons/me/store-info.png'
 import violationRecordsIcon from '@/static/icons/me/violation-records.png'
 import settingIcon from '@/static/icons/setting.png'
 import { useMerchantFoodStore } from '@/store'
+import { useTokenStore } from '@/store/token'
 
 defineOptions({
   name: 'Me',
@@ -21,6 +22,8 @@ definePage({
 })
 
 const merchantFoodStore = useMerchantFoodStore()
+const tokenStore = useTokenStore()
+const isLoggingOut = ref(false)
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 
 const storeStatus = computed(() => merchantFoodStore.currentStore?.storeStatus === '1'
@@ -40,8 +43,9 @@ const walletItems = [
 
 interface MenuItem {
   title: string
-  icon: string
+  icon?: string
   path?: string
+  action?: 'logout'
 }
 
 const menuItems: MenuItem[] = [
@@ -52,6 +56,7 @@ const menuItems: MenuItem[] = [
   { title: '违规记录', icon: violationRecordsIcon },
   { title: '规则中心', icon: rulesCenterIcon },
   { title: '关于我们', icon: aboutUsIcon },
+  { title: '退出登录', action: 'logout' },
 ]
 
 function openSettings() {
@@ -61,7 +66,26 @@ function openSettings() {
   })
 }
 
+async function handleLogout() {
+  if (isLoggingOut.value)
+    return
+
+  isLoggingOut.value = true
+  try {
+    await tokenStore.logout()
+    uni.reLaunch({ url: '/pages/login/index' })
+  }
+  finally {
+    isLoggingOut.value = false
+  }
+}
+
 function handleMenuItemTap(item: (typeof menuItems)[number]) {
+  if (item.action === 'logout') {
+    void handleLogout()
+    return
+  }
+
   if (item.path) {
     uni.navigateTo({
       url: item.path,
@@ -142,7 +166,7 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
             hover-class="menu-grid__item--hover"
             @tap="handleMenuItemTap(item)"
           >
-            <image class="menu-grid__icon-image" :src="item.icon" mode="aspectFit" />
+            <image v-if="item.icon" class="menu-grid__icon-image" :src="item.icon" mode="aspectFit" />
             <text class="menu-grid__title">
               {{ item.title }}
             </text>

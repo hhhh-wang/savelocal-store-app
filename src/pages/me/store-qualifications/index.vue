@@ -3,14 +3,21 @@ import type { QualificationSection } from './shared'
 import type { MerchantFoodQualification, MerchantFoodQualificationType, MerchantQualificationPayload } from '@/api/types/merchant-food'
 import {
   createMerchantQualification,
-  deleteMerchantQualification,
   getMerchantQualifications,
   updateMerchantQualification,
 } from '@/api/merchant-food'
 import useUpload from '@/hooks/useUpload'
 import addImageIcon from '@/static/icons/add-image.png'
 import deleteIcon from '@/static/icons/delete.png'
-import { buildQualificationSections, mergeQualificationCatalogs } from './shared'
+import {
+  appendQualificationImage,
+  buildQualificationSections,
+  MAX_QUALIFICATION_IMAGES,
+  mergeQualificationCatalogs,
+  normalizeQualificationNo,
+  removeQualificationImage,
+  replaceQualificationImage,
+} from './shared'
 
 defineOptions({
   name: 'StoreQualifications',
@@ -27,7 +34,12 @@ const fallbackUrl = '/pages/me/store-info/index'
 const qualificationSections = ref<QualificationSection[]>([])
 const qualificationTemplates = ref<MerchantFoodQualificationType[]>([])
 const qualifications = ref<MerchantFoodQualification[]>([])
-const selectedQualificationCode = ref('')
+const currentImageIndexes = reactive<Record<string, number>>({})
+const pendingImageUpload = ref<{
+  sectionId: string
+  mode: 'append' | 'replace'
+  imageIndex?: number
+}>()
 
 function imageUrls(item: MerchantFoodQualification | undefined) {
   return (item?.qualificationImages || '').split(',').filter(Boolean)
@@ -75,12 +87,29 @@ const { run: selectAndUpload } = useUpload<'image'>({
   },
   success: async (result) => {
     const imageUrl = uploadedUrl(result)
-    const item = qualifications.value.find(value => value.qualificationCode === selectedQualificationCode.value)
-    if (!imageUrl || !item)
+    const action = pendingImageUpload.value
+    pendingImageUpload.value = undefined
+    if (!imageUrl || !action)
       return
-    item.qualificationImages = [...imageUrls(item), imageUrl].join(',')
-    await saveQualification(item)
-    uni.showToast({ title: '资质图片已提交', icon: 'success' })
+
+    const item = qualifications.value.find(value => value.qualificationCode === action.sectionId)
+    if (!item)
+      return
+
+    try {
+      const nextImageUrls = action.mode === 'replace'
+        ? replaceQualificationImage(imageUrls(item), action.imageIndex ?? -1, imageUrl)
+        : appendQualificationImage(imageUrls(item), imageUrl)
+      const nextIndex = action.mode === 'replace' ? action.imageIndex ?? 0 : nextImageUrls.length - 1
+
+      item.qualificationImages = nextImageUrls.join(',')
+      currentImageIndexes[action.sectionId] = nextIndex
+      await saveQualification(item)
+      uni.showToast({ title: action.mode === 'replace' ? '当前图片已替换' : '图片已添加', icon: 'success' })
+    }
+    catch (error) {
+      uni.showToast({ title: error instanceof Error ? error.message : '图片保存失败', icon: 'none' })
+    }
   },
 })
 
@@ -97,33 +126,126 @@ function handleClose() {
   })
 }
 
-function handleUpload(title: string) {
-  const section = qualificationSections.value.find(item => item.title === title)
-  if (!section)
+function qualificationFor(sectionId: string) {
+  let item = qualifications.value.find(value => value.qualificationCode === sectionId)
+  if (item)
+    return item
+
+  const template = qualificationTemplates.value.find(type => type.qualificationCode === sectionId)
+  if (!template)
     return
-  selectedQualificationCode.value = section.id
-  let item = qualifications.value.find(value => value.qualificationCode === section.id)
-  if (!item) {
-    item = {
-      qualificationId: 0,
-      qualificationCode: section.id,
-      qualificationName: section.title,
-      qualificationScope: qualificationTemplates.value.find(type => type.qualificationCode === section.id)?.qualificationScope,
-      qualificationImages: '',
-    }
-    qualifications.value.push(item)
+
+  item = {
+    qualificationId: 0,
+    qualificationCode: sectionId,
+    qualificationName: template.qualificationName,
+    qualificationScope: template.qualificationScope,
+    qualificationImages: '',
+  }
+  qualifications.value.push(item)
+  return item
+}
+
+function currentImageIndex(sectionId: string, imageCount: number) {
+  return Math.min(currentImageIndexes[sectionId] || 0, Math.max(0, imageCount - 1))
+}
+
+function handleSwiperChange(sectionId: string, event: { detail: { current: number } }) {
+  currentImageIndexes[sectionId] = event.detail.current
+}
+
+function selectImage(sectionId: string, imageIndex: number) {
+  currentImageIndexes[sectionId] = imageIndex
+}
+
+function startImageUpload(sectionId: string, mode: 'append' | 'replace') {
+  const section = qualificationSections.value.find(item => item.id === sectionId)
+  const item = qualificationFor(sectionId)
+  if (!section || !item)
+    return
+
+  const urls = imageUrls(item)
+  if (mode === 'append' && urls.length >= MAX_QUALIFICATION_IMAGES) {
+    uni.showToast({ title: `最多上传 ${MAX_QUALIFICATION_IMAGES} 张图片`, icon: 'none' })
+    return
+  }
+  if (mode === 'replace' && !urls.length)
+    return
+
+  pendingImageUpload.value = {
+    sectionId,
+    mode,
+    ...(mode === 'replace' ? { imageIndex: currentImageIndex(sectionId, urls.length) } : {}),
   }
   selectAndUpload()
 }
 
-async function handleDelete(title: string) {
-  const section = qualificationSections.value.find(item => item.title === title)
-  const item = qualifications.value.find(value => value.qualificationCode === section?.id)
+function handleQualificationNo(sectionId: string) {
+  const item = qualificationFor(sectionId)
   if (!item)
     return
-  await deleteMerchantQualification(item.qualificationId)
-  await loadQualifications()
-  uni.showToast({ title: '资质图片已删除', icon: 'success' })
+
+  uni.showModal({
+    title: '填写证件编号',
+    content: item.qualificationNo || '',
+    editable: true,
+    placeholderText: '选填，可留空',
+    success: (result) => {
+      if (!result.confirm)
+        return
+
+      const qualificationNo = normalizeQualificationNo(result.content)
+      if (!item.qualificationId && !imageUrls(item).length && !qualificationNo)
+        return
+
+      item.qualificationNo = qualificationNo
+      saveQualification(item).then(() => {
+        uni.showToast({ title: qualificationNo ? '证件编号已保存' : '证件编号已清空', icon: 'success' })
+      }).catch(() => {})
+    },
+  })
+}
+
+async function handleValidToChange(sectionId: string, event: { detail: { value: string } }) {
+  const item = qualificationFor(sectionId)
+  if (!item)
+    return
+
+  item.validTo = event.detail.value
+  await saveQualification(item)
+  uni.showToast({ title: '有效期已保存', icon: 'success' })
+}
+
+function handleDeleteImage(sectionId: string, required: boolean) {
+  const item = qualifications.value.find(value => value.qualificationCode === sectionId)
+  const urls = imageUrls(item)
+  if (!item || !urls.length)
+    return
+
+  const imageIndex = currentImageIndex(sectionId, urls.length)
+  let nextImageUrls: string[]
+  try {
+    nextImageUrls = removeQualificationImage(urls, imageIndex, required)
+  }
+  catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '当前图片无法删除', icon: 'none' })
+    return
+  }
+
+  uni.showModal({
+    title: '删除当前图片',
+    content: `确认删除第 ${imageIndex + 1} 张图片吗？`,
+    success: (result) => {
+      if (!result.confirm)
+        return
+
+      item.qualificationImages = nextImageUrls.join(',')
+      currentImageIndexes[sectionId] = Math.min(imageIndex, Math.max(0, nextImageUrls.length - 1))
+      saveQualification(item).then(() => {
+        uni.showToast({ title: '当前图片已删除', icon: 'success' })
+      }).catch(() => {})
+    },
+  })
 }
 
 onMounted(() => {
@@ -178,9 +300,14 @@ onMounted(() => {
               </text>
             </view>
 
-            <text v-if="section.showSectionWarn !== false" class="qualification-block__warn">
-              !
-            </text>
+            <view v-if="section.showSectionWarn" class="qualification-block__rejection">
+              <text class="qualification-block__warn">
+                !
+              </text>
+              <text class="qualification-block__rejection-reason">
+                {{ section.rejectReason }}
+              </text>
+            </view>
           </view>
 
           <view class="qualification-card">
@@ -206,26 +333,67 @@ onMounted(() => {
 
               <view class="qualification-card__image-wrap">
                 <view class="qualification-card__image-frame">
-                  <view v-if="!upload.imageUrls.length" class="qualification-card__image-photo">
+                  <view
+                    v-if="!upload.imageUrls.length"
+                    class="qualification-card__image-photo"
+                    @tap="startImageUpload(section.id, 'append')"
+                  >
                     <image class="qualification-card__image-photo-icon" :src="addImageIcon" mode="aspectFit" />
                     <text class="qualification-card__image-photo-text">
                       {{ upload.title }}
                     </text>
                   </view>
 
-                  <swiper v-else class="qualification-card__image-swiper" :indicator-dots="upload.imageUrls.length > 1">
-                    <swiper-item v-for="imageUrl in upload.imageUrls" :key="imageUrl">
-                      <image class="qualification-card__image" :src="imageUrl" mode="aspectFit" />
+                  <swiper
+                    v-else
+                    class="qualification-card__image-swiper"
+                    :current="currentImageIndex(section.id, upload.imageUrls.length)"
+                    @change="handleSwiperChange(section.id, $event)"
+                  >
+                    <swiper-item v-for="(imageUrl, imageIndex) in upload.imageUrls" :key="`${imageUrl}-${imageIndex}`">
+                      <image class="qualification-card__image" :src="imageUrl" mode="aspectFill" />
                     </swiper-item>
                   </swiper>
 
-                  <view class="qualification-card__delete" @tap="handleDelete(upload.title)">
+                  <view
+                    v-if="upload.imageUrls.length"
+                    class="qualification-card__delete"
+                    @tap="handleDeleteImage(section.id, Boolean(section.required))"
+                  >
                     <image class="qualification-card__delete-icon" :src="deleteIcon" mode="aspectFit" />
                   </view>
+                </view>
 
-                  <view class="qualification-card__upload-mask" @tap="handleUpload(upload.title)">
-                    重新上传
-                  </view>
+                <view v-if="upload.imageUrls.length > 1" class="qualification-card__indicators">
+                  <view
+                    v-for="(_, imageIndex) in upload.imageUrls"
+                    :key="imageIndex"
+                    class="qualification-card__indicator"
+                    :class="{ 'qualification-card__indicator--active': currentImageIndex(section.id, upload.imageUrls.length) === imageIndex }"
+                    @tap="selectImage(section.id, imageIndex)"
+                  />
+                </view>
+
+                <view class="qualification-card__image-actions">
+                  <text class="qualification-card__image-count">
+                    {{ upload.imageUrls.length }}/{{ MAX_QUALIFICATION_IMAGES }}
+                  </text>
+
+                  <button
+                    v-if="upload.imageUrls.length"
+                    class="qualification-card__image-action"
+                    @tap="startImageUpload(section.id, 'replace')"
+                  >
+                    替换当前
+                  </button>
+
+                  <button
+                    class="qualification-card__image-action qualification-card__image-action--primary"
+                    :disabled="upload.imageUrls.length >= MAX_QUALIFICATION_IMAGES"
+                    @tap="startImageUpload(section.id, 'append')"
+                  >
+                    {{ upload.imageUrls.length >= MAX_QUALIFICATION_IMAGES ? '已达上限' : '添加图片' }}
+                  </button>
                 </view>
               </view>
             </view>
@@ -241,10 +409,45 @@ onMounted(() => {
                   <text v-if="field.required" class="qualification-card__field-required">
                     *
                   </text>
+                  <text v-else-if="field.optional" class="qualification-card__field-optional">
+                    选填
+                  </text>
                 </text>
 
                 <view v-if="field.toggle" class="qualification-card__switch" :class="{ 'qualification-card__switch--active': field.toggleActive }">
                   <view class="qualification-card__switch-thumb" />
+                </view>
+
+                <picker
+                  v-else-if="field.editor === 'date'"
+                  class="qualification-card__field-picker"
+                  mode="date"
+                  :value="field.muted ? '' : field.value"
+                  @change="handleValidToChange(section.id, $event)"
+                >
+                  <view class="qualification-card__field-control">
+                    <text
+                      class="qualification-card__field-value"
+                      :class="{ 'qualification-card__field-value--muted': field.muted }"
+                    >
+                      {{ field.value }}
+                    </text>
+                    <view class="qualification-card__field-chevron" />
+                  </view>
+                </picker>
+
+                <view
+                  v-else-if="field.editor === 'text'"
+                  class="qualification-card__field-control"
+                  @tap="handleQualificationNo(section.id)"
+                >
+                  <text
+                    class="qualification-card__field-value"
+                    :class="{ 'qualification-card__field-value--muted': field.muted }"
+                  >
+                    {{ field.value }}
+                  </text>
+                  <view class="qualification-card__field-chevron" />
                 </view>
 
                 <text
@@ -346,6 +549,7 @@ onMounted(() => {
 }
 
 .qualification-block__header {
+  align-items: flex-start;
   justify-content: space-between;
   gap: 18rpx;
   margin-bottom: 12rpx;
@@ -397,6 +601,29 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
+.qualification-block__rejection {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 10rpx;
+  min-width: 0;
+  padding-top: 6rpx;
+}
+
+.qualification-block__rejection .qualification-block__warn {
+  flex-shrink: 0;
+}
+
+.qualification-block__rejection-reason {
+  max-width: 360rpx;
+  color: #ff453a;
+  font-size: 24rpx;
+  line-height: 32rpx;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .qualification-card {
   overflow: hidden;
   border-radius: 28rpx;
@@ -431,7 +658,7 @@ onMounted(() => {
 }
 
 .qualification-card__image-wrap {
-  padding: 24rpx 24rpx 0;
+  padding: 24rpx 24rpx 20rpx;
 }
 
 .qualification-card__image-frame {
@@ -440,6 +667,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   min-height: 340rpx;
+  overflow: hidden;
   border-radius: 20rpx;
   background: #fff;
 }
@@ -454,6 +682,7 @@ onMounted(() => {
   border: 2rpx solid #d8c9a8;
   background: linear-gradient(180deg, #f8f0de 0%, #e6d7b8 100%);
   box-shadow: inset 0 0 0 8rpx rgba(255, 255, 255, 0.18);
+  cursor: pointer;
 }
 
 .qualification-card__image-swiper {
@@ -462,6 +691,7 @@ onMounted(() => {
 }
 
 .qualification-card__image {
+  display: block;
   width: 100%;
   height: 100%;
   background: #f6f7f9;
@@ -497,18 +727,71 @@ onMounted(() => {
   height: 100%;
 }
 
-.qualification-card__upload-mask {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+.qualification-card__indicators {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 58rpx;
-  background: rgba(35, 38, 44, 0.5);
+  gap: 12rpx;
+  min-height: 36rpx;
+  padding-top: 12rpx;
+}
+
+.qualification-card__indicator {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #d5d8df;
+}
+
+.qualification-card__indicator--active {
+  background: #ff3024;
+}
+
+.qualification-card__image-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-height: 64rpx;
+  margin-top: 12rpx;
+}
+
+.qualification-card__image-count {
+  flex: 1;
+  color: #858b95;
+  font-size: 26rpx;
+}
+
+.qualification-card__image-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 176rpx;
+  height: 64rpx;
+  margin: 0;
+  padding: 0 22rpx;
+  border: 2rpx solid #d9dce2;
+  border-radius: 12rpx;
+  background: #fff;
+  color: #454a52;
+  font-size: 26rpx;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.qualification-card__image-action::after {
+  border: 0;
+}
+
+.qualification-card__image-action--primary {
+  border-color: #ff3024;
+  background: #ff3024;
   color: #fff;
-  font-size: 30rpx;
+}
+
+.qualification-card__image-action[disabled] {
+  border-color: #e3e5e9;
+  background: #eef0f3;
+  color: #a8adb5;
 }
 
 .qualification-card__fields {
@@ -536,12 +819,43 @@ onMounted(() => {
   color: #ff4d4f;
 }
 
+.qualification-card__field-optional {
+  margin-left: 8rpx;
+  color: #a3a8b1;
+  font-size: 24rpx;
+}
+
 .qualification-card__field-value {
   flex: 1;
   min-width: 0;
   color: #31353c;
   font-size: 30rpx;
   text-align: right;
+}
+
+.qualification-card__field-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.qualification-card__field-control {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18rpx;
+  min-width: 0;
+  min-height: 96rpx;
+  cursor: pointer;
+}
+
+.qualification-card__field-chevron {
+  flex-shrink: 0;
+  width: 14rpx;
+  height: 14rpx;
+  border-top: 2rpx solid #b7bbc3;
+  border-right: 2rpx solid #b7bbc3;
+  transform: rotate(45deg);
 }
 
 .qualification-card__field-value--muted {

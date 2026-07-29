@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { IAccountLoginForm } from '@/api/login'
 import { getCaptcha } from '@/api/login'
+import loginImage from '@/static/images/login.png'
 import { useTokenStore } from '@/store'
 import { HOME_PAGE } from '@/utils'
-import loginImage from '@/static/images/login.png'
 
 defineOptions({
   name: 'MerchantLogin',
@@ -186,32 +186,16 @@ function goToForgotPassword() {
   })
 }
 
-function navigateToResolvedUrl(url: string) {
-  const normalizedUrl = url.split('?')[0]
+function finishLogin() {
+  const targetUrl = redirectUrl.value || HOME_PAGE
+  const normalizedUrl = targetUrl.split('?')[0]
 
   if (TABBAR_PAGES.includes(normalizedUrl)) {
     uni.switchTab({ url: normalizedUrl })
     return
   }
 
-  uni.reLaunch({ url })
-}
-
-function finishLogin() {
-  if (redirectUrl.value) {
-    navigateToResolvedUrl(redirectUrl.value)
-    return
-  }
-
-  const pages = getCurrentPages()
-  if (pages.length > 1) {
-    uni.navigateBack()
-    return
-  }
-
-  uni.switchTab({
-    url: HOME_PAGE,
-  })
+  uni.reLaunch({ url: targetUrl })
 }
 
 async function handleLogin() {
@@ -425,7 +409,6 @@ async function handleLogin() {
 </template>
 
 <style lang="scss" scoped>
-
 .login-page {
   min-height: 100vh;
   background: linear-gradient(180deg, #ffcb2f 0%, #ffcb2f 400rpx, #f7f7f7 400rpx, #f7f7f7 100%);
