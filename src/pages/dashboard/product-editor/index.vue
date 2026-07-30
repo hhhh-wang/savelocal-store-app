@@ -1,7 +1,14 @@
 <script lang="ts" setup>
+import type { ProductEditorSpecForm } from './product-editor-form'
 import type { MerchantFoodProduct } from '@/api/types/merchant-food'
 import { createMerchantFoodProduct, getMerchantFoodProductDetail, updateMerchantFoodProduct } from '@/api/merchant-food'
 import { useMerchantFoodStore } from '@/store'
+import {
+  buildSpecPayloads,
+  createEditorSpec,
+  mapProductSpecs,
+  validateEditorSpecs,
+} from './product-editor-form'
 
 defineOptions({
   name: 'ProductEditorPage',
@@ -15,7 +22,7 @@ definePage({
 })
 
 type EditorMode = 'create' | 'edit'
-type ProductKind = 'single' | 'set'
+type ProductKind = 'takeout' | 'deal'
 interface ProductEditorPayload {
   name?: string
   imageUrl?: string
@@ -24,6 +31,15 @@ interface ProductEditorPayload {
   price?: string
   unit?: string
   description?: string
+}
+interface ProductEditorForm {
+  name: string
+  imageText: string
+  imageUrl: string
+  coverImageId: number
+  kind: ProductKind
+  tag: string
+  specs: ProductEditorSpecForm[]
 }
 interface SelectedAlbumImage {
   id: number
@@ -36,36 +52,32 @@ const merchantFoodStore = useMerchantFoodStore()
 const productId = ref<number>()
 const submitting = ref(false)
 const specOptions = ['锅', '包', '例', '袋', '1升桶', '玻璃瓶'] as const
-const defaultCreateForm = {
+let nextSpecKey = 1
+const defaultCreateForm: ProductEditorForm = {
   name: '',
   imageText: '',
   imageUrl: '',
   coverImageId: 0,
-  kind: 'single' as ProductKind,
+  kind: 'takeout' as ProductKind,
   tag: '无',
-  price: '',
-  unit: '',
-  description: '',
-  stockQuantity: 9999,
+  specs: [createEditorSpec(0, { specName: '默认规格' })],
 }
-const defaultEditForm = {
+const defaultEditForm: ProductEditorForm = {
   name: '青椒炒肉',
   imageText: '',
   imageUrl: '',
   coverImageId: 0,
-  kind: 'single' as ProductKind,
+  kind: 'takeout' as ProductKind,
   tag: '无',
-  price: '28',
-  unit: '份',
-  description: '',
-  stockQuantity: 9999,
+  specs: [createEditorSpec(0, { specName: '默认规格', price: '28', unit: '份' })],
 }
 
 const editorMode = ref<EditorMode>('edit')
 const pageTitle = computed(() => editorMode.value === 'create' ? '新增商品' : '编辑菜品')
 const showSpecPicker = ref(false)
+const selectingUnitSpecKey = ref<number>()
 
-const form = reactive({ ...defaultEditForm })
+const form = reactive<ProductEditorForm>({ ...defaultEditForm, specs: [...defaultEditForm.specs] })
 
 function parseProductPayload(rawValue?: string): ProductEditorPayload | null {
   if (!rawValue) {
@@ -81,32 +93,26 @@ function parseProductPayload(rawValue?: string): ProductEditorPayload | null {
   }
 }
 
-function applyFormValues(values: typeof defaultEditForm) {
+function applyFormValues(values: ProductEditorForm) {
   form.name = values.name
   form.imageText = values.imageText
   form.imageUrl = values.imageUrl
   form.coverImageId = values.coverImageId
   form.kind = values.kind
   form.tag = values.tag
-  form.price = values.price
-  form.unit = values.unit
-  form.description = values.description
-  form.stockQuantity = values.stockQuantity
+  form.specs = values.specs.map(spec => ({ ...spec, detailItems: [...spec.detailItems] }))
+  nextSpecKey = Math.max(0, ...form.specs.map(spec => spec.key)) + 1
 }
 
 function applyProduct(product: MerchantFoodProduct) {
-  const spec = product.specs?.[0]
   applyFormValues({
     name: product.productName,
     imageText: product.coverImageUrl ? '已选择图片' : '',
     imageUrl: product.coverImageUrl || '',
     coverImageId: product.coverImageId,
-    kind: product.productType === 'SET' ? 'set' : 'single',
+    kind: product.productType === 'DEAL' ? 'deal' : 'takeout',
     tag: product.tagText || '无',
-    price: String(spec?.salePrice ?? ''),
-    unit: spec?.unitName || '',
-    description: product.productDesc || '',
-    stockQuantity: spec?.stockQuantity ?? 9999,
+    specs: mapProductSpecs(product.specs, product.productDesc || ''),
   })
 }
 
@@ -114,13 +120,22 @@ function applyMode(mode?: string, productPayload?: ProductEditorPayload | null) 
   editorMode.value = mode === 'create' ? 'create' : 'edit'
 
   if (editorMode.value === 'create') {
-    applyFormValues({ ...defaultCreateForm })
+    applyFormValues({ ...defaultCreateForm, specs: [createEditorSpec(0, { specName: '默认规格' })] })
     return
   }
 
-  const nextFormValues = {
+  const nextFormValues: ProductEditorForm = {
     ...defaultEditForm,
-    ...productPayload,
+    name: productPayload?.name || defaultEditForm.name,
+    imageUrl: productPayload?.imageUrl || defaultEditForm.imageUrl,
+    kind: productPayload?.kind || defaultEditForm.kind,
+    tag: productPayload?.tag || defaultEditForm.tag,
+    specs: [createEditorSpec(0, {
+      specName: '默认规格',
+      price: productPayload?.price || defaultEditForm.specs[0].price,
+      unit: productPayload?.unit || defaultEditForm.specs[0].unit,
+      detailItems: [productPayload?.description || ''],
+    })],
   }
 
   nextFormValues.imageText = nextFormValues.imageUrl ? '已选择图片' : ''
@@ -158,28 +173,71 @@ function handleSelectKind(kind: ProductKind) {
 }
 
 function handleAddSpec() {
+  form.specs.push(createEditorSpec(nextSpecKey++, { display: false }))
+}
+
+function handleRemoveSpec(specKey: number) {
+  if (form.specs.length === 1)
+    return
+  const index = form.specs.findIndex(spec => spec.key === specKey)
+  if (index < 0)
+    return
+  const [removed] = form.specs.splice(index, 1)
+  if (removed.display)
+    form.specs[0].display = true
+}
+
+function handleSelectDisplaySpec(specKey: number) {
+  form.specs.forEach((spec) => {
+    spec.display = spec.key === specKey
+  })
+}
+
+function handleOpenUnitPicker(specKey: number) {
+  selectingUnitSpecKey.value = specKey
   showSpecPicker.value = true
+}
+
+function handleAddDetail(spec: ProductEditorSpecForm) {
+  spec.detailItems.push('')
+}
+
+function handleRemoveDetail(spec: ProductEditorSpecForm, detailIndex: number) {
+  if (spec.detailItems.length === 1) {
+    spec.detailItems[0] = ''
+    return
+  }
+  spec.detailItems.splice(detailIndex, 1)
 }
 
 function handleCloseSpecPicker() {
   showSpecPicker.value = false
+  selectingUnitSpecKey.value = undefined
 }
 
 function handleSelectSpec(option: string) {
-  form.unit = option
+  const spec = form.specs.find(item => item.key === selectingUnitSpecKey.value)
+  if (spec)
+    spec.unit = option
   showSpecPicker.value = false
+  selectingUnitSpecKey.value = undefined
 }
 
-function handlePriceInput(event: { detail?: { value?: string } }) {
+function handlePriceInput(spec: ProductEditorSpecForm, event: { detail?: { value?: string } }) {
   const rawValue = event.detail?.value || ''
   const sanitizedValue = rawValue.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
 
-  form.price = sanitizedValue
+  spec.price = sanitizedValue
 }
 
 async function handleSubmit() {
-  if (!form.name.trim() || !form.coverImageId || !form.price || !form.unit.trim()) {
-    uni.showToast({ title: '请完整填写商品名称、图片、价格和单位', icon: 'none' })
+  if (!form.name.trim() || !form.coverImageId) {
+    uni.showToast({ title: '请完整填写商品名称和图片', icon: 'none' })
+    return
+  }
+  const specError = validateEditorSpecs(form.specs)
+  if (specError) {
+    uni.showToast({ title: specError, icon: 'none' })
     return
   }
   if (submitting.value)
@@ -189,18 +247,11 @@ async function handleSubmit() {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     const payload = {
       productName: form.name.trim(),
-      productType: form.kind === 'set' ? 'SET' as const : 'SINGLE' as const,
+      productType: form.kind === 'deal' ? 'DEAL' as const : 'TAKEOUT' as const,
       coverImageId: form.coverImageId,
       tagText: form.tag === '无' ? '' : form.tag,
-      productDesc: form.description.trim(),
-      specs: [{
-        specName: '默认规格',
-        salePrice: Number(form.price),
-        unitName: form.unit.trim(),
-        stockQuantity: form.stockQuantity,
-        display: true,
-        sortNum: 0,
-      }],
+      productDesc: form.specs.find(spec => spec.display)?.detailItems[0]?.trim() || '',
+      specs: buildSpecPayloads(form.specs),
     }
     if (editorMode.value === 'create') {
       await createMerchantFoodProduct(storeId, payload)
@@ -292,23 +343,23 @@ onLoad(async (options) => {
             </view>
           </view>
 
-          <view class="product-editor-row product-editor-row--clickable" @tap="handleSelectKind('single')">
+          <view class="product-editor-row product-editor-row--clickable" @tap="handleSelectKind('takeout')">
             <text class="product-editor-row__label-text">
-              单品
+              外卖
             </text>
 
-            <view class="product-editor-radio" :class="{ 'product-editor-radio--active': form.kind === 'single' }">
-              <view v-if="form.kind === 'single'" class="product-editor-radio__dot" />
+            <view class="product-editor-radio" :class="{ 'product-editor-radio--active': form.kind === 'takeout' }">
+              <view v-if="form.kind === 'takeout'" class="product-editor-radio__dot" />
             </view>
           </view>
 
-          <view class="product-editor-row product-editor-row--clickable" @tap="handleSelectKind('set')">
+          <view class="product-editor-row product-editor-row--clickable" @tap="handleSelectKind('deal')">
             <text class="product-editor-row__label-text">
-              套餐
+              团购
             </text>
 
-            <view class="product-editor-radio" :class="{ 'product-editor-radio--active': form.kind === 'set' }">
-              <view v-if="form.kind === 'set'" class="product-editor-radio__dot" />
+            <view class="product-editor-radio" :class="{ 'product-editor-radio--active': form.kind === 'deal' }">
+              <view v-if="form.kind === 'deal'" class="product-editor-radio__dot" />
             </view>
           </view>
 
@@ -330,59 +381,114 @@ onLoad(async (options) => {
         </text>
 
         <view class="product-editor-card">
-          <view class="product-editor-spec">
-            <view class="product-editor-row product-editor-row--compact">
+          <view
+            v-for="(spec, specIndex) in form.specs"
+            :key="spec.key"
+            class="product-editor-spec"
+          >
+            <view class="product-editor-spec__header">
               <view class="product-editor-row__label">
-                <text>售卖规格</text>
+                <text>售卖规格 {{ specIndex + 1 }}</text>
                 <text class="product-editor-row__required">*</text>
+              </view>
+
+              <view class="product-editor-spec__actions">
+                <view class="product-editor-display" @tap="handleSelectDisplaySpec(spec.key)">
+                  <view class="product-editor-radio" :class="{ 'product-editor-radio--active': spec.display }">
+                    <view v-if="spec.display" class="product-editor-radio__dot" />
+                  </view>
+                  <text>展示规格</text>
+                </view>
+
+                <view
+                  class="product-editor-spec__remove"
+                  :class="{ 'product-editor-spec__remove--disabled': form.specs.length === 1 }"
+                  title="删除规格"
+                  @tap="handleRemoveSpec(spec.key)"
+                >
+                  ×
+                </view>
               </view>
             </view>
 
             <view class="product-editor-spec__inputs">
+              <input
+                v-model="spec.specName"
+                class="product-editor-spec__field product-editor-spec__input product-editor-spec__field--name"
+                :maxlength="100"
+                placeholder="规格名称，如三人套餐"
+                placeholder-class="product-editor-spec__placeholder"
+              >
+
               <view class="product-editor-spec__field">
                 <text class="product-editor-spec__currency">¥</text>
                 <input
-                  v-model="form.price"
+                  v-model="spec.price"
                   class="product-editor-spec__input"
                   type="number"
                   placeholder="0"
                   placeholder-class="product-editor-spec__placeholder"
-                  @input="handlePriceInput"
+                  @input="handlePriceInput(spec, $event)"
                 >
               </view>
 
-              <input
-                v-model="form.unit"
-                class="product-editor-spec__field product-editor-spec__input product-editor-spec__field--unit"
-                placeholder="份"
-                placeholder-class="product-editor-spec__placeholder"
+              <view
+                class="product-editor-spec__field product-editor-spec__field--unit"
+                @tap="handleOpenUnitPicker(spec.key)"
               >
+                <text :class="spec.unit ? 'product-editor-spec__unit-value' : 'product-editor-spec__placeholder'">
+                  {{ spec.unit || '选择单位' }}
+                </text>
+                <text class="product-editor-spec__unit-arrow">›</text>
+              </view>
             </view>
 
-            <text class="product-editor-spec__hint">
-              在推荐菜/菜单仅支持展示一个规格信息，请勾选展示规格
-            </text>
+            <view class="product-editor-detail">
+              <view class="product-editor-detail__header">
+                <text class="product-editor-detail__title">菜品描述</text>
+                <text class="product-editor-detail__type">
+                  {{ form.kind === 'deal' ? '团购组合单品' : '外卖组合单品' }}
+                </text>
+              </view>
 
-            <view class="product-editor-spec__add" hover-class="product-editor-spec__add--hover" @tap="handleAddSpec">
-              + 添加规格
+              <view
+                v-for="(_, detailIndex) in spec.detailItems"
+                :key="`${spec.key}-${detailIndex}`"
+                class="product-editor-detail__row"
+              >
+                <input
+                  v-model="spec.detailItems[detailIndex]"
+                  class="product-editor-detail__input"
+                  :maxlength="50"
+                  placeholder="请输入菜品明细，最多50字"
+                  placeholder-class="product-editor-detail__placeholder"
+                >
+                <view
+                  class="product-editor-detail__remove"
+                  title="删除明细"
+                  @tap="handleRemoveDetail(spec, detailIndex)"
+                >
+                  ×
+                </view>
+              </view>
+
+              <view
+                class="product-editor-detail__add"
+                hover-class="product-editor-detail__add--hover"
+                @tap="handleAddDetail(spec)"
+              >
+                + 添加明细
+              </view>
             </view>
           </view>
-        </view>
-      </view>
 
-      <view class="product-editor-section product-editor-section--description">
-        <text class="product-editor-section__title">
-          菜品描述
-        </text>
-
-        <view class="product-editor-card product-editor-card--description">
-          <textarea
-            v-model="form.description"
-            class="product-editor-textarea"
-            :maxlength="100"
-            placeholder="请输入100字以内的描述信息，如菜品故事、特色、卖点等"
-            placeholder-class="product-editor-textarea__placeholder"
-          />
+          <view
+            class="product-editor-spec-list__add"
+            hover-class="product-editor-spec-list__add--hover"
+            @tap="handleAddSpec"
+          >
+            + 添加售卖规格
+          </view>
         </view>
       </view>
     </view>
@@ -461,10 +567,6 @@ onLoad(async (options) => {
   margin-top: 68rpx;
 }
 
-.product-editor-section--description {
-  margin-top: 28rpx;
-}
-
 .product-editor-section__title {
   display: block;
   margin-bottom: 22rpx;
@@ -477,10 +579,6 @@ onLoad(async (options) => {
   overflow: hidden;
   border-radius: 22rpx;
   background: #ffffff;
-}
-
-.product-editor-card--description {
-  padding: 24rpx 22rpx;
 }
 
 .product-editor-row {
@@ -600,14 +698,66 @@ onLoad(async (options) => {
 }
 
 .product-editor-spec {
-  padding-bottom: 24rpx;
+  padding: 24rpx 22rpx 28rpx;
+}
+
+.product-editor-spec + .product-editor-spec {
+  border-top: 12rpx solid #f5f5f5;
+}
+
+.product-editor-spec__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.product-editor-spec__actions,
+.product-editor-display {
+  display: flex;
+  align-items: center;
+}
+
+.product-editor-spec__actions {
+  gap: 20rpx;
+}
+
+.product-editor-display {
+  gap: 10rpx;
+  color: #666b72;
+  font-size: 27rpx;
+}
+
+.product-editor-display .product-editor-radio {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.product-editor-display .product-editor-radio__dot {
+  width: 14rpx;
+  height: 14rpx;
+}
+
+.product-editor-spec__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44rpx;
+  height: 44rpx;
+  color: #747981;
+  font-size: 42rpx;
+  line-height: 1;
+}
+
+.product-editor-spec__remove--disabled {
+  color: #d5d7da;
 }
 
 .product-editor-spec__inputs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16rpx;
-  padding: 18rpx 22rpx 0;
+  padding-top: 20rpx;
 }
 
 .product-editor-spec__field {
@@ -622,7 +772,12 @@ onLoad(async (options) => {
 }
 
 .product-editor-spec__field--unit {
+  justify-content: space-between;
   padding: 0 18rpx;
+}
+
+.product-editor-spec__field--name {
+  grid-column: 1 / -1;
 }
 
 .product-editor-spec__currency {
@@ -642,21 +797,84 @@ onLoad(async (options) => {
   font-size: 34rpx;
 }
 
-.product-editor-spec__hint {
-  display: block;
-  margin-top: 18rpx;
-  padding: 0 22rpx;
-  color: #80858d;
-  font-size: 26rpx;
-  line-height: 1.5;
+.product-editor-spec__unit-value {
+  color: #3d4249;
+  font-size: 34rpx;
 }
 
-.product-editor-spec__add {
+.product-editor-spec__unit-arrow {
+  color: #a8adb4;
+  font-size: 40rpx;
+  line-height: 1;
+}
+
+.product-editor-detail {
+  margin-top: 26rpx;
+  padding-top: 24rpx;
+  border-top: 2rpx solid #eeeeee;
+}
+
+.product-editor-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.product-editor-detail__title {
+  color: #292d33;
+  font-size: 31rpx;
+  font-weight: 700;
+}
+
+.product-editor-detail__type {
+  color: #777b82;
+  font-size: 27rpx;
+}
+
+.product-editor-detail__row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-height: 82rpx;
+  margin-top: 16rpx;
+  padding: 0 10rpx 0 20rpx;
+  border-radius: 12rpx;
+  background: #f5f5f5;
+  box-sizing: border-box;
+}
+
+.product-editor-detail__input {
+  flex: 1;
+  min-width: 0;
+  color: #474b52;
+  font-size: 31rpx;
+}
+
+.product-editor-detail__placeholder {
+  color: #b9bdc3;
+  font-size: 29rpx;
+}
+
+.product-editor-detail__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52rpx;
+  height: 52rpx;
+  flex-shrink: 0;
+  color: #858a91;
+  font-size: 40rpx;
+  line-height: 1;
+}
+
+.product-editor-detail__add,
+.product-editor-spec-list__add {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 78rpx;
-  margin: 18rpx 22rpx 0;
+  margin-top: 18rpx;
   border: 2rpx solid #e4e4e4;
   border-radius: 12rpx;
   color: #35383f;
@@ -665,22 +883,15 @@ onLoad(async (options) => {
   background: #ffffff;
 }
 
-.product-editor-spec__add--hover {
+.product-editor-detail__add--hover,
+.product-editor-spec-list__add--hover {
   opacity: 0.88;
 }
 
-.product-editor-textarea {
-  width: 100%;
-  height: 132rpx;
-  color: #474b52;
-  font-size: 32rpx;
-  line-height: 1.5;
-}
-
-.product-editor-textarea__placeholder {
-  color: #c8ccd2;
-  font-size: 32rpx;
-  line-height: 1.5;
+.product-editor-spec-list__add {
+  margin: 0 22rpx 24rpx;
+  border-color: #d9d9d9;
+  background: #fafafa;
 }
 
 .product-editor-footer {

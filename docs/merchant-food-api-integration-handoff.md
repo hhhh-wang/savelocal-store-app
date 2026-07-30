@@ -336,7 +336,7 @@ PUT /merchant/food/stores/{storeId}/products/batch-off-shelf
 
 | 字段 | 值 |
 | --- | --- |
-| `productType` | `SINGLE` 单品、`SET` 套餐 |
+| `productType` | `TAKEOUT` 外卖、`DEAL` 团购 |
 | `saleStatus` | `ON_SALE`、`OFF_SHELF` |
 | `auditStatus` | `0` 待审核、`1` 已通过、`2` 未通过 |
 
@@ -345,7 +345,7 @@ PUT /merchant/food/stores/{storeId}/products/batch-off-shelf
 ```ts
 interface ProductSavePayload {
   productName: string
-  productType: 'SINGLE' | 'SET'
+  productType: 'TAKEOUT' | 'DEAL'
   coverImageId: number
   tagText?: string
   productDesc?: string

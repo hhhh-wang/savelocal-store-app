@@ -24,7 +24,7 @@ type ProductAction = '上架' | '下架'
 interface ProductEditorPayload {
   name: string
   imageUrl: string
-  kind: 'single' | 'set'
+  kind: 'takeout' | 'deal'
   tag: string
   price: string
   unit: string
@@ -57,7 +57,7 @@ function mapProduct(product: MerchantFoodProduct): ProductItem {
     id: product.productId,
     name: product.productName,
     stock: firstSpec?.stockQuantity || 0,
-    unitLabel: product.productType === 'SET' ? '套餐' : '单品',
+    unitLabel: product.productType === 'DEAL' ? '团购' : '外卖',
     price: String(firstSpec?.salePrice ?? '0.00'),
     status: product.saleStatus === 'ON_SALE' ? '上架' : '下架',
     actionLabel: product.saleStatus === 'ON_SALE' ? '下架' : '上架',
@@ -91,7 +91,7 @@ function buildProductEditorPayload(product: ProductItem): ProductEditorPayload {
   return {
     name: product.name,
     imageUrl: product.image,
-    kind: product.unitLabel === '套餐' ? 'set' : 'single',
+    kind: product.unitLabel === '团购' ? 'deal' : 'takeout',
     tag: '无',
     price: product.price.split('.')[0] || product.price,
     unit: '份',

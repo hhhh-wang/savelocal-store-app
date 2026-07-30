@@ -1,5 +1,5 @@
 export type MerchantFoodScene = 'ALL' | 'ONSITE' | 'GROUP_BUY'
-export type MerchantFoodProductType = 'SINGLE' | 'SET'
+export type MerchantFoodProductType = 'TAKEOUT' | 'DEAL'
 export type MerchantFoodSaleStatus = 'ON_SALE' | 'OFF_SHELF'
 export type MerchantFoodAuditStatus = '0' | '1' | '2'
 export type MerchantFoodOrderStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED'
@@ -177,6 +177,7 @@ export interface MerchantFoodProductSpec {
   isDisplay: string
   status?: string
   sortNum?: number
+  detailItems: string[]
 }
 
 export interface MerchantFoodProduct {
@@ -202,6 +203,7 @@ export interface MerchantFoodProductSpecPayload {
   stockQuantity: number
   display: boolean
   sortNum?: number
+  detailItems: string[]
 }
 
 export interface MerchantFoodProductPayload {
