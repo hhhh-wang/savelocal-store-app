@@ -39,6 +39,7 @@ interface ProductEditorForm {
   coverImageId: number
   kind: ProductKind
   tag: string
+  packingFee: string
   specs: ProductEditorSpecForm[]
 }
 interface SelectedAlbumImage {
@@ -60,6 +61,7 @@ const defaultCreateForm: ProductEditorForm = {
   coverImageId: 0,
   kind: 'takeout' as ProductKind,
   tag: '无',
+  packingFee: '0.00',
   specs: [createEditorSpec(0, { specName: '默认规格' })],
 }
 const defaultEditForm: ProductEditorForm = {
@@ -69,6 +71,7 @@ const defaultEditForm: ProductEditorForm = {
   coverImageId: 0,
   kind: 'takeout' as ProductKind,
   tag: '无',
+  packingFee: '0.00',
   specs: [createEditorSpec(0, { specName: '默认规格', price: '28', unit: '份' })],
 }
 
@@ -100,6 +103,7 @@ function applyFormValues(values: ProductEditorForm) {
   form.coverImageId = values.coverImageId
   form.kind = values.kind
   form.tag = values.tag
+  form.packingFee = values.packingFee
   form.specs = values.specs.map(spec => ({ ...spec, detailItems: [...spec.detailItems] }))
   nextSpecKey = Math.max(0, ...form.specs.map(spec => spec.key)) + 1
 }
@@ -112,6 +116,7 @@ function applyProduct(product: MerchantFoodProduct) {
     coverImageId: product.coverImageId,
     kind: product.productType === 'DEAL' ? 'deal' : 'takeout',
     tag: product.tagText || '无',
+    packingFee: product.productType === 'TAKEOUT' ? String(product.packingFee ?? '0.00') : '0.00',
     specs: mapProductSpecs(product.specs, product.productDesc || ''),
   })
 }
@@ -170,6 +175,9 @@ function handleSelectImage() {
 
 function handleSelectKind(kind: ProductKind) {
   form.kind = kind
+  if (kind === 'deal') {
+    form.packingFee = '0.00'
+  }
 }
 
 function handleAddSpec() {
@@ -230,6 +238,17 @@ function handlePriceInput(spec: ProductEditorSpecForm, event: { detail?: { value
   spec.price = sanitizedValue
 }
 
+function handlePackingFeeInput(event: { detail?: { value?: string } }) {
+  const rawValue = event.detail?.value || ''
+  const sanitizedValue = rawValue.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
+  const [integerPart, decimalPart] = sanitizedValue.split('.')
+  const limitedValue = decimalPart === undefined
+    ? sanitizedValue
+    : `${integerPart || '0'}.${decimalPart.slice(0, 2)}`
+  const amount = Number(limitedValue)
+  form.packingFee = Number.isFinite(amount) && amount > 2 ? '2.00' : limitedValue
+}
+
 async function handleSubmit() {
   if (!form.name.trim() || !form.coverImageId) {
     uni.showToast({ title: '请完整填写商品名称和图片', icon: 'none' })
@@ -251,6 +270,7 @@ async function handleSubmit() {
       coverImageId: form.coverImageId,
       tagText: form.tag === '无' ? '' : form.tag,
       productDesc: form.specs.find(spec => spec.display)?.detailItems[0]?.trim() || '',
+      packingFee: Number(form.packingFee || 0),
       specs: buildSpecPayloads(form.specs),
     }
     if (editorMode.value === 'create') {
@@ -371,6 +391,26 @@ onLoad(async (options) => {
             <text class="product-editor-row__value">
               {{ form.tag }}
             </text>
+          </view>
+
+          <view
+            class="product-editor-row product-editor-row--packing-fee"
+            :class="{ 'product-editor-row--packing-fee-hidden': form.kind === 'deal' }"
+          >
+            <text class="product-editor-row__label-text">
+              打包费
+            </text>
+            <view class="product-editor-row__value-wrap">
+              <text class="product-editor-row__currency">¥</text>
+              <input
+                v-model="form.packingFee"
+                class="product-editor-row__input product-editor-row__input--align-right product-editor-row__input--fee"
+                type="number"
+                placeholder="0.00"
+                placeholder-class="product-editor-row__placeholder product-editor-row__placeholder--align-right"
+                @input="handlePackingFeeInput"
+              >
+            </view>
           </view>
         </view>
       </view>
@@ -590,6 +630,15 @@ onLoad(async (options) => {
   padding: 0 22rpx;
 }
 
+.product-editor-row--packing-fee {
+  min-height: 96rpx;
+}
+
+.product-editor-row--packing-fee-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .product-editor-row + .product-editor-row {
   border-top: 2rpx solid #f2f2f2;
 }
@@ -637,6 +686,11 @@ onLoad(async (options) => {
   text-align: right;
 }
 
+.product-editor-row__input--fee {
+  width: 100rpx;
+  flex: 0 0 100rpx;
+}
+
 .product-editor-row__placeholder {
   color: #c6c9cf;
   font-size: 34rpx;
@@ -650,6 +704,11 @@ onLoad(async (options) => {
   display: flex;
   align-items: center;
   gap: 10rpx;
+}
+
+.product-editor-row__currency {
+  color: #444950;
+  font-size: 34rpx;
 }
 
 .product-editor-row__thumb {

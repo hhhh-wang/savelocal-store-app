@@ -192,6 +192,7 @@ export interface MerchantFoodProduct {
   productDesc?: string
   saleStatus: MerchantFoodSaleStatus
   auditStatus: MerchantFoodAuditStatus
+  packingFee: number | string
   sortNum?: number
   specs: MerchantFoodProductSpec[]
 }
@@ -212,6 +213,7 @@ export interface MerchantFoodProductPayload {
   coverImageId: number
   tagText?: string
   productDesc?: string
+  packingFee: number
   sortNum?: number
   specs: MerchantFoodProductSpecPayload[]
 }
