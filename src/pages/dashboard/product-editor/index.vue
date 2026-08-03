@@ -40,6 +40,7 @@ interface ProductEditorForm {
   kind: ProductKind
   tag: string
   packingFee: string
+  singleNoDelivery: boolean
   specs: ProductEditorSpecForm[]
 }
 interface SelectedAlbumImage {
@@ -62,6 +63,7 @@ const defaultCreateForm: ProductEditorForm = {
   kind: 'takeout' as ProductKind,
   tag: '无',
   packingFee: '0.00',
+  singleNoDelivery: false,
   specs: [createEditorSpec(0, { specName: '默认规格' })],
 }
 const defaultEditForm: ProductEditorForm = {
@@ -72,6 +74,7 @@ const defaultEditForm: ProductEditorForm = {
   kind: 'takeout' as ProductKind,
   tag: '无',
   packingFee: '0.00',
+  singleNoDelivery: false,
   specs: [createEditorSpec(0, { specName: '默认规格', price: '28', unit: '份' })],
 }
 
@@ -104,6 +107,7 @@ function applyFormValues(values: ProductEditorForm) {
   form.kind = values.kind
   form.tag = values.tag
   form.packingFee = values.packingFee
+  form.singleNoDelivery = values.singleNoDelivery
   form.specs = values.specs.map(spec => ({ ...spec, detailItems: [...spec.detailItems] }))
   nextSpecKey = Math.max(0, ...form.specs.map(spec => spec.key)) + 1
 }
@@ -117,6 +121,7 @@ function applyProduct(product: MerchantFoodProduct) {
     kind: product.productType === 'DEAL' ? 'deal' : 'takeout',
     tag: product.tagText || '无',
     packingFee: product.productType === 'TAKEOUT' ? String(product.packingFee ?? '0.00') : '0.00',
+    singleNoDelivery: false,
     specs: mapProductSpecs(product.specs, product.productDesc || ''),
   })
 }
@@ -135,6 +140,7 @@ function applyMode(mode?: string, productPayload?: ProductEditorPayload | null) 
     imageUrl: productPayload?.imageUrl || defaultEditForm.imageUrl,
     kind: productPayload?.kind || defaultEditForm.kind,
     tag: productPayload?.tag || defaultEditForm.tag,
+    singleNoDelivery: false,
     specs: [createEditorSpec(0, {
       specName: '默认规格',
       price: productPayload?.price || defaultEditForm.specs[0].price,
@@ -177,7 +183,13 @@ function handleSelectKind(kind: ProductKind) {
   form.kind = kind
   if (kind === 'deal') {
     form.packingFee = '0.00'
+    form.singleNoDelivery = false
   }
+}
+
+function handleToggleSingleNoDelivery() {
+  if (form.kind === 'takeout')
+    form.singleNoDelivery = !form.singleNoDelivery
 }
 
 function handleAddSpec() {
@@ -410,6 +422,20 @@ onLoad(async (options) => {
                 placeholder-class="product-editor-row__placeholder product-editor-row__placeholder--align-right"
                 @input="handlePackingFeeInput"
               >
+            </view>
+          </view>
+
+          <view
+            v-if="form.kind === 'takeout'"
+            class="product-editor-row product-editor-row--clickable"
+            @tap="handleToggleSingleNoDelivery"
+          >
+            <text class="product-editor-row__label-text">
+              单点不送
+            </text>
+
+            <view class="product-editor-radio" :class="{ 'product-editor-radio--active': form.singleNoDelivery }">
+              <view v-if="form.singleNoDelivery" class="product-editor-radio__dot" />
             </view>
           </view>
         </view>
