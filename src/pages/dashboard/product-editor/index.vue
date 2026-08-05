@@ -121,7 +121,7 @@ function applyProduct(product: MerchantFoodProduct) {
     kind: product.productType === 'DEAL' ? 'deal' : 'takeout',
     tag: product.tagText || '无',
     packingFee: product.productType === 'TAKEOUT' ? String(product.packingFee ?? '0.00') : '0.00',
-    singleNoDelivery: false,
+    singleNoDelivery: Boolean(product.singleNoDelivery),
     specs: mapProductSpecs(product.specs, product.productDesc || ''),
   })
 }
@@ -283,6 +283,7 @@ async function handleSubmit() {
       tagText: form.tag === '无' ? '' : form.tag,
       productDesc: form.specs.find(spec => spec.display)?.detailItems[0]?.trim() || '',
       packingFee: Number(form.packingFee || 0),
+      singleNoDelivery: form.kind === 'takeout' && form.singleNoDelivery,
       specs: buildSpecPayloads(form.specs),
     }
     if (editorMode.value === 'create') {

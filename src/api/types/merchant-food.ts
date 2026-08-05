@@ -193,6 +193,7 @@ export interface MerchantFoodProduct {
   saleStatus: MerchantFoodSaleStatus
   auditStatus: MerchantFoodAuditStatus
   packingFee: number | string
+  singleNoDelivery: boolean
   sortNum?: number
   specs: MerchantFoodProductSpec[]
 }
@@ -214,6 +215,7 @@ export interface MerchantFoodProductPayload {
   tagText?: string
   productDesc?: string
   packingFee: number
+  singleNoDelivery?: boolean
   sortNum?: number
   specs: MerchantFoodProductSpecPayload[]
 }
