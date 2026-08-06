@@ -5,14 +5,12 @@ interface Props {
   visible?: boolean
   stores?: MerchantFoodStore[]
   modelValue?: number
-  returnPath?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
   stores: () => [],
   modelValue: undefined,
-  returnPath: '',
 })
 
 const emit = defineEmits<{
@@ -23,7 +21,6 @@ const emit = defineEmits<{
 }>()
 
 const selectedStoreId = ref<number>()
-const tabbarPages = ['/pages/dashboard/index', '/pages/me/me']
 
 watch([
   () => props.visible,
@@ -47,23 +44,8 @@ function selectStore(storeId: number) {
   emit('update:modelValue', storeId)
 }
 
-function navigateToReturnPath() {
-  if (!props.returnPath) {
-    return
-  }
-
-  const normalizedPath = props.returnPath.split('?')[0]
-  if (tabbarPages.includes(normalizedPath)) {
-    uni.switchTab({ url: normalizedPath })
-    return
-  }
-
-  uni.redirectTo({ url: props.returnPath })
-}
-
 function handleClose() {
   emit('update:visible', false)
-  navigateToReturnPath()
 }
 
 function handleConfirm() {

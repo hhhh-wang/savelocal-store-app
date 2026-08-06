@@ -10,6 +10,7 @@ import {
   wxLogin as _wxLogin,
   getWxCode,
 } from '@/api/login'
+import { useMerchantFoodStore } from './merchant-food'
 import { useUserStore } from './user'
 
 // 初始化状态
@@ -68,6 +69,7 @@ export const useTokenStore = defineStore(
      * @param nextTokenInfo 登录返回的 token 信息
      */
     function _postLogin(nextTokenInfo: IAuthLoginRes) {
+      useMerchantFoodStore().reset()
       setTokenInfo(nextTokenInfo)
       const userStore = useUserStore()
       void userStore.fetchUserInfo().catch((error) => {
@@ -77,6 +79,7 @@ export const useTokenStore = defineStore(
 
     function clearAuthState() {
       updateNowTime()
+      useMerchantFoodStore().reset()
       uni.removeStorageSync('accessTokenExpireTime')
       console.log('退出登录-清除用户信息')
       tokenInfo.value = { ...tokenInfoState }

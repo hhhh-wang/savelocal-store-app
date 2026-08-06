@@ -444,7 +444,6 @@ async function handleLogin() {
     v-model:visible="storeAccessVisible"
     v-model="selectedStoreId"
     :stores="merchantFoodStore.stores"
-    return-path="/pages/login/index"
     @confirm="handleStoreAccessConfirm"
     @create-store="handleCreateStore"
   />
