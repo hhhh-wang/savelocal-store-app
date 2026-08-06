@@ -2,7 +2,8 @@
 import type { IAccountLoginForm } from '@/api/login'
 import { getCaptcha } from '@/api/login'
 import loginImage from '@/static/images/login.png'
-import { useTokenStore } from '@/store'
+import { useMerchantFoodStore, useTokenStore } from '@/store'
+import { shouldShowStoreAccessScope } from '@/store/merchant-food-selection'
 import { HOME_PAGE } from '@/utils'
 
 defineOptions({
@@ -24,13 +25,17 @@ const REMEMBER_USERNAME_KEY = 'merchant-login-username'
 const TABBAR_PAGES = ['/pages/dashboard/index', '/pages/me/me']
 
 const tokenStore = useTokenStore()
+const merchantFoodStore = useMerchantFoodStore()
 const activeTab = ref<LoginTab>('account')
 const agreementChecked = ref(false)
 const rememberAccount = ref(false)
 const isSubmitting = ref(false)
+const storeAccessVisible = ref(false)
+const selectedStoreId = ref<number>()
 const captchaEnabled = ref(true)
 const captchaImageUrl = ref('')
 const redirectUrl = ref('')
+const isTestMode = import.meta.env.MODE === 'test'
 
 const form = reactive<IAccountLoginForm>({
   username: '',
@@ -198,6 +203,34 @@ function finishLogin() {
   uni.reLaunch({ url: targetUrl })
 }
 
+async function continueAfterLogin() {
+  const stores = await merchantFoodStore.loadStores()
+  if (!stores.length) {
+    showPendingToast('当前账号没有可访问的分店')
+    return
+  }
+
+  selectedStoreId.value = stores[0]?.storeId
+
+  if (shouldShowStoreAccessScope(stores, isTestMode ? 'test' : import.meta.env.MODE)) {
+    storeAccessVisible.value = true
+    return
+  }
+
+  finishLogin()
+}
+
+function handleStoreAccessConfirm(storeId: number) {
+  merchantFoodStore.selectStore(storeId)
+  finishLogin()
+}
+
+function handleCreateStore() {
+  uni.navigateTo({
+    url: '/pages/me/store-info/index',
+  })
+}
+
 async function handleLogin() {
   if (isSubmitting.value) {
     return
@@ -224,7 +257,7 @@ async function handleLogin() {
       uuid: captchaEnabled.value ? form.uuid : undefined,
     })
 
-    finishLogin()
+    await continueAfterLogin()
   }
   catch (error) {
     console.error('商家登录失败:', error)
@@ -406,6 +439,15 @@ async function handleLogin() {
       </view>
     </view>
   </view>
+
+  <store-access-scope
+    v-model:visible="storeAccessVisible"
+    v-model="selectedStoreId"
+    :stores="merchantFoodStore.stores"
+    return-path="/pages/login/index"
+    @confirm="handleStoreAccessConfirm"
+    @create-store="handleCreateStore"
+  />
 </template>
 
 <style lang="scss" scoped>
@@ -689,7 +731,7 @@ async function handleLogin() {
   margin-top: 72rpx;
   border-radius: 999rpx;
   background: linear-gradient(180deg, #ffd54f 0%, #ffc83b 100%);
-  color: #3a3427;
+  color: #ffffff;
   font-size: 38rpx;
   font-weight: 700;
   box-shadow: 0 18rpx 36rpx rgba(255, 188, 42, 0.26);

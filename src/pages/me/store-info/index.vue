@@ -39,6 +39,7 @@ const storeQualificationsPagePath = '/pages/me/store-qualifications/index'
 const storeEntryPagePath = '/pages/me/store-entry/index'
 
 const merchantFoodStore = useMerchantFoodStore()
+const storeLoadError = ref('')
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 const storeBusinessStatus = computed(() => fromMerchantFoodBusinessTimes(
   merchantFoodStore.profile?.store.storeStatus,
@@ -69,6 +70,22 @@ function openCustomerService() {
     title: '客服入口待接入',
     icon: 'none',
   })
+}
+
+async function loadStoreProfile() {
+  storeLoadError.value = ''
+  try {
+    await merchantFoodStore.loadProfile(true)
+  }
+  catch (error) {
+    storeLoadError.value = error instanceof Error && error.message.includes('没有可管理')
+      ? '当前账号暂无可管理的餐饮门店'
+      : '门店资料加载失败，请重试'
+  }
+}
+
+function retryLoadStoreProfile() {
+  void loadStoreProfile()
 }
 
 function openStoreName() {
@@ -139,7 +156,7 @@ function openFeedback() {
 }
 
 onShow(() => {
-  merchantFoodStore.loadProfile(true).catch(() => {})
+  void loadStoreProfile()
 })
 </script>
 
@@ -149,7 +166,19 @@ onShow(() => {
     <view class="store-info-page__glow store-info-page__glow--right" />
 
     <view class="store-info-page__content">
-      <view class="store-info-nav">
+      <view v-if="storeLoadError" class="store-info-empty">
+        <text class="store-info-empty__title">
+          {{ storeLoadError }}
+        </text>
+        <text class="store-info-empty__description">
+          请先完成门店创建或等待平台开通门店后再查看资料。
+        </text>
+        <view class="store-info-empty__button" hover-class="store-info-empty__button--hover" @tap="retryLoadStoreProfile">
+          重新加载
+        </view>
+      </view>
+
+      <view v-if="!storeLoadError" class="store-info-nav">
         <back-button
           fallback-url="/pages/me/me"
           color="#22262d"
@@ -166,7 +195,7 @@ onShow(() => {
         </view>
       </view>
 
-      <view class="store-info-summary" hover-class="store-info-summary--hover" @tap="openStoreName">
+      <view v-if="!storeLoadError" class="store-info-summary" hover-class="store-info-summary--hover" @tap="openStoreName">
         <text class="store-info-summary__name">
           {{ storeName }}
         </text>
@@ -175,7 +204,7 @@ onShow(() => {
         </text>
       </view>
 
-      <view class="store-info-card">
+      <view v-if="!storeLoadError" class="store-info-card">
         <view
           v-for="row in storeInfoRows"
           :key="row.label"
@@ -210,7 +239,7 @@ onShow(() => {
         </view>
       </view>
 
-      <view class="store-info-footer">
+      <view v-if="!storeLoadError" class="store-info-footer">
         <view class="store-info-footer__button" hover-class="store-info-footer__button--hover" @tap="openFeedback">
           使用反馈
         </view>
@@ -252,6 +281,51 @@ onShow(() => {
 .store-info-page__content {
   position: relative;
   padding: calc(env(safe-area-inset-top) + 20rpx) 18rpx calc(env(safe-area-inset-bottom) + 52rpx);
+}
+
+.store-info-empty {
+  display: flex;
+  align-items: center;
+  min-height: 560rpx;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48rpx 36rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16rpx 42rpx rgba(56, 61, 86, 0.08);
+  text-align: center;
+}
+
+.store-info-empty__title {
+  color: #262a31;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.store-info-empty__description {
+  max-width: 560rpx;
+  margin-top: 18rpx;
+  color: #8b909a;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+.store-info-empty__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 220rpx;
+  height: 72rpx;
+  margin-top: 34rpx;
+  border: 2rpx solid #dadde4;
+  border-radius: 20rpx;
+  color: #242931;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.store-info-empty__button--hover {
+  opacity: 0.82;
 }
 
 .store-info-nav {

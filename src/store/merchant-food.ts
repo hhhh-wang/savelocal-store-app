@@ -2,6 +2,7 @@ import type { MerchantFoodStore, MerchantFoodStoreProfile } from '@/api/types/me
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { getMerchantFoodStoreProfile, getMerchantFoodStores } from '@/api/merchant-food'
+import { resolveCurrentStoreId } from './merchant-food-selection'
 
 export const useMerchantFoodStore = defineStore(
   'merchant-food',
@@ -27,10 +28,7 @@ export const useMerchantFoodStore = defineStore(
       loading.value = true
       try {
         stores.value = await getMerchantFoodStores()
-        const selectedExists = stores.value.some(store => store.storeId === currentStoreId.value)
-        if (!selectedExists) {
-          currentStoreId.value = stores.value[0]?.storeId
-        }
+        currentStoreId.value = resolveCurrentStoreId(stores.value, currentStoreId.value)
         return stores.value
       }
       finally {
@@ -39,9 +37,7 @@ export const useMerchantFoodStore = defineStore(
     }
 
     async function ensureCurrentStoreId() {
-      if (!currentStoreId.value) {
-        await loadStores()
-      }
+      await loadStores()
       if (!currentStoreId.value) {
         throw new Error('当前账号没有可管理的餐饮门店')
       }
