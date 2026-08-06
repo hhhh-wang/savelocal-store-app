@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { ICaptcha } from '@/api/types/login'
 import type { IMerchantRegisterForm } from '@/api/login'
+import type { ICaptcha } from '@/api/types/login'
 import { getCaptcha, register } from '@/api/login'
 import registerImage from '@/static/images/register.png'
 
@@ -25,19 +25,14 @@ const captchaEnabled = ref(true)
 const captchaImageUrl = ref('')
 
 const form = reactive<RegisterFormState>({
-  username: '',
   password: '',
   confirmPassword: '',
   mobile: '',
-  gid: '',
   code: '',
   uuid: '',
 })
 
-onLoad((options) => {
-  if (typeof options?.gid === 'string') {
-    form.gid = options.gid.trim()
-  }
+onLoad(() => {
   void fetchCaptcha()
 })
 
@@ -74,15 +69,13 @@ function showPendingToast(title: string) {
 }
 
 function validateRegisterForm() {
-  const username = form.username.trim()
   const password = form.password.trim()
   const confirmPassword = form.confirmPassword.trim()
   const mobile = form.mobile.trim()
-  const gid = form.gid.trim()
   const code = form.code?.trim()
 
-  if (!username) {
-    showPendingToast('请输入登录账号/手机号')
+  if (!/^1\d{10}$/.test(mobile)) {
+    showPendingToast('请输入正确的手机号')
     return false
   }
 
@@ -98,21 +91,6 @@ function validateRegisterForm() {
 
   if (confirmPassword !== password) {
     showPendingToast('两次输入的密码不一致')
-    return false
-  }
-
-  if (!gid) {
-    showPendingToast('请输入GUID')
-    return false
-  }
-
-  if (!/^\d{8}$/.test(gid)) {
-    showPendingToast('GUID需为8位数字')
-    return false
-  }
-
-  if (!/^1\d{10}$/.test(mobile)) {
-    showPendingToast('请输入正确的手机号')
     return false
   }
 
@@ -148,10 +126,8 @@ async function handleRegister() {
   try {
     isSubmitting.value = true
     await register({
-      username: form.username.trim(),
       password: form.password,
       mobile: form.mobile.trim(),
-      gid: form.gid.trim(),
       code: captchaEnabled.value ? form.code?.trim() : undefined,
       uuid: captchaEnabled.value ? form.uuid : undefined,
     })
@@ -212,11 +188,11 @@ async function handleRegister() {
       <view class="register-form">
         <view class="register-field">
           <input
-            v-model="form.username"
+            v-model="form.mobile"
             class="register-input"
-            type="text"
-            :maxlength="20"
-            placeholder="登录手机号"
+            type="number"
+            :maxlength="11"
+            placeholder="手机号"
             placeholder-class="register-input__placeholder"
           />
           <text class="register-field__required">
@@ -247,34 +223,6 @@ async function handleRegister() {
             :password="true"
             :maxlength="20"
             placeholder="确认密码"
-            placeholder-class="register-input__placeholder"
-          />
-          <text class="register-field__required">
-            *
-          </text>
-        </view>
-
-        <view class="register-field register-field--spaced">
-          <input
-            v-model="form.gid"
-            class="register-input"
-            type="number"
-            :maxlength="8"
-            placeholder="GUID"
-            placeholder-class="register-input__placeholder"
-          />
-          <text class="register-field__required">
-            *
-          </text>
-        </view>
-
-        <view class="register-field register-field--spaced">
-          <input
-            v-model="form.mobile"
-            class="register-input"
-            type="number"
-            :maxlength="11"
-            placeholder="手机号"
             placeholder-class="register-input__placeholder"
           />
           <text class="register-field__required">

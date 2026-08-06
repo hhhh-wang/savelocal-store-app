@@ -205,11 +205,6 @@ function finishLogin() {
 
 async function continueAfterLogin() {
   const stores = await merchantFoodStore.loadStores()
-  if (!stores.length) {
-    showPendingToast('当前账号没有可访问的分店')
-    return
-  }
-
   selectedStoreId.value = stores[0]?.storeId
 
   if (shouldShowStoreAccessScope(stores, isTestMode ? 'test' : import.meta.env.MODE)) {

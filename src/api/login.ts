@@ -25,10 +25,8 @@ export interface IAccountLoginForm {
 export type ILoginForm = IAccountLoginForm
 
 export interface IMerchantRegisterForm {
-  username: string
   password: string
   mobile: string
-  gid: string
   code?: string
   uuid?: string
 }
