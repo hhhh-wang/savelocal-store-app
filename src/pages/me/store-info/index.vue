@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { submitMerchantStoreForAudit } from '@/api/merchant-store'
 import {
   formatStoreCategorySummary,
   normalizeStoreCategorySelection,
@@ -28,6 +29,7 @@ interface StoreInfoRow {
   type?: 'text' | 'image'
   muted?: boolean
   imageText?: string
+  required?: boolean
 }
 
 const storeNamePagePath = '/pages/me/store-name/index'
@@ -39,7 +41,8 @@ const storeQualificationsPagePath = '/pages/me/store-qualifications/index'
 const storeEntryPagePath = '/pages/me/store-entry/index'
 
 const merchantFoodStore = useMerchantFoodStore()
-const storeLoadError = ref('')
+const isCreateMode = ref(false)
+const pageTitle = computed(() => isCreateMode.value ? '新增门店' : '门店信息')
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 const storeBusinessStatus = computed(() => fromMerchantFoodBusinessTimes(
   merchantFoodStore.profile?.store.storeStatus,
@@ -59,10 +62,20 @@ const storeInfoRows = computed<StoreInfoRow[]>(() => {
     { label: '营业状态', value: getBusinessStatusLabel(storeBusinessStatus.value.status) },
     { label: '营业时间', value: businessHoursSummary, muted: businessHoursSummary === '未设置' },
     { label: '门店品类', value: formatStoreCategorySummary(storeCategorySelection.value) },
-    { label: '门店电话', value: merchantFoodStore.profile?.phones.map(item => item.phoneNumber).join('、') || '未设置' },
-    { label: '企业资质', value: '上传材料' },
-    { label: '门店地址', value: merchantFoodStore.profile?.store.addressDetail || '未设置' },
+    {
+      label: '门店电话',
+      value: merchantFoodStore.profile?.phones.map(item => item.phoneNumber).join('、')
+        || merchantFoodStore.profile?.store.contactMobile
+        || '未设置',
+      required: true,
+    },
+    { label: '企业资质', value: '上传材料', required: true },
+    { label: '门店地址', value: merchantFoodStore.profile?.store.addressDetail || '未设置', required: true },
   ]
+})
+
+onLoad((options) => {
+  isCreateMode.value = options?.mode === 'create'
 })
 
 function openCustomerService() {
@@ -73,19 +86,12 @@ function openCustomerService() {
 }
 
 async function loadStoreProfile() {
-  storeLoadError.value = ''
   try {
     await merchantFoodStore.loadProfile(true)
   }
   catch (error) {
-    storeLoadError.value = error instanceof Error && error.message.includes('没有可管理')
-      ? '当前账号暂无可管理的餐饮门店'
-      : '门店资料加载失败，请重试'
+    console.error('门店资料加载失败:', error)
   }
-}
-
-function retryLoadStoreProfile() {
-  void loadStoreProfile()
 }
 
 function openStoreName() {
@@ -148,11 +154,46 @@ function handleRowTap(row: StoreInfoRow) {
   })
 }
 
+async function submitStoreForAudit() {
+  const currentStore = merchantFoodStore.currentStore
+  if (currentStore?.auditStatus === '1') {
+    uni.showToast({ title: '门店已提交审核，请耐心等待', icon: 'none' })
+    return
+  }
+  if (currentStore?.auditStatus === '2') {
+    uni.showToast({ title: '门店已审核通过', icon: 'none' })
+    return
+  }
+
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await submitMerchantStoreForAudit(storeId)
+    await merchantFoodStore.loadStores()
+    await merchantFoodStore.loadProfile(true)
+    uni.showToast({ title: '已提交审核', icon: 'success' })
+  }
+  catch (error) {
+    console.error('新门店提审失败:', error)
+    if (error instanceof Error && error.message) {
+      uni.showToast({ title: error.message, icon: 'none' })
+    }
+  }
+}
+
 function openFeedback() {
   uni.showToast({
     title: '使用反馈入口待接入',
     icon: 'none',
   })
+}
+
+function handleFooterTap() {
+  if (isCreateMode.value) {
+    void submitStoreForAudit()
+    return
+  }
+
+  openFeedback()
 }
 
 onShow(() => {
@@ -166,19 +207,7 @@ onShow(() => {
     <view class="store-info-page__glow store-info-page__glow--right" />
 
     <view class="store-info-page__content">
-      <view v-if="storeLoadError" class="store-info-empty">
-        <text class="store-info-empty__title">
-          {{ storeLoadError }}
-        </text>
-        <text class="store-info-empty__description">
-          请先完成门店创建或等待平台开通门店后再查看资料。
-        </text>
-        <view class="store-info-empty__button" hover-class="store-info-empty__button--hover" @tap="retryLoadStoreProfile">
-          重新加载
-        </view>
-      </view>
-
-      <view v-if="!storeLoadError" class="store-info-nav">
+      <view class="store-info-nav">
         <back-button
           fallback-url="/pages/me/me"
           color="#22262d"
@@ -187,7 +216,7 @@ onShow(() => {
         />
 
         <text class="store-info-nav__title">
-          门店信息
+          {{ pageTitle }}
         </text>
 
         <view class="store-info-nav__action" hover-class="store-info-nav__action--hover" @tap="openCustomerService">
@@ -195,7 +224,7 @@ onShow(() => {
         </view>
       </view>
 
-      <view v-if="!storeLoadError" class="store-info-summary" hover-class="store-info-summary--hover" @tap="openStoreName">
+      <view class="store-info-summary" hover-class="store-info-summary--hover" @tap="openStoreName">
         <text class="store-info-summary__name">
           {{ storeName }}
         </text>
@@ -204,7 +233,7 @@ onShow(() => {
         </text>
       </view>
 
-      <view v-if="!storeLoadError" class="store-info-card">
+      <view class="store-info-card">
         <view
           v-for="row in storeInfoRows"
           :key="row.label"
@@ -215,6 +244,9 @@ onShow(() => {
         >
           <text class="store-info-card__label">
             {{ row.label }}
+          </text>
+          <text v-if="isCreateMode && row.required" class="store-info-card__required">
+            *
           </text>
 
           <view class="store-info-card__value-wrap">
@@ -239,9 +271,9 @@ onShow(() => {
         </view>
       </view>
 
-      <view v-if="!storeLoadError" class="store-info-footer">
-        <view class="store-info-footer__button" hover-class="store-info-footer__button--hover" @tap="openFeedback">
-          使用反馈
+      <view class="store-info-footer">
+        <view class="store-info-footer__button" hover-class="store-info-footer__button--hover" @tap="handleFooterTap">
+          {{ isCreateMode ? '新门店提交审核' : '使用反馈' }}
         </view>
       </view>
     </view>
@@ -281,51 +313,6 @@ onShow(() => {
 .store-info-page__content {
   position: relative;
   padding: calc(env(safe-area-inset-top) + 20rpx) 18rpx calc(env(safe-area-inset-bottom) + 52rpx);
-}
-
-.store-info-empty {
-  display: flex;
-  align-items: center;
-  min-height: 560rpx;
-  flex-direction: column;
-  justify-content: center;
-  padding: 48rpx 36rpx;
-  border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 16rpx 42rpx rgba(56, 61, 86, 0.08);
-  text-align: center;
-}
-
-.store-info-empty__title {
-  color: #262a31;
-  font-size: 32rpx;
-  font-weight: 700;
-}
-
-.store-info-empty__description {
-  max-width: 560rpx;
-  margin-top: 18rpx;
-  color: #8b909a;
-  font-size: 26rpx;
-  line-height: 1.6;
-}
-
-.store-info-empty__button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 220rpx;
-  height: 72rpx;
-  margin-top: 34rpx;
-  border: 2rpx solid #dadde4;
-  border-radius: 20rpx;
-  color: #242931;
-  font-size: 28rpx;
-  font-weight: 600;
-}
-
-.store-info-empty__button--hover {
-  opacity: 0.82;
 }
 
 .store-info-nav {
@@ -420,6 +407,13 @@ onShow(() => {
   flex-shrink: 0;
   color: #525861;
   font-size: 28rpx;
+}
+
+.store-info-card__required {
+  margin-left: 4rpx;
+  color: #ff4d4f;
+  font-size: 30rpx;
+  font-weight: 700;
 }
 
 .store-info-card__value-wrap {

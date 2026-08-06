@@ -1,10 +1,12 @@
 <script lang="ts" setup>
 import type { IAccountLoginForm } from '@/api/login'
 import { getCaptcha } from '@/api/login'
+import { createMerchantStore } from '@/api/merchant-store'
 import loginImage from '@/static/images/login.png'
-import { useMerchantFoodStore, useTokenStore } from '@/store'
-import { shouldShowStoreAccessScope } from '@/store/merchant-food-selection'
+import { useMerchantFoodStore, useTokenStore, useUserStore } from '@/store'
+import { resolveStoreIdForCreate, shouldShowStoreAccessScope } from '@/store/merchant-food-selection'
 import { HOME_PAGE } from '@/utils'
+import { buildMerchantStoreDraft } from './store-create'
 
 defineOptions({
   name: 'MerchantLogin',
@@ -26,11 +28,13 @@ const TABBAR_PAGES = ['/pages/dashboard/index', '/pages/me/me']
 
 const tokenStore = useTokenStore()
 const merchantFoodStore = useMerchantFoodStore()
+const userStore = useUserStore()
 const activeTab = ref<LoginTab>('account')
 const agreementChecked = ref(false)
 const rememberAccount = ref(false)
 const isSubmitting = ref(false)
 const storeAccessVisible = ref(false)
+const creatingStore = ref(false)
 const selectedStoreId = ref<number>()
 const captchaEnabled = ref(true)
 const captchaImageUrl = ref('')
@@ -220,10 +224,42 @@ function handleStoreAccessConfirm(storeId: number) {
   finishLogin()
 }
 
-function handleCreateStore() {
-  uni.navigateTo({
-    url: '/pages/me/store-info/index',
-  })
+async function handleCreateStore() {
+  if (creatingStore.value) {
+    return
+  }
+
+  creatingStore.value = true
+  try {
+    const stores = await merchantFoodStore.loadStores()
+    let storeId = resolveStoreIdForCreate(stores)
+
+    if (!storeId) {
+      const createdStore = await createMerchantStore(buildMerchantStoreDraft(userStore.userInfo))
+      storeId = createdStore.storeId
+    }
+
+    if (!storeId) {
+      throw new Error('创建门店失败，请重试')
+    }
+
+    merchantFoodStore.selectStore(storeId)
+    uni.navigateTo({
+      url: `/pages/me/store-info/index?mode=create&storeId=${storeId}`,
+    })
+  }
+  catch (error) {
+    console.error('开新店准备失败:', error)
+    if (error instanceof Error && error.message) {
+      uni.showToast({
+        title: error.message,
+        icon: 'none',
+      })
+    }
+  }
+  finally {
+    creatingStore.value = false
+  }
 }
 
 async function handleLogin() {

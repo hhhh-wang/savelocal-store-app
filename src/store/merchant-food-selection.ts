@@ -1,5 +1,6 @@
 export interface StoreSelectionItem {
   storeId: number
+  auditStatus?: string
 }
 
 export function shouldShowStoreAccessScope(
@@ -17,4 +18,8 @@ export function resolveCurrentStoreId(
     return persistedStoreId
   }
   return stores[0]?.storeId
+}
+
+export function resolveStoreIdForCreate(stores: StoreSelectionItem[]): number | undefined {
+  return stores.find(store => store.auditStatus !== '2')?.storeId
 }
