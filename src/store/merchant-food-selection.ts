@@ -6,7 +6,7 @@ export function shouldShowStoreAccessScope(
   stores: StoreSelectionItem[],
   mode: string,
 ): boolean {
-  return stores.length > 1 || mode === 'test'
+  return stores.length === 0 || stores.length > 1 || mode === 'test'
 }
 
 export function resolveCurrentStoreId(

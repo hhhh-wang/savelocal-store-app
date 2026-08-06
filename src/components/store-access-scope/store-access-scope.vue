@@ -116,6 +116,7 @@ function handleCreateStore() {
 
       <view class="store-access-scope__actions">
         <view
+          v-if="stores.length"
           class="store-access-scope__button"
           hover-class="store-access-scope__button--hover"
           @tap="handleConfirm"
