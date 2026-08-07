@@ -81,6 +81,22 @@ export interface MerchantFoodStoreProfile {
   pendingChanges: MerchantFoodProfileChange[]
 }
 
+export interface MerchantFoodAddressSuggestion {
+  title?: string
+  address?: string
+  detailAddress?: string
+  province?: string
+  city?: string
+  district?: string
+  street?: string
+  streetNumber?: string
+  latitude?: number
+  longitude?: number
+  adcode?: string
+  category?: string
+  distanceMeters?: number
+}
+
 export interface MerchantFoodBusinessStatusPayload {
   storeStatus: '0' | '1'
   businessTimes: MerchantFoodBusinessTime[]

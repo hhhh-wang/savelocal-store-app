@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { IMerchantRegisterForm } from '@/api/login'
 import type { ICaptcha } from '@/api/types/login'
-import { getCaptcha, register } from '@/api/login'
+import { getCaptcha, register, sendVerificationCodeSms } from '@/api/login'
 import registerImage from '@/static/images/register.png'
 
 defineOptions({
@@ -18,22 +18,33 @@ definePage({
 
 interface RegisterFormState extends IMerchantRegisterForm {
   confirmPassword: string
+  captchaCode: string
+  captchaUuid: string
 }
 
 const isSubmitting = ref(false)
+const SMS_COUNTDOWN_SECONDS = 60
+const smsCountdown = ref(0)
+const isSendingSms = ref(false)
 const captchaEnabled = ref(true)
 const captchaImageUrl = ref('')
+let smsCountdownTimer: ReturnType<typeof setInterval> | null = null
 
 const form = reactive<RegisterFormState>({
   password: '',
   confirmPassword: '',
   mobile: '',
-  code: '',
-  uuid: '',
+  smsCode: '',
+  captchaCode: '',
+  captchaUuid: '',
 })
 
 onLoad(() => {
   void fetchCaptcha()
+})
+
+onUnload(() => {
+  clearSmsCountdown()
 })
 
 async function fetchCaptcha() {
@@ -43,22 +54,43 @@ async function fetchCaptcha() {
 
     if (!captchaEnabled.value) {
       captchaImageUrl.value = ''
-      form.code = ''
-      form.uuid = ''
+      form.captchaCode = ''
+      form.captchaUuid = ''
       return
     }
 
     const base64Image = captcha.image || captcha.img || ''
     captchaImageUrl.value = base64Image ? `data:image/gif;base64,${base64Image}` : ''
-    form.uuid = captcha.uuid || ''
+    form.captchaCode = ''
+    form.captchaUuid = captcha.uuid || ''
   }
   catch (error) {
     console.error('获取注册验证码失败:', error)
     captchaEnabled.value = false
     captchaImageUrl.value = ''
-    form.code = ''
-    form.uuid = ''
+    form.captchaCode = ''
+    form.captchaUuid = ''
   }
+}
+
+function clearSmsCountdown() {
+  if (smsCountdownTimer) {
+    clearInterval(smsCountdownTimer)
+    smsCountdownTimer = null
+  }
+  smsCountdown.value = 0
+}
+
+function startSmsCountdown() {
+  clearSmsCountdown()
+  smsCountdown.value = SMS_COUNTDOWN_SECONDS
+  smsCountdownTimer = setInterval(() => {
+    if (smsCountdown.value <= 1) {
+      clearSmsCountdown()
+      return
+    }
+    smsCountdown.value -= 1
+  }, 1000)
 }
 
 function showPendingToast(title: string) {
@@ -68,11 +100,52 @@ function showPendingToast(title: string) {
   })
 }
 
+async function handleSendSmsCode() {
+  if (isSendingSms.value || smsCountdown.value > 0) {
+    return
+  }
+
+  const mobile = form.mobile.trim()
+  const captchaCode = form.captchaCode.trim()
+  if (!/^1\d{10}$/.test(mobile)) {
+    showPendingToast('请先输入正确的手机号')
+    return
+  }
+
+  if (captchaEnabled.value && !captchaCode) {
+    showPendingToast('请输入图形验证码')
+    return
+  }
+
+  try {
+    isSendingSms.value = true
+    await sendVerificationCodeSms(
+      mobile,
+      captchaEnabled.value ? captchaCode : undefined,
+      captchaEnabled.value ? form.captchaUuid : undefined,
+    )
+    startSmsCountdown()
+    uni.showToast({
+      title: '验证码已发送',
+      icon: 'success',
+    })
+  }
+  catch (error) {
+    console.error('发送注册短信验证码失败:', error)
+  }
+  finally {
+    isSendingSms.value = false
+    if (captchaEnabled.value) {
+      await fetchCaptcha()
+    }
+  }
+}
+
 function validateRegisterForm() {
   const password = form.password.trim()
   const confirmPassword = form.confirmPassword.trim()
   const mobile = form.mobile.trim()
-  const code = form.code?.trim()
+  const smsCode = form.smsCode.trim()
 
   if (!/^1\d{10}$/.test(mobile)) {
     showPendingToast('请输入正确的手机号')
@@ -94,8 +167,8 @@ function validateRegisterForm() {
     return false
   }
 
-  if (captchaEnabled.value && !code) {
-    showPendingToast('请输入验证码')
+  if (!smsCode) {
+    showPendingToast('请输入短信验证码')
     return false
   }
 
@@ -128,8 +201,7 @@ async function handleRegister() {
     await register({
       password: form.password,
       mobile: form.mobile.trim(),
-      code: captchaEnabled.value ? form.code?.trim() : undefined,
-      uuid: captchaEnabled.value ? form.uuid : undefined,
+      smsCode: form.smsCode.trim(),
     })
 
     uni.showToast({
@@ -145,11 +217,7 @@ async function handleRegister() {
   }
   catch (error) {
     console.error('商家注册失败:', error)
-    form.code = ''
-
-    if (captchaEnabled.value) {
-      await fetchCaptcha()
-    }
+    form.smsCode = ''
   }
   finally {
     isSubmitting.value = false
@@ -194,7 +262,7 @@ async function handleRegister() {
             :maxlength="11"
             placeholder="手机号"
             placeholder-class="register-input__placeholder"
-          />
+          >
           <text class="register-field__required">
             *
           </text>
@@ -209,7 +277,7 @@ async function handleRegister() {
             :maxlength="20"
             placeholder="您的密码"
             placeholder-class="register-input__placeholder"
-          />
+          >
           <text class="register-field__required register-field__required--success">
             *
           </text>
@@ -224,7 +292,7 @@ async function handleRegister() {
             :maxlength="20"
             placeholder="确认密码"
             placeholder-class="register-input__placeholder"
-          />
+          >
           <text class="register-field__required">
             *
           </text>
@@ -244,13 +312,31 @@ async function handleRegister() {
           </view>
 
           <input
-            v-model="form.code"
+            v-model="form.captchaCode"
             class="register-captcha__input"
             type="text"
             :maxlength="10"
             placeholder="请输入验证码"
             placeholder-class="register-input__placeholder"
-          />
+          >
+        </view>
+
+        <view class="register-phone-code">
+          <input
+            v-model="form.smsCode"
+            class="register-phone-code__input"
+            type="number"
+            :maxlength="6"
+            placeholder="请输入短信验证码"
+            placeholder-class="register-input__placeholder"
+          >
+          <text
+            class="register-phone-code__action"
+            :class="{ 'register-phone-code__action--disabled': isSendingSms || smsCountdown > 0 }"
+            @tap="handleSendSmsCode"
+          >
+            {{ isSendingSms ? '发送中...' : smsCountdown > 0 ? `${smsCountdown}秒后重发` : '获取验证码' }}
+          </text>
         </view>
 
         <view class="register-login-link" @tap="goToLogin">
@@ -352,7 +438,8 @@ async function handleRegister() {
 }
 
 .register-input,
-.register-captcha__input {
+.register-captcha__input,
+.register-phone-code__input {
   width: 100%;
   height: 96rpx;
   padding: 0 92rpx 0 46rpx;
@@ -384,12 +471,41 @@ async function handleRegister() {
 
 .register-captcha {
   display: grid;
-  grid-template-columns: 210rpx minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 210rpx;
   gap: 20rpx;
   margin-top: 30rpx;
 }
 
+.register-phone-code {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210rpx;
+  gap: 20rpx;
+  margin-top: 30rpx;
+}
+
+.register-phone-code__action {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  height: 96rpx;
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #7f765b;
+  font-size: 26rpx;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 2rpx rgba(178, 228, 180, 0.85);
+  box-sizing: border-box;
+}
+
+.register-phone-code__action--disabled {
+  opacity: 0.55;
+}
+
 .register-captcha__preview {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: center;

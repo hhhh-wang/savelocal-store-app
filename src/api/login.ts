@@ -27,8 +27,7 @@ export type ILoginForm = IAccountLoginForm
 export interface IMerchantRegisterForm {
   password: string
   mobile: string
-  code?: string
-  uuid?: string
+  smsCode: string
 }
 
 /**
@@ -42,6 +41,22 @@ export function getCaptcha() {
 }
 
 export const getCode = getCaptcha
+
+/**
+ * 发送短信验证码
+ * @param phoneNumber 手机号
+ * @param code 图形验证码
+ * @param uuid 图形验证码 UUID
+ */
+export function sendVerificationCodeSms(phoneNumber: string, code?: string, uuid?: string) {
+  return http.post<void>('/common/sms/verification-code/send', undefined, {
+    phoneNumber,
+    code,
+    uuid,
+  }, undefined, {
+    withAuth: false,
+  })
+}
 
 /**
  * 用户登录

@@ -1,6 +1,10 @@
 <script lang="ts" setup>
-import { submitMerchantFoodProfileChange } from '@/api/merchant-food'
+import type { RegionCodes } from './shared'
+import type { MerchantFoodAddressSuggestion } from '@/api/types/merchant-food'
+import { getMerchantFoodAddressSuggestions, submitMerchantFoodProfileChange } from '@/api/merchant-food'
+import locationIcon from '@/static/icons/location-icon.png'
 import { useMerchantFoodStore } from '@/store'
+import { normalizeCoordinate, resolveRegionCodesFromAdcode } from './shared'
 
 defineOptions({
   name: 'StoreAddress',
@@ -16,7 +20,10 @@ definePage({
 const fallbackUrl = '/pages/me/store-info/index'
 const merchantFoodStore = useMerchantFoodStore()
 const submitting = ref(false)
-const regionCodes = reactive({ provinceCode: '', cityCode: '', districtCode: '' })
+const regionCodes = reactive<RegionCodes>({ provinceCode: '', cityCode: '', districtCode: '' })
+const addressSuggestions = ref<MerchantFoodAddressSuggestion[]>([])
+const loadingAddressSuggestions = ref(false)
+const addressSuggestionVisible = ref(false)
 
 const form = reactive({
   address: '',
@@ -28,6 +35,8 @@ const mapLocation = reactive({
 })
 
 const mapScale = ref(14)
+const ADDRESS_SUGGESTION_LIMIT = 10
+let addressSuggestionRequestSeq = 0
 
 interface MapChangePayload {
   latitude: number
@@ -66,6 +75,134 @@ function loadUserLocation() {
   })
 }
 
+function resetRegionCodes() {
+  regionCodes.provinceCode = ''
+  regionCodes.cityCode = ''
+  regionCodes.districtCode = ''
+}
+
+function clearAddressSuggestions() {
+  addressSuggestionRequestSeq += 1
+  addressSuggestions.value = []
+  addressSuggestionVisible.value = false
+}
+
+function formatAddressSuggestionMeta(item: MerchantFoodAddressSuggestion) {
+  return [item.province, item.city, item.district, item.street]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+async function requestAddressLocation() {
+  const currentLatitude = normalizeCoordinate(mapLocation.latitude)
+  const currentLongitude = normalizeCoordinate(mapLocation.longitude)
+
+  if (currentLatitude && currentLongitude) {
+    return {
+      latitude: currentLatitude,
+      longitude: currentLongitude,
+    }
+  }
+
+  const location = await uni.getLocation({
+    type: 'gcj02',
+    isHighAccuracy: true,
+    highAccuracyExpireTime: 3000,
+  })
+  const latitude = normalizeCoordinate(location.latitude)
+  const longitude = normalizeCoordinate(location.longitude)
+  if (latitude === undefined || longitude === undefined) {
+    throw new Error('定位结果无效')
+  }
+
+  return { latitude, longitude }
+}
+
+async function loadAddressSuggestions() {
+  const requestSeq = ++addressSuggestionRequestSeq
+  loadingAddressSuggestions.value = true
+  addressSuggestionVisible.value = false
+
+  try {
+    const location = await requestAddressLocation()
+    if (requestSeq !== addressSuggestionRequestSeq) {
+      return
+    }
+
+    mapLocation.latitude = location.latitude
+    mapLocation.longitude = location.longitude
+    const suggestions = await getMerchantFoodAddressSuggestions({
+      ...location,
+      limit: ADDRESS_SUGGESTION_LIMIT,
+    })
+    if (requestSeq !== addressSuggestionRequestSeq) {
+      return
+    }
+
+    addressSuggestions.value = (suggestions || []).filter(item =>
+      !!(item.detailAddress || item.title || item.address),
+    )
+    if (!addressSuggestions.value.length) {
+      uni.showToast({ title: '当前位置暂无可选地址', icon: 'none' })
+      return
+    }
+
+    addressSuggestionVisible.value = true
+  }
+  catch (error) {
+    if (requestSeq !== addressSuggestionRequestSeq) {
+      return
+    }
+
+    console.error('获取门店地址候选失败:', error)
+    uni.showToast({ title: '获取地址失败，请检查定位权限', icon: 'none' })
+  }
+  finally {
+    if (requestSeq === addressSuggestionRequestSeq) {
+      loadingAddressSuggestions.value = false
+    }
+  }
+}
+
+function handleAddressIconTap() {
+  if (loadingAddressSuggestions.value) {
+    return
+  }
+
+  if (addressSuggestions.value.length) {
+    addressSuggestionVisible.value = true
+    return
+  }
+
+  void loadAddressSuggestions()
+}
+
+function selectAddressSuggestion(item: MerchantFoodAddressSuggestion) {
+  const address = (item.detailAddress || item.address || item.title || '').trim()
+  const latitude = normalizeCoordinate(item.latitude)
+  const longitude = normalizeCoordinate(item.longitude)
+  const codes = resolveRegionCodesFromAdcode(item.adcode)
+
+  if (!address || latitude === undefined || longitude === undefined || !codes.districtCode) {
+    uni.showToast({ title: '该地址缺少完整定位信息，请重新选择', icon: 'none' })
+    return
+  }
+
+  form.address = address
+  regionCodes.provinceCode = codes.provinceCode
+  regionCodes.cityCode = codes.cityCode
+  regionCodes.districtCode = codes.districtCode
+  mapLocation.latitude = latitude
+  mapLocation.longitude = longitude
+  mapScale.value = 16
+  clearAddressSuggestions()
+}
+
+function handleAddressInput() {
+  resetRegionCodes()
+  clearAddressSuggestions()
+}
+
 async function handleSubmit() {
   if (!form.address.trim()) {
     uni.showToast({
@@ -75,8 +212,14 @@ async function handleSubmit() {
     return
   }
 
+  const latitude = normalizeCoordinate(mapLocation.latitude)
+  const longitude = normalizeCoordinate(mapLocation.longitude)
   if (!regionCodes.provinceCode || !regionCodes.cityCode || !regionCodes.districtCode) {
     uni.showToast({ title: '门店地区编码不完整，请联系管理员', icon: 'none' })
+    return
+  }
+  if (!latitude || !longitude) {
+    uni.showToast({ title: '请先选择完整的门店定位', icon: 'none' })
     return
   }
   if (submitting.value)
@@ -88,8 +231,8 @@ async function handleSubmit() {
       changeType: 'ADDRESS',
       ...regionCodes,
       addressDetail: form.address.trim(),
-      longitude: mapLocation.longitude,
-      latitude: mapLocation.latitude,
+      longitude,
+      latitude,
     })
     await merchantFoodStore.loadProfile(true)
     uni.showToast({ title: '已提交审核', icon: 'success' })
@@ -123,7 +266,9 @@ onMounted(async () => {
     if (!mapLocation.latitude || !mapLocation.longitude)
       loadUserLocation()
   }
-  catch {}
+  catch (error) {
+    console.error('门店地址资料加载失败:', error)
+  }
 })
 </script>
 
@@ -169,12 +314,56 @@ onMounted(async () => {
             </text>
           </view>
 
-          <input
-            v-model="form.address"
-            class="store-address-field__input"
-            placeholder="请输入门店地址"
-            placeholder-class="store-address-field__placeholder"
+          <view class="store-address-field__input-wrap">
+            <view
+              class="store-address-field__location"
+              :class="{ 'store-address-field__location--loading': loadingAddressSuggestions }"
+              @tap.stop="handleAddressIconTap"
+            >
+              <image
+                class="store-address-field__location-icon"
+                :src="locationIcon"
+                mode="aspectFit"
+              />
+            </view>
+
+            <input
+              v-model="form.address"
+              class="store-address-field__input"
+              placeholder="请输入门店地址"
+              placeholder-class="store-address-field__placeholder"
+              @input="handleAddressInput"
+            >
+          </view>
+
+          <view v-if="loadingAddressSuggestions" class="store-address-field__suggestion-state">
+            正在获取附近地址...
+          </view>
+
+          <scroll-view
+            v-else-if="addressSuggestionVisible && addressSuggestions.length"
+            class="store-address-field__suggestion-list"
+            scroll-y
+            enhanced
+            show-scrollbar
           >
+            <view
+              v-for="(item, index) in addressSuggestions"
+              :key="`${item.title || item.address || 'suggestion'}-${index}`"
+              class="store-address-field__suggestion-item"
+              @tap="selectAddressSuggestion(item)"
+            >
+              <view class="store-address-field__suggestion-title">
+                {{ item.title || item.detailAddress || item.address }}
+              </view>
+              <view class="store-address-field__suggestion-address">
+                {{ item.address || item.detailAddress }}
+              </view>
+              <view v-if="formatAddressSuggestionMeta(item)" class="store-address-field__suggestion-meta">
+                {{ formatAddressSuggestionMeta(item) }}
+              </view>
+            </view>
+          </scroll-view>
         </view>
 
         <view class="store-address-map-section">
@@ -326,15 +515,87 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-.store-address-field__input {
-  width: 100%;
+.store-address-field__input-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
   margin-top: 18rpx;
+}
+
+.store-address-field__location {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48rpx;
+  height: 56rpx;
+  flex-shrink: 0;
+}
+
+.store-address-field__location--loading {
+  opacity: 0.55;
+}
+
+.store-address-field__location-icon {
+  display: block;
+  width: 38rpx;
+  height: 38rpx;
+}
+
+.store-address-field__input {
+  min-width: 0;
+  flex: 1;
   color: #23262c;
   font-size: 30rpx;
 }
 
 .store-address-field__placeholder {
   color: #b8bdc7;
+}
+
+.store-address-field__suggestion-state {
+  margin: 12rpx 0 0 58rpx;
+  color: #8a8f98;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.store-address-field__suggestion-list {
+  max-height: 420rpx;
+  margin: 12rpx 0 0 58rpx;
+  overflow: hidden;
+  border: 1rpx solid #eceef2;
+  border-radius: 16rpx;
+  background: #fafbfc;
+}
+
+.store-address-field__suggestion-item {
+  padding: 18rpx 20rpx;
+  border-top: 1rpx solid #eceef2;
+}
+
+.store-address-field__suggestion-item:first-child {
+  border-top: none;
+}
+
+.store-address-field__suggestion-title {
+  color: #20242a;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.store-address-field__suggestion-address {
+  margin-top: 6rpx;
+  color: #5f6670;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.store-address-field__suggestion-meta {
+  margin-top: 6rpx;
+  color: #8b929c;
+  font-size: 22rpx;
+  line-height: 1.4;
 }
 
 .store-address-map-section {

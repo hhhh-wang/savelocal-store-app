@@ -1,4 +1,5 @@
 import type {
+  MerchantFoodAddressSuggestion,
   MerchantFoodAlbumImage,
   MerchantFoodAuditStatus,
   MerchantFoodBill,
@@ -38,6 +39,14 @@ export function getMerchantFoodStores() {
 
 export function getMerchantFoodStoreProfile(storeId: number) {
   return http.get<MerchantFoodStoreProfile>(`${storeBase}/${storeId}/profile`)
+}
+
+export function getMerchantFoodAddressSuggestions(params: {
+  latitude: number
+  longitude: number
+  limit?: number
+}) {
+  return http.get<MerchantFoodAddressSuggestion[]>('/common/map/reverse-geocode', params)
 }
 
 export function updateMerchantFoodStoreBusinessStatus(storeId: number, payload: MerchantFoodBusinessStatusPayload) {
