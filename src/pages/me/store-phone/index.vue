@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { StorePhoneInputItem } from './shared'
 import {
   addMerchantFoodStorePhone,
   deleteMerchantFoodStorePhone,
@@ -6,6 +7,7 @@ import {
   updateMerchantFoodStorePhone,
 } from '@/api/merchant-food'
 import { useMerchantFoodStore } from '@/store'
+import { buildInitialPhoneNumbers } from './shared'
 
 defineOptions({
   name: 'StorePhone',
@@ -20,20 +22,13 @@ definePage({
 
 const fallbackUrl = '/pages/me/store-info/index'
 
-type PhoneAuditStatus = 'approved' | 'pending' | 'rejected'
-
-interface PhoneItem {
-  id: number
-  value: string
-  auditStatus: PhoneAuditStatus
-}
-
-let nextPhoneId = -1
+const INITIAL_PHONE_ID = -1
+let nextPhoneId = INITIAL_PHONE_ID - 1
 const merchantFoodStore = useMerchantFoodStore()
 const removedPhoneIds = ref<number[]>([])
 const submitting = ref(false)
 
-const phoneNumbers = ref<PhoneItem[]>([])
+const phoneNumbers = ref<StorePhoneInputItem[]>([])
 
 const canAddPhone = computed(() => {
   const lastPhone = phoneNumbers.value[phoneNumbers.value.length - 1]
@@ -115,11 +110,7 @@ async function handleSubmit() {
       ? updateMerchantFoodStorePhone(storeId, phone.id, { phoneNumber: phone.value.trim(), sortNum: index })
       : addMerchantFoodStorePhone(storeId, { phoneNumber: phone.value.trim(), sortNum: index })))
     const phones = await getMerchantFoodStorePhones(storeId)
-    phoneNumbers.value = phones.map(phone => ({
-      id: phone.phoneId,
-      value: phone.phoneNumber,
-      auditStatus: phone.auditStatus === '1' ? 'approved' : phone.auditStatus === '2' ? 'rejected' : 'pending',
-    }))
+    phoneNumbers.value = buildInitialPhoneNumbers(phones)
     removedPhoneIds.value = []
     await merchantFoodStore.loadProfile(true)
     uni.showToast({ title: '已提交审核', icon: 'success' })
@@ -133,13 +124,10 @@ onMounted(async () => {
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     const phones = await getMerchantFoodStorePhones(storeId)
-    phoneNumbers.value = phones.map(phone => ({
-      id: phone.phoneId,
-      value: phone.phoneNumber,
-      auditStatus: phone.auditStatus === '1' ? 'approved' : phone.auditStatus === '2' ? 'rejected' : 'pending',
-    }))
-    if (!phoneNumbers.value.length)
-      addPhone()
+    const storeProfile = merchantFoodStore.profile?.store.storeId === storeId
+      ? merchantFoodStore.profile
+      : await merchantFoodStore.loadProfile()
+    phoneNumbers.value = buildInitialPhoneNumbers(phones, storeProfile?.store.contactMobile)
   }
   catch {}
 })
