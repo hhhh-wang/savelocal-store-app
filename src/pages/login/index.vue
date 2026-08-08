@@ -2,6 +2,7 @@
 import type { IAccountLoginForm } from '@/api/login'
 import { getCaptcha } from '@/api/login'
 import { createMerchantStore } from '@/api/merchant-store'
+import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/shared'
 import loginImage from '@/static/images/login.png'
 import { useMerchantFoodStore, useTokenStore, useUserStore } from '@/store'
 import { resolveStoreIdForCreate, shouldShowStoreAccessScope } from '@/store/merchant-food-selection'
@@ -245,7 +246,7 @@ async function handleCreateStore() {
 
     merchantFoodStore.selectStore(storeId)
     uni.navigateTo({
-      url: `/pages/me/store-info/index?mode=create&storeId=${storeId}`,
+      url: buildStoreCreateLockRoute(storeId),
     })
   }
   catch (error) {
