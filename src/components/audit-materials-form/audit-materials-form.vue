@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'update:modelValue': [value: AuditMaterialsFormValue]
   'upload-document': [item: AuditMaterialsDocumentItem]
+  'clear-field-issue': [key: string]
   'submit': [value: AuditMaterialsFormValue]
 }>()
 
@@ -47,6 +48,7 @@ function handleInput(key: string, event: { detail: { value: string } }) {
   if (props.readonly)
     return
   updateField(key, event.detail.value)
+  emit('clear-field-issue', key)
 }
 
 function optionLabels(field: AuditMaterialsSelectField) {
@@ -66,8 +68,10 @@ function handlePickerChange(field: AuditMaterialsSelectField, event: { detail: {
   if (props.readonly)
     return
   const option = field.options[Number(event.detail.value)]
-  if (option)
+  if (option) {
     updateField(field.key, option.value)
+    emit('clear-field-issue', field.key)
+  }
 }
 
 function handleDocumentTap(item: AuditMaterialsDocumentItem) {
@@ -110,7 +114,10 @@ function handleSubmit() {
             :disabled="readonly"
             @change="handlePickerChange(field, $event)"
           >
-            <view class="audit-materials-form__control">
+            <view
+              class="audit-materials-form__control"
+              :class="{ 'audit-materials-form__control--issue': fieldIssues[field.key] }"
+            >
               <text class="audit-materials-form__control-value">
                 {{ selectedOptionLabel(field) }}
               </text>
@@ -130,6 +137,7 @@ function handleSubmit() {
           </text>
           <input
             class="audit-materials-form__input"
+            :class="{ 'audit-materials-form__input--issue': fieldIssues[field.key] }"
             :type="field.type || 'text'"
             :value="fieldValue(field.key)"
             :placeholder="field.placeholder || ''"
@@ -147,27 +155,33 @@ function handleSubmit() {
         <view
           v-for="item in documents"
           :key="item.key"
-          class="audit-materials-form__document"
-          hover-class="audit-materials-form__document--hover"
-          @tap="handleDocumentTap(item)"
+          class="audit-materials-form__document-wrapper"
         >
-          <text class="audit-materials-form__document-title">
-            {{ item.title }}<text v-if="item.required" class="audit-materials-form__required">*</text>
-          </text>
+          <view
+            class="audit-materials-form__document"
+            :class="{ 'audit-materials-form__document--issue': item.issueMessage }"
+            hover-class="audit-materials-form__document--hover"
+            @tap="handleDocumentTap(item)"
+          >
+            <text class="audit-materials-form__document-title">
+              {{ item.title }}<text v-if="item.required" class="audit-materials-form__required">*</text>
+            </text>
 
-          <image
-            v-if="item.imageUrl || item.fileUrl || documentIcon"
-            class="audit-materials-form__document-icon"
-            :src="item.imageUrl || documentIcon"
-            mode="aspectFit"
-          />
+            <image
+              v-if="item.imageUrl || item.fileUrl || documentIcon"
+              class="audit-materials-form__document-icon"
+              :src="item.imageUrl || documentIcon"
+              mode="aspectFit"
+            />
 
             <text class="audit-materials-form__document-text">
               {{ item.fileName || (item.imageUrl || item.fileUrl ? '已上传' : item.emptyText || '上传文件') }}
             </text>
-            <text v-if="item.issueMessage" class="audit-materials-form__issue">
-              {{ item.issueMessage }}
-            </text>
+          </view>
+
+          <text v-if="item.issueMessage" class="audit-materials-form__issue">
+            {{ item.issueMessage }}
+          </text>
         </view>
       </view>
 
@@ -229,8 +243,9 @@ function handleSubmit() {
 
 .audit-materials-form__field {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16rpx;
+  gap: 6rpx 16rpx;
   min-width: 0;
   min-height: 86rpx;
 }
@@ -270,6 +285,12 @@ function handleSubmit() {
   padding: 0 20rpx;
 }
 
+.audit-materials-form__control--issue,
+.audit-materials-form__input--issue {
+  border-color: #e3473e;
+  background: #fff8f7;
+}
+
 .audit-materials-form__control-value {
   overflow: hidden;
   color: #2c2f34;
@@ -301,6 +322,7 @@ function handleSubmit() {
 
 .audit-materials-form__issue {
   display: block;
+  flex-basis: 100%;
   width: 100%;
   margin-top: 6rpx;
   color: #e3473e;
@@ -312,9 +334,17 @@ function handleSubmit() {
 .audit-materials-form__documents {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: flex-start;
   gap: 18rpx;
   padding: 26rpx 28rpx 28rpx;
   border-top: 2rpx solid #f0f1f3;
+}
+
+.audit-materials-form__document-wrapper {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .audit-materials-form__document {
@@ -329,6 +359,11 @@ function handleSubmit() {
   border-radius: 18rpx;
   box-sizing: border-box;
   background: #fff;
+}
+
+.audit-materials-form__document--issue {
+  border-color: #e3473e;
+  background: #fff8f7;
 }
 
 .audit-materials-form__document--hover,
@@ -356,6 +391,12 @@ function handleSubmit() {
 .audit-materials-form__document-text {
   color: #55595e;
   font-size: 25rpx;
+  line-height: 1.35;
+}
+
+.audit-materials-form__document-wrapper > .audit-materials-form__issue {
+  margin: 10rpx 4rpx 0;
+  font-size: 22rpx;
   line-height: 1.35;
 }
 

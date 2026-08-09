@@ -44,6 +44,20 @@ const auditIssues = ref<{ field: string, message: string }[]>([])
 const loading = ref(true)
 const submitting = ref(false)
 
+const auditIssueAliases: Record<string, string[]> = {
+  mainIndustryCode: ['industry.mainIndustryCode'],
+  storeCategoryCode: ['industry.storeCategoryCode'],
+  storeName: ['store.storeName'],
+  legalPersonName: ['legalEntity.legalPersonName'],
+  legalPersonPhone: ['legalEntity.legalPersonPhone'],
+  storeAddress: ['store.addressText', 'store.addressDetail'],
+  businessLicenseCode: ['legalEntity.unifiedSocialCode'],
+  'business-license': ['qualifications.BUSINESS_LICENSE.qualificationImages'],
+  'food-permit': ['qualifications.FOOD_LICENSE.qualificationImages'],
+  'id-front': ['legalEntity.legalPersonIdFront'],
+  'id-back': ['legalEntity.legalPersonIdBack'],
+}
+
 const isReadonly = computed(() => auditStatus.value === '1' || loading.value || submitting.value)
 const statusLabel = computed(() => ({
   '0': '草稿，可继续完善资料',
@@ -53,16 +67,17 @@ const statusLabel = computed(() => ({
 } as Record<string, string>)[auditStatus.value] || '请完善审核资料')
 
 const fieldIssues = computed<Record<string, string>>(() => {
-  const aliases: Record<string, string[]> = {
-    mainIndustryCode: ['industry.mainIndustryCode'],
-    storeCategoryCode: ['industry.storeCategoryCode'],
-    storeName: ['store.storeName'],
-    legalPersonName: ['legalEntity.legalPersonName'],
-    legalPersonPhone: ['legalEntity.legalPersonPhone'],
-    storeAddress: ['store.addressText', 'store.addressDetail'],
-    businessLicenseCode: ['legalEntity.unifiedSocialCode'],
-  }
-  return Object.fromEntries(Object.entries(aliases).flatMap(([key, paths]) => {
+  const formFieldKeys = [
+    'mainIndustryCode',
+    'storeCategoryCode',
+    'storeName',
+    'legalPersonName',
+    'legalPersonPhone',
+    'storeAddress',
+    'businessLicenseCode',
+  ]
+  return Object.fromEntries(formFieldKeys.flatMap((key) => {
+    const paths = auditIssueAliases[key] || []
     const issue = auditIssues.value.find(item => paths.includes(item.field))
     return issue ? [[key, issue.message]] : []
   }))
@@ -111,21 +126,15 @@ const requiredDocumentKeys = documents.value.filter(document => document.require
 const pendingDocumentKey = ref('')
 
 function fieldIssue(key: string) {
-  const aliases: Record<string, string[]> = {
-    mainIndustryCode: ['industry.mainIndustryCode'],
-    storeCategoryCode: ['industry.storeCategoryCode'],
-    storeName: ['store.storeName'],
-    legalPersonName: ['legalEntity.legalPersonName'],
-    legalPersonPhone: ['legalEntity.legalPersonPhone'],
-    storeAddress: ['store.addressText', 'store.addressDetail'],
-    businessLicenseCode: ['legalEntity.unifiedSocialCode'],
-    'business-license': ['qualifications.BUSINESS_LICENSE.qualificationImages'],
-    'food-permit': ['qualifications.FOOD_LICENSE.qualificationImages'],
-    'id-front': ['legalEntity.legalPersonIdFront'],
-    'id-back': ['legalEntity.legalPersonIdBack'],
-  }
-  const keys = aliases[key] || []
+  const keys = auditIssueAliases[key] || []
   return auditIssues.value.find(item => keys.includes(item.field))?.message || ''
+}
+
+function clearFieldIssue(key: string) {
+  const paths = auditIssueAliases[key] || []
+  if (!paths.length)
+    return
+  auditIssues.value = auditIssues.value.filter(item => !paths.includes(item.field))
 }
 
 function applyDraft(draft: MerchantStoreAuditDraft) {
@@ -244,6 +253,7 @@ const { run: selectAndUpload } = useUpload<'file'>({
     } as Record<string, string>)[document.key]
     if (fieldKey) form[fieldKey] = fileUrl
     document.issueMessage = ''
+    clearFieldIssue(document.key)
     uni.showToast({ title: `${document.title}上传成功`, icon: 'success' })
   },
   error: () => {
@@ -343,6 +353,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         :field-issues="fieldIssues"
         :document-icon="documentIcon"
         @update:model-value="handleFormUpdate"
+        @clear-field-issue="clearFieldIssue"
         @upload-document="handleDocumentUpload"
         @submit="handleSubmit"
       />
