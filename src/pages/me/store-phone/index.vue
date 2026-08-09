@@ -1,12 +1,6 @@
 <script lang="ts" setup>
 import type { StorePhoneInputItem } from './shared'
-import {
-  addMerchantFoodStorePhone,
-  deleteMerchantFoodStorePhone,
-  getMerchantFoodStorePhones,
-  updateMerchantFoodStorePhone,
-} from '@/api/merchant-food'
-import { useMerchantFoodStore } from '@/store'
+import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 import { buildInitialPhoneNumbers } from './shared'
 
 defineOptions({
@@ -25,20 +19,16 @@ const fallbackUrl = '/pages/me/store-info/index'
 const INITIAL_PHONE_ID = -1
 let nextPhoneId = INITIAL_PHONE_ID - 1
 const merchantFoodStore = useMerchantFoodStore()
-const removedPhoneIds = ref<number[]>([])
+const merchantStoreAudit = useMerchantStoreAuditStore()
 const submitting = ref(false)
 
 const phoneNumbers = ref<StorePhoneInputItem[]>([])
 
 const canAddPhone = computed(() => {
-  const lastPhone = phoneNumbers.value[phoneNumbers.value.length - 1]
-
-  if (!lastPhone) {
-    return true
-  }
-
-  return lastPhone.auditStatus === 'approved'
+  return phoneNumbers.value.length < 10
 })
+const phoneIssue = computed(() => merchantStoreAudit.issueMessages['phones']
+  || merchantStoreAudit.issueMessages['phones.primary.phoneNumber'] || '')
 
 function handleClose() {
   const pages = getCurrentPages()
@@ -64,6 +54,7 @@ function addPhone() {
 
   phoneNumbers.value.push({
     id: nextPhoneId--,
+    draftKey: `phone-${Math.abs(nextPhoneId)}`,
     value: '',
     auditStatus: 'pending',
   })
@@ -74,9 +65,7 @@ function removePhone(index: number) {
     return
   }
 
-  const [removed] = phoneNumbers.value.splice(index, 1)
-  if (removed.id > 0)
-    removedPhoneIds.value.push(removed.id)
+  phoneNumbers.value.splice(index, 1)
 }
 
 function markPhonePending(index: number) {
@@ -105,15 +94,15 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    await Promise.all(removedPhoneIds.value.map(phoneId => deleteMerchantFoodStorePhone(storeId, phoneId)))
-    await Promise.all(validPhones.map((phone, index) => phone.id > 0
-      ? updateMerchantFoodStorePhone(storeId, phone.id, { phoneNumber: phone.value.trim(), sortNum: index })
-      : addMerchantFoodStorePhone(storeId, { phoneNumber: phone.value.trim(), sortNum: index })))
-    const phones = await getMerchantFoodStorePhones(storeId)
-    phoneNumbers.value = buildInitialPhoneNumbers(phones)
-    removedPhoneIds.value = []
-    await merchantFoodStore.loadProfile(true)
-    uni.showToast({ title: '已提交审核', icon: 'success' })
+    await merchantStoreAudit.savePhones(storeId, {
+      phones: validPhones.map((phone, index) => ({
+        draftKey: phone.draftKey || (index === 0 ? 'primary' : `phone-${index + 1}`),
+        phoneNumber: phone.value.trim(),
+        sortNum: index,
+      })),
+    })
+    phoneNumbers.value = buildInitialPhoneNumbers(merchantStoreAudit.snapshot.phones)
+    uni.showToast({ title: '已保存到审核草稿', icon: 'success' })
   }
   finally {
     submitting.value = false
@@ -123,11 +112,11 @@ async function handleSubmit() {
 onMounted(async () => {
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    const phones = await getMerchantFoodStorePhones(storeId)
-    const storeProfile = merchantFoodStore.profile?.store.storeId === storeId
-      ? merchantFoodStore.profile
-      : await merchantFoodStore.loadProfile()
-    phoneNumbers.value = buildInitialPhoneNumbers(phones, storeProfile?.store.contactMobile)
+    await merchantStoreAudit.load(storeId, true)
+    phoneNumbers.value = buildInitialPhoneNumbers(
+      merchantStoreAudit.snapshot.phones,
+      merchantStoreAudit.snapshot.store.contactMobile,
+    )
   }
   catch {}
 })
@@ -162,6 +151,9 @@ onMounted(async () => {
       </view>
 
       <view class="store-phone-card">
+        <view v-if="phoneIssue" class="store-phone-card__issue">
+          {{ phoneIssue }}
+        </view>
         <view class="store-phone-card__label">
           <text class="store-phone-card__label-text">
             门店电话
@@ -292,6 +284,13 @@ onMounted(async () => {
   border-radius: 28rpx;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 16rpx 42rpx rgba(56, 61, 86, 0.08);
+}
+
+.store-phone-card__issue {
+  margin-bottom: 18rpx;
+  color: #d93025;
+  font-size: 25rpx;
+  line-height: 36rpx;
 }
 
 .store-phone-card__label {

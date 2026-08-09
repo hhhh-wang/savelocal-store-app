@@ -23,6 +23,7 @@ export const storeCategoryOptions: StoreCategoryPrimaryOption[] = [
     label: '餐饮美食',
     children: [
       { id: 'CATERING', label: '餐厅' },
+      { id: 'SNACK', label: '小吃' },
       { id: 'CAFE', label: '咖啡茶饮' },
     ],
   },

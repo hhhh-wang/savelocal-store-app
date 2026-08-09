@@ -78,7 +78,6 @@ export interface MerchantFoodStoreProfile {
   store: MerchantFoodStore
   businessTimes: MerchantFoodBusinessTime[]
   phones: MerchantFoodStorePhone[]
-  pendingChanges: MerchantFoodProfileChange[]
 }
 
 export interface MerchantFoodAddressSuggestion {
@@ -99,7 +98,6 @@ export interface MerchantFoodAddressSuggestion {
 
 export interface MerchantFoodBusinessStatusPayload {
   storeStatus: '0' | '1'
-  businessTimes: MerchantFoodBusinessTime[]
 }
 
 export interface MerchantFoodProfileChangePayload {

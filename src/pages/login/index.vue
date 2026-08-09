@@ -1,13 +1,12 @@
 <script lang="ts" setup>
 import type { IAccountLoginForm } from '@/api/login'
 import { getCaptcha } from '@/api/login'
-import { createMerchantStore } from '@/api/merchant-store'
+import { createMerchantStoreDraft } from '@/api/merchant-store'
 import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/shared'
 import loginImage from '@/static/images/login.png'
-import { useMerchantFoodStore, useTokenStore, useUserStore } from '@/store'
+import { useMerchantFoodStore, useTokenStore } from '@/store'
 import { resolveStoreIdForCreate, shouldShowStoreAccessScope } from '@/store/merchant-food-selection'
 import { HOME_PAGE } from '@/utils'
-import { buildMerchantStoreDraft } from './store-create'
 
 defineOptions({
   name: 'MerchantLogin',
@@ -29,7 +28,6 @@ const TABBAR_PAGES = ['/pages/dashboard/index', '/pages/me/me']
 
 const tokenStore = useTokenStore()
 const merchantFoodStore = useMerchantFoodStore()
-const userStore = useUserStore()
 const activeTab = ref<LoginTab>('account')
 const agreementChecked = ref(false)
 const rememberAccount = ref(false)
@@ -236,7 +234,7 @@ async function handleCreateStore() {
     let storeId = resolveStoreIdForCreate(stores)
 
     if (!storeId) {
-      const createdStore = await createMerchantStore(buildMerchantStoreDraft(userStore.userInfo))
+      const createdStore = await createMerchantStoreDraft()
       storeId = createdStore.storeId
     }
 

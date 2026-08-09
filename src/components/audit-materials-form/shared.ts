@@ -1,4 +1,17 @@
-export type AuditMaterialsFormValue = Record<string, string>
+export interface AuditMaterialsFormValue extends Record<string, string> {
+  mainIndustryCode: string
+  storeCategoryCode: string
+  storeName: string
+  legalPersonName: string
+  legalPersonPhone: string
+  storeAddress: string
+  businessLicenseCode: string
+  businessLicenseUrl?: string
+  foodPermitUrl?: string
+  legalPersonIdFrontUrl?: string
+  legalPersonIdBackUrl?: string
+  auditVersion?: string
+}
 
 export interface AuditMaterialsOption {
   label: string
@@ -10,6 +23,7 @@ export interface AuditMaterialsSelectField {
   label: string
   required?: boolean
   options: AuditMaterialsOption[]
+  issueMessage?: string
 }
 
 export interface AuditMaterialsTextField {
@@ -18,6 +32,7 @@ export interface AuditMaterialsTextField {
   required?: boolean
   type?: 'text' | 'number' | 'tel'
   placeholder?: string
+  issueMessage?: string
 }
 
 export interface AuditMaterialsDocumentItem {
@@ -26,6 +41,9 @@ export interface AuditMaterialsDocumentItem {
   required?: boolean
   emptyText?: string
   imageUrl?: string
+  fileUrl?: string
+  fileName?: string
+  issueMessage?: string
 }
 
 export interface AuditMaterialsValidationResult {

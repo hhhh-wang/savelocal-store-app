@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import type { StoreCategoryPrimaryOption, StoreCategorySecondaryOption, StoreCategorySelection } from './shared'
-import { updateMerchantFoodStoreCategory } from '@/api/merchant-food'
-import { useMerchantFoodStore } from '@/store'
+import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 import {
   createDefaultStoreCategorySelection,
   formatStoreCategoryPath,
@@ -27,6 +26,7 @@ const savedSelection = ref<StoreCategorySelection>(createDefaultStoreCategorySel
 const draftSelection = ref<StoreCategorySelection>(createDefaultStoreCategorySelection())
 const activePrimaryId = ref('')
 const merchantFoodStore = useMerchantFoodStore()
+const merchantStoreAudit = useMerchantStoreAuditStore()
 const submitting = ref(false)
 
 const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase())
@@ -100,10 +100,11 @@ const savedCategoryPath = computed(() => formatStoreCategoryPath(savedSelection.
 const currentCategoryPath = computed(() => formatStoreCategoryPath(draftSelection.value))
 
 async function syncStateFromServer() {
-  const profile = await merchantFoodStore.loadProfile(true)
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  await merchantStoreAudit.load(storeId, true)
   const storedSelection = normalizeStoreCategorySelection({
-    primaryId: 'FOOD',
-    secondaryId: profile.store.mainIndustryCode,
+    primaryId: merchantStoreAudit.snapshot.industry.mainIndustryCode,
+    secondaryId: merchantStoreAudit.snapshot.industry.storeCategoryCode,
   })
 
   savedSelection.value = storedSelection
@@ -156,11 +157,12 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    await updateMerchantFoodStoreCategory(storeId, draftSelection.value.secondaryId)
+    await merchantStoreAudit.saveCategory(storeId, {
+      mainIndustryCode: draftSelection.value.primaryId,
+      storeCategoryCode: draftSelection.value.secondaryId,
+    })
     savedSelection.value = normalizeStoreCategorySelection(draftSelection.value)
-    await merchantFoodStore.loadProfile(true)
-
-    uni.showToast({ title: '提交成功', icon: 'success' })
+    uni.showToast({ title: '已保存到审核草稿', icon: 'success' })
 
     setTimeout(handleClose, 320)
   }

@@ -1,7 +1,6 @@
 <script lang="ts" setup>
-import { submitMerchantFoodProfileChange } from '@/api/merchant-food'
 import previewImage from '@/static/images/item-image.png'
-import { useMerchantFoodStore } from '@/store'
+import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 
 defineOptions({
   name: 'StoreName',
@@ -17,6 +16,7 @@ definePage({
 const fallbackUrl = '/pages/me/store-info/index'
 
 const merchantFoodStore = useMerchantFoodStore()
+const merchantStoreAudit = useMerchantStoreAuditStore()
 const reviewStatus = ref<'rejected' | 'editing'>('editing')
 const rejectReason = ref('')
 const submitting = ref(false)
@@ -82,13 +82,15 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    await submitMerchantFoodProfileChange(storeId, {
-      changeType: 'NAME',
+    await merchantStoreAudit.saveBasic(storeId, {
       storeName: form.storeName.trim(),
       shortName: form.branchName.trim(),
+      contactName: merchantStoreAudit.snapshot.store.contactName || '',
+      storeDesc: merchantStoreAudit.snapshot.store.storeDesc || '',
     })
-    await merchantFoodStore.loadProfile(true)
-    uni.showToast({ title: '已提交审核', icon: 'success' })
+    reviewStatus.value = 'editing'
+    rejectReason.value = ''
+    uni.showToast({ title: '已保存到审核草稿', icon: 'success' })
   }
   finally {
     submitting.value = false
@@ -97,12 +99,13 @@ async function handleSubmit() {
 
 onMounted(async () => {
   try {
-    const profile = await merchantFoodStore.loadProfile(true)
-    form.storeName = profile.store.storeName || ''
-    form.branchName = profile.store.shortName || ''
-    const rejected = [...profile.pendingChanges].reverse().find(item => item.changeType === 'NAME' && item.auditStatus === '2')
-    reviewStatus.value = rejected ? 'rejected' : 'editing'
-    rejectReason.value = rejected?.rejectReason || ''
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await merchantStoreAudit.load(storeId, true)
+    form.storeName = merchantStoreAudit.snapshot.store.storeName || ''
+    form.branchName = merchantStoreAudit.snapshot.store.shortName || ''
+    rejectReason.value = merchantStoreAudit.issueMessages['store.storeName']
+      || merchantStoreAudit.issueMessages['store.shortName'] || ''
+    reviewStatus.value = rejectReason.value ? 'rejected' : 'editing'
   }
   catch {}
 })
@@ -158,6 +161,7 @@ onMounted(async () => {
 
           <input
             v-model="form.storeName"
+            :disabled="!merchantStoreAudit.editable"
             class="store-name-field__input"
             :maxlength="20"
             placeholder="请输入门店名称"
@@ -172,6 +176,7 @@ onMounted(async () => {
 
           <input
             v-model="form.branchName"
+            :disabled="!merchantStoreAudit.editable"
             class="store-name-field__input"
             :maxlength="20"
             placeholder="请输入分店名称"

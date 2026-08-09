@@ -1,4 +1,4 @@
-export const defaultAuditPagePath = '/pages/me/store-info/index?mode=create'
+export const defaultAuditPagePath = '/pages/me/store-audit/index'
 
 function appendStoreId(path: string, storeId: number) {
   const separator = path.includes('?') ? '&' : '?'

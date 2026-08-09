@@ -9,13 +9,8 @@ import type {
   MerchantFoodOrderDetail,
   MerchantFoodPageParams,
   MerchantFoodPageResult,
-  MerchantFoodPhonePayload,
   MerchantFoodProduct,
   MerchantFoodProductPayload,
-  MerchantFoodProfileChange,
-  MerchantFoodProfileChangePayload,
-  MerchantFoodQualificationPayload,
-  MerchantFoodQualifications,
   MerchantFoodReconciliationOverview,
   MerchantFoodReconciliationQuery,
   MerchantFoodRefund,
@@ -24,10 +19,7 @@ import type {
   MerchantFoodSaleStatus,
   MerchantFoodScene,
   MerchantFoodStore,
-  MerchantFoodStorePhone,
   MerchantFoodStoreProfile,
-  MerchantQualificationPayload,
-  MerchantQualifications,
 } from './types/merchant-food'
 import { http } from '@/http/http'
 
@@ -51,58 +43,6 @@ export function getMerchantFoodAddressSuggestions(params: {
 
 export function updateMerchantFoodStoreBusinessStatus(storeId: number, payload: MerchantFoodBusinessStatusPayload) {
   return http.put<void>(`${storeBase}/${storeId}/business-status`, payload)
-}
-
-export function updateMerchantFoodStoreCategory(storeId: number, industryCode: string) {
-  return http.put<void>(`${storeBase}/${storeId}/category`, { industryCode })
-}
-
-export function updateMerchantFoodEntryImages(storeId: number, payload: { coverImage: string, galleryImages: string[] }) {
-  return http.put<void>(`${storeBase}/${storeId}/entry-images`, payload)
-}
-
-export function submitMerchantFoodProfileChange(storeId: number, payload: MerchantFoodProfileChangePayload) {
-  return http.post<MerchantFoodProfileChange>(`${storeBase}/${storeId}/profile-changes`, payload)
-}
-
-export function getMerchantFoodStorePhones(storeId: number) {
-  return http.get<MerchantFoodStorePhone[]>(`${storeBase}/${storeId}/phones`)
-}
-
-export function addMerchantFoodStorePhone(storeId: number, payload: MerchantFoodPhonePayload) {
-  return http.post<MerchantFoodStorePhone>(`${storeBase}/${storeId}/phones`, payload)
-}
-
-export function updateMerchantFoodStorePhone(storeId: number, phoneId: number, payload: MerchantFoodPhonePayload) {
-  return http.put<void>(`${storeBase}/${storeId}/phones/${phoneId}`, payload)
-}
-
-export function deleteMerchantFoodStorePhone(storeId: number, phoneId: number) {
-  return http.delete<void>(`${storeBase}/${storeId}/phones/${phoneId}`)
-}
-
-export function getMerchantFoodQualifications(storeId: number) {
-  return http.get<MerchantFoodQualifications>(`${storeBase}/${storeId}/qualifications`)
-}
-
-export function updateMerchantFoodQualifications(storeId: number, payload: MerchantFoodQualificationPayload[]) {
-  return http.put<void>(`${storeBase}/${storeId}/qualifications`, payload as unknown as Record<string, any>)
-}
-
-export function getMerchantQualifications(scope: '1' | '2' = '1') {
-  return http.get<MerchantQualifications>('/merchant/onboarding/qualifications', { scope })
-}
-
-export function createMerchantQualification(payload: MerchantQualificationPayload) {
-  return http.post<void>('/merchant/onboarding/qualifications', payload as unknown as Record<string, any>)
-}
-
-export function updateMerchantQualification(qualificationId: number, payload: MerchantQualificationPayload) {
-  return http.put<void>(`/merchant/onboarding/qualifications/${qualificationId}`, payload)
-}
-
-export function deleteMerchantQualification(qualificationId: number) {
-  return http.delete<void>(`/merchant/onboarding/qualifications/${qualificationId}`)
 }
 
 export function getMerchantFoodAlbumPage(storeId: number, params: MerchantFoodPageParams & { auditStatus?: MerchantFoodAuditStatus }) {

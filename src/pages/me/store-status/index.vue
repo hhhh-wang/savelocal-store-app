@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { BusinessStatus, StoreBusinessStatusPayload } from '@/components/business-hours-picker/types'
 import { updateMerchantFoodStoreBusinessStatus } from '@/api/merchant-food'
-import { useMerchantFoodStore } from '@/store'
+import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 import {
   cloneStoreBusinessStatus,
   createDefaultStoreBusinessStatus,
@@ -37,11 +37,16 @@ const businessStatusOptions: Array<{ value: BusinessStatus, title: string, descr
 
 const form = reactive<StoreBusinessStatusPayload>(createDefaultStoreBusinessStatus())
 const merchantFoodStore = useMerchantFoodStore()
+const merchantStoreAudit = useMerchantStoreAuditStore()
 const submitting = ref(false)
 
 async function syncForm() {
   const profile = await merchantFoodStore.loadProfile(true)
-  const storedValue = fromMerchantFoodBusinessTimes(profile.store.storeStatus, profile.businessTimes)
+  await merchantStoreAudit.load(profile.store.storeId, true)
+  const storedValue = fromMerchantFoodBusinessTimes(
+    profile.store.storeStatus,
+    merchantStoreAudit.snapshot.businessHours,
+  )
 
   form.status = storedValue.status
   form.hours = cloneStoreBusinessStatus(storedValue).hours
@@ -72,11 +77,13 @@ async function handleSubmit() {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     await updateMerchantFoodStoreBusinessStatus(storeId, {
       storeStatus: form.status === 'pause' ? '1' : '0',
-      businessTimes: toMerchantFoodBusinessTimes(form.hours),
+    })
+    await merchantStoreAudit.saveBusinessHours(storeId, {
+      businessHours: toMerchantFoodBusinessTimes(form.hours),
     })
     await merchantFoodStore.loadProfile(true)
 
-    uni.showToast({ title: '提交成功', icon: 'success' })
+    uni.showToast({ title: '营业状态已生效，营业时间已保存到草稿', icon: 'success' })
 
     setTimeout(handleClose, 320)
   }

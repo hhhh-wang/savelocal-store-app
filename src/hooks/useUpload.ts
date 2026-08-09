@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useTokenStore } from '@/store/token'
 import { getEnvBaseUrl } from '@/utils/index'
 
 const VITE_UPLOAD_BASEURL = `${getEnvBaseUrl()}/common/upload`
@@ -42,7 +43,17 @@ export default function useUpload<T extends TfileType>(options: TOptions<T> = {}
     onError?.(uploadError)
   }
 
-  const handleFileChoose = ({ tempFilePath, size }: { tempFilePath: string, size: number }) => {
+  const handleFileChoose = ({
+    tempFilePath,
+    size,
+    name,
+    mimeType,
+  }: {
+    tempFilePath: string
+    size: number
+    name?: string
+    mimeType?: string
+  }) => {
     if (size > maxSize) {
       uni.showToast({
         title: `文件大小不能超过 ${maxSize / 1024 / 1024}MB`,
@@ -51,16 +62,18 @@ export default function useUpload<T extends TfileType>(options: TOptions<T> = {}
       return
     }
 
-    // const fileExtension = file?.tempFiles?.name?.split('.').pop()?.toLowerCase()
-    // const isTypeValid = accept.some((type) => type === '*' || type.toLowerCase() === fileExtension)
+    const nameExtension = name?.split('.').pop()?.toLowerCase()
+    const fileExtension = nameExtension || mimeType?.split('/').pop()?.toLowerCase()
+    const normalizedExtension = nameExtension ? fileExtension : fileExtension === 'jpeg' ? 'jpg' : fileExtension
+    const isTypeValid = accept.some(type => type === '*' || type.toLowerCase() === normalizedExtension)
 
-    // if (!isTypeValid) {
-    //   uni.showToast({
-    //     title: `仅支持 ${accept.join(', ')} 格式的文件`,
-    //     icon: 'none',
-    //   })
-    //   return
-    // }
+    if (!isTypeValid) {
+      uni.showToast({
+        title: `仅支持 ${accept.join('、')} 格式的文件`,
+        icon: 'none',
+      })
+      return
+    }
 
     loading.value = true
     uploadFile({
@@ -91,15 +104,22 @@ export default function useUpload<T extends TfileType>(options: TOptions<T> = {}
         // App的File有以下字段：{path: "file:///Users/feige/xxx/gallery/1522437259-compressed-IMG_0006.jpg", size: 48976}
         let tempFilePath = ''
         let size = 0
+        let name = ''
+        let mimeType = ''
+        const selectedFile = res.tempFiles[0]
         // #ifdef MP-WEIXIN
-        tempFilePath = res.tempFiles[0].tempFilePath
-        size = res.tempFiles[0].size
+        tempFilePath = selectedFile.tempFilePath
+        size = selectedFile.size
+        name = selectedFile.name || ''
+        mimeType = selectedFile.type || selectedFile.fileType || ''
         // #endif
         // #ifndef MP-WEIXIN
         tempFilePath = res.tempFilePaths[0]
-        size = res.tempFiles[0].size
+        size = selectedFile.size
+        name = selectedFile.name || ''
+        mimeType = selectedFile.type || selectedFile.fileType || ''
         // #endif
-        handleFileChoose({ tempFilePath, size })
+        handleFileChoose({ tempFilePath, size, name, mimeType })
       },
       fail: (err: any) => {
         console.error('File selection failed:', err)
@@ -144,11 +164,23 @@ async function uploadFile({
   onError: (err: any) => void
   onComplete: () => void
 }) {
+  const tokenStore = useTokenStore()
+  const token = tokenStore.updateNowTime().validToken
+
+  if (!token) {
+    onError(new Error('登录状态已失效，请重新登录'))
+    onComplete()
+    return
+  }
+
   uni.uploadFile({
     url: VITE_UPLOAD_BASEURL,
     filePath: tempFilePath,
     name: 'file',
     formData,
+    header: {
+      Authorization: `Bearer ${token}`,
+    },
     success: (uploadFileRes) => {
       try {
         let parsedData: any

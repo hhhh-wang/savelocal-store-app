@@ -14,12 +14,16 @@ interface Props {
   documentIcon?: string
   title?: string
   tipText?: string
+  readonly?: boolean
+  fieldIssues?: Record<string, string>
 }
 
 const props = withDefaults(defineProps<Props>(), {
   documentIcon: '',
   title: '审核资料编辑',
   tipText: '带 * 为必填项，请确保信息与证件一致',
+  readonly: false,
+  fieldIssues: () => ({}),
 })
 
 const emit = defineEmits<{
@@ -40,6 +44,8 @@ function updateField(key: string, value: string) {
 }
 
 function handleInput(key: string, event: { detail: { value: string } }) {
+  if (props.readonly)
+    return
   updateField(key, event.detail.value)
 }
 
@@ -57,16 +63,22 @@ function selectedOptionLabel(field: AuditMaterialsSelectField) {
 }
 
 function handlePickerChange(field: AuditMaterialsSelectField, event: { detail: { value: number | string } }) {
+  if (props.readonly)
+    return
   const option = field.options[Number(event.detail.value)]
   if (option)
     updateField(field.key, option.value)
 }
 
 function handleDocumentTap(item: AuditMaterialsDocumentItem) {
+  if (props.readonly)
+    return
   emit('upload-document', item)
 }
 
 function handleSubmit() {
+  if (props.readonly)
+    return
   emit('submit', { ...props.modelValue })
 }
 </script>
@@ -95,6 +107,7 @@ function handleSubmit() {
             mode="selector"
             :range="optionLabels(field)"
             :value="selectedOptionIndex(field)"
+            :disabled="readonly"
             @change="handlePickerChange(field, $event)"
           >
             <view class="audit-materials-form__control">
@@ -104,6 +117,9 @@ function handleSubmit() {
               <view class="audit-materials-form__chevron" />
             </view>
           </picker>
+          <text v-if="fieldIssues[field.key]" class="audit-materials-form__issue">
+            {{ fieldIssues[field.key] }}
+          </text>
         </view>
       </view>
 
@@ -117,9 +133,13 @@ function handleSubmit() {
             :type="field.type || 'text'"
             :value="fieldValue(field.key)"
             :placeholder="field.placeholder || ''"
+            :disabled="readonly"
             placeholder-class="audit-materials-form__placeholder"
             @input="handleInput(field.key, $event)"
           >
+          <text v-if="fieldIssues[field.key]" class="audit-materials-form__issue">
+            {{ fieldIssues[field.key] }}
+          </text>
         </view>
       </view>
 
@@ -136,20 +156,24 @@ function handleSubmit() {
           </text>
 
           <image
-            v-if="item.imageUrl || documentIcon"
+            v-if="item.imageUrl || item.fileUrl || documentIcon"
             class="audit-materials-form__document-icon"
             :src="item.imageUrl || documentIcon"
             mode="aspectFit"
           />
 
-          <text class="audit-materials-form__document-text">
-            {{ item.imageUrl ? '已上传' : item.emptyText || '上传文件' }}
-          </text>
+            <text class="audit-materials-form__document-text">
+              {{ item.fileName || (item.imageUrl || item.fileUrl ? '已上传' : item.emptyText || '上传文件') }}
+            </text>
+            <text v-if="item.issueMessage" class="audit-materials-form__issue">
+              {{ item.issueMessage }}
+            </text>
         </view>
       </view>
 
       <view
         class="audit-materials-form__submit"
+        :class="{ 'audit-materials-form__submit--disabled': readonly }"
         hover-class="audit-materials-form__submit--hover"
         @tap="handleSubmit"
       >
@@ -275,6 +299,16 @@ function handleSubmit() {
   color: #c3c5c8;
 }
 
+.audit-materials-form__issue {
+  display: block;
+  width: 100%;
+  margin-top: 6rpx;
+  color: #e3473e;
+  font-size: 23rpx;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
 .audit-materials-form__documents {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -336,5 +370,9 @@ function handleSubmit() {
   color: #202327;
   font-size: 36rpx;
   font-weight: 700;
+}
+
+.audit-materials-form__submit--disabled {
+  opacity: 0.5;
 }
 </style>

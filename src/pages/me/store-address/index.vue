@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { RegionCodes } from './shared'
 import type { MerchantFoodAddressSuggestion } from '@/api/types/merchant-food'
-import { getMerchantFoodAddressSuggestions, submitMerchantFoodProfileChange } from '@/api/merchant-food'
+import { getMerchantFoodAddressSuggestions } from '@/api/merchant-food'
 import locationIcon from '@/static/icons/location-icon.png'
-import { useMerchantFoodStore } from '@/store'
+import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 import { normalizeCoordinate, resolveRegionCodesFromAdcode } from './shared'
 
 defineOptions({
@@ -19,6 +19,7 @@ definePage({
 
 const fallbackUrl = '/pages/me/store-info/index'
 const merchantFoodStore = useMerchantFoodStore()
+const merchantStoreAudit = useMerchantStoreAuditStore()
 const submitting = ref(false)
 const regionCodes = reactive<RegionCodes>({ provinceCode: '', cityCode: '', districtCode: '' })
 const addressSuggestions = ref<MerchantFoodAddressSuggestion[]>([])
@@ -227,15 +228,15 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    await submitMerchantFoodProfileChange(storeId, {
-      changeType: 'ADDRESS',
-      ...regionCodes,
-      addressDetail: form.address.trim(),
+    await merchantStoreAudit.saveAddress(storeId, {
+      addressText: form.address.trim(),
+      provinceCode: regionCodes.provinceCode,
+      cityCode: regionCodes.cityCode,
+      districtCode: regionCodes.districtCode,
       longitude,
       latitude,
     })
-    await merchantFoodStore.loadProfile(true)
-    uni.showToast({ title: '已提交审核', icon: 'success' })
+    uni.showToast({ title: '已保存到审核草稿', icon: 'success' })
   }
   finally {
     submitting.value = false
@@ -256,7 +257,9 @@ function handleMapChange(payload: MapChangePayload) {
 
 onMounted(async () => {
   try {
-    const { store } = await merchantFoodStore.loadProfile(true)
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await merchantStoreAudit.load(storeId, true)
+    const store = merchantStoreAudit.snapshot.store
     form.address = store.addressDetail || ''
     regionCodes.provinceCode = store.provinceCode || ''
     regionCodes.cityCode = store.cityCode || ''

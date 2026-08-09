@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { submitMerchantStoreForAudit } from '@/api/merchant-store'
+import { getMerchantStoreAuditDraft } from '@/api/merchant-store'
 import {
   formatStoreCategorySummary,
   normalizeStoreCategorySelection,
@@ -156,24 +156,13 @@ function handleRowTap(row: StoreInfoRow) {
 
 async function submitStoreForAudit() {
   const currentStore = merchantFoodStore.currentStore
-  if (currentStore?.auditStatus === '1') {
-    uni.showToast({ title: '门店已提交审核，请耐心等待', icon: 'none' })
-    return
-  }
-  if (currentStore?.auditStatus === '2') {
-    uni.showToast({ title: '门店已审核通过', icon: 'none' })
-    return
-  }
-
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    await submitMerchantStoreForAudit(storeId)
-    await merchantFoodStore.loadStores()
-    await merchantFoodStore.loadProfile(true)
-    uni.showToast({ title: '已提交审核', icon: 'success' })
+    await getMerchantStoreAuditDraft(storeId)
+    uni.navigateTo({ url: `/pages/me/store-audit/index?storeId=${storeId}` })
   }
   catch (error) {
-    console.error('新门店提审失败:', error)
+    console.error('打开门店审核资料失败:', error)
     if (error instanceof Error && error.message) {
       uni.showToast({ title: error.message, icon: 'none' })
     }
@@ -273,7 +262,7 @@ onShow(() => {
 
       <view class="store-info-footer">
         <view class="store-info-footer__button" hover-class="store-info-footer__button--hover" @tap="handleFooterTap">
-          {{ isCreateMode ? '新门店提交审核' : '使用反馈' }}
+          {{ isCreateMode ? '填写审核资料' : '使用反馈' }}
         </view>
       </view>
     </view>

@@ -1,14 +1,11 @@
 <script lang="ts" setup>
 import type { QualificationSection } from './shared'
-import type { MerchantFoodQualification, MerchantFoodQualificationType, MerchantQualificationPayload } from '@/api/types/merchant-food'
-import {
-  createMerchantQualification,
-  getMerchantQualifications,
-  updateMerchantQualification,
-} from '@/api/merchant-food'
+import type { MerchantFoodQualification, MerchantFoodQualificationType } from '@/api/types/merchant-food'
+import { getMerchantStoreAuditOptions } from '@/api/merchant-store'
 import useUpload from '@/hooks/useUpload'
 import addImageIcon from '@/static/icons/add-image.png'
 import deleteIcon from '@/static/icons/delete.png'
+import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 import {
   appendQualificationImage,
   buildQualificationSections,
@@ -40,39 +37,65 @@ const pendingImageUpload = ref<{
   mode: 'append' | 'replace'
   imageIndex?: number
 }>()
+const merchantFoodStore = useMerchantFoodStore()
+const merchantStoreAudit = useMerchantStoreAuditStore()
 
 function imageUrls(item: MerchantFoodQualification | undefined) {
   return (item?.qualificationImages || '').split(',').filter(Boolean)
 }
 
-function toPayload(item: MerchantFoodQualification): MerchantQualificationPayload {
+function toDraftQualification(item: MerchantFoodQualification) {
   return {
     qualificationCode: item.qualificationCode,
-    qualificationScope: item.qualificationScope === '2' ? '2' : '1',
+    qualificationName: item.qualificationName,
     qualificationNo: item.qualificationNo,
-    qualificationImages: imageUrls(item).join(','),
+    qualificationImages: imageUrls(item),
     validFrom: item.validFrom,
     validTo: item.validTo,
+    remark: '',
   }
 }
 
-async function saveQualification(item: MerchantFoodQualification) {
-  if (item.qualificationId) {
-    await updateMerchantQualification(item.qualificationId, toPayload(item))
-  }
-  else {
-    await createMerchantQualification(toPayload(item))
-  }
-  await loadQualifications()
+async function saveQualification(_item: MerchantFoodQualification) {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  await merchantStoreAudit.saveQualifications(storeId, {
+    qualifications: qualifications.value.map(toDraftQualification),
+  })
+  qualificationSections.value = buildQualificationSections(qualificationTemplates.value, qualifications.value)
 }
 
 async function loadQualifications() {
-  const result = mergeQualificationCatalogs(
-    await getMerchantQualifications('1'),
-    await getMerchantQualifications('2'),
-  )
-  qualificationTemplates.value = result.templates as MerchantFoodQualificationType[]
-  qualifications.value = result.records as MerchantFoodQualification[]
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const [, options] = await Promise.all([
+    merchantStoreAudit.load(storeId, true),
+    getMerchantStoreAuditOptions(),
+  ])
+  const documents = options.requiredDocuments.filter(item => !item.code.startsWith('LEGAL_ID_'))
+  qualificationTemplates.value = documents.map((item, index) => ({
+    typeId: index + 1,
+    qualificationCode: item.code,
+    qualificationName: item.name,
+    qualificationScope: '2',
+    isRequired: '1',
+  }))
+  qualifications.value = merchantStoreAudit.snapshot.qualifications.map((item, index) => ({
+    qualificationId: index + 1,
+    qualificationCode: item.qualificationCode,
+    qualificationName: item.qualificationName,
+    qualificationScope: '2',
+    qualificationNo: item.qualificationNo,
+    qualificationImages: item.qualificationImages.join(','),
+    validFrom: item.validFrom,
+    validTo: item.validTo,
+    auditStatus: Object.keys(merchantStoreAudit.issueMessages)
+      .some(field => field.startsWith(`qualifications.${item.qualificationCode}.`)) ? '2' : undefined,
+    rejectReason: Object.entries(merchantStoreAudit.issueMessages)
+      .find(([field]) => field.startsWith(`qualifications.${item.qualificationCode}.`))?.[1],
+  }))
+  const result = mergeQualificationCatalogs({
+    templates: qualificationTemplates.value,
+    records: qualifications.value,
+  })
   qualificationSections.value = buildQualificationSections(result.templates, result.records)
 }
 

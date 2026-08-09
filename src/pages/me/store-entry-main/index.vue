@@ -1,8 +1,7 @@
 <script lang="ts" setup>
-import { updateMerchantFoodEntryImages } from '@/api/merchant-food'
 import useUpload from '@/hooks/useUpload'
 import storeEntryBackgroundFallback from '@/static/images/store-entry-background.png'
-import { useMerchantFoodStore } from '@/store'
+import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 
 defineOptions({
   name: 'StoreEntryMain',
@@ -17,8 +16,9 @@ definePage({
 
 const fallbackUrl = '/pages/me/store-entry/index'
 const merchantFoodStore = useMerchantFoodStore()
+const merchantStoreAudit = useMerchantStoreAuditStore()
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
-const galleryImages = computed(() => (merchantFoodStore.profile?.store.galleryImages || '').split(',').filter(Boolean))
+const galleryImages = computed(() => merchantStoreAudit.snapshot.store.galleryImages || [])
 const storeEntryBackgroundPreview = computed(() => galleryImages.value[0] || storeEntryBackgroundFallback)
 
 const backgroundSlots = computed(() => Array.from({ length: 5 }, (_, index) => ({
@@ -40,14 +40,13 @@ const { run: selectAndUpload } = useUpload<'image'>({
     }
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     const nextGallery = [...galleryImages.value, imageUrl].slice(0, 5)
-    const coverImage = merchantFoodStore.profile?.store.coverImage
+    const coverImage = merchantStoreAudit.snapshot.store.coverImage
     if (!coverImage) {
       uni.showToast({ title: '请先设置门店入口图', icon: 'none' })
       return
     }
-    await updateMerchantFoodEntryImages(storeId, { coverImage, galleryImages: nextGallery })
-    await merchantFoodStore.loadProfile(true)
-    uni.showToast({ title: '主图已更新', icon: 'success' })
+    await merchantStoreAudit.saveImages(storeId, { coverImage, galleryImages: nextGallery })
+    uni.showToast({ title: '主图已保存到审核草稿', icon: 'success' })
   },
 })
 
@@ -60,7 +59,9 @@ function handleUploadBackground() {
 }
 
 onMounted(() => {
-  merchantFoodStore.loadProfile(true).catch(() => {})
+  merchantFoodStore.ensureCurrentStoreId()
+    .then(storeId => merchantStoreAudit.load(storeId, true))
+    .catch(() => {})
 })
 
 async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
@@ -75,13 +76,12 @@ async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
   if (!result.confirm)
     return
   const storeId = await merchantFoodStore.ensureCurrentStoreId()
-  const coverImage = merchantFoodStore.profile?.store.coverImage
+  const coverImage = merchantStoreAudit.snapshot.store.coverImage
   if (!coverImage)
     return
   const nextGallery = galleryImages.value.filter((_, imageIndex) => imageIndex !== index)
-  await updateMerchantFoodEntryImages(storeId, { coverImage, galleryImages: nextGallery })
-  await merchantFoodStore.loadProfile(true)
-  uni.showToast({ title: '主图已删除', icon: 'success' })
+  await merchantStoreAudit.saveImages(storeId, { coverImage, galleryImages: nextGallery })
+  uni.showToast({ title: '主图修改已保存到审核草稿', icon: 'success' })
 }
 </script>
 
