@@ -107,7 +107,7 @@ function handleCreateStore() {
           </view>
 
           <text class="store-access-scope__name">
-            {{ store.storeName }}
+            {{ store.storeName?.trim() ? store.storeName : '新店' }}
           </text>
         </view>
 
