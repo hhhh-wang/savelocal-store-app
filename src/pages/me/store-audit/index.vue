@@ -465,7 +465,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
     <view class="store-audit-page__content">
       <view class="store-audit-nav">
         <back-button
-          fallback-url="/pages/me/me"
+          fallback-url="/pages/components/store-create-lock"
           fallback-mode="switchTab"
           color="#23262c"
           background="transparent"

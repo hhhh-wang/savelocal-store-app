@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { createMerchantStoreDraft } from '@/api/merchant-store'
+import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/shared'
 import aboutUsIcon from '@/static/icons/me/about-us.png'
 import customerServiceIcon from '@/static/icons/me/customer-service.png'
 import myContractsIcon from '@/static/icons/me/my-contracts.png'
@@ -6,8 +8,14 @@ import notificationSettingsIcon from '@/static/icons/me/notification-settings.pn
 import rulesCenterIcon from '@/static/icons/me/rules-center.png'
 import storeInfoIcon from '@/static/icons/me/store-info.png'
 import violationRecordsIcon from '@/static/icons/me/violation-records.png'
+import arrowDownIcon from '@/static/icons/arrow-down.png'
 import settingIcon from '@/static/icons/setting.png'
 import { useMerchantFoodStore } from '@/store'
+import {
+  canCreateStore as canCreateMerchantStore,
+  resolveStoreAccessAction,
+  resolveStoreIdForCreate,
+} from '@/store/merchant-food-selection'
 import { useTokenStore } from '@/store/token'
 
 defineOptions({
@@ -24,6 +32,9 @@ definePage({
 const merchantFoodStore = useMerchantFoodStore()
 const tokenStore = useTokenStore()
 const isLoggingOut = ref(false)
+const storeAccessVisible = ref(false)
+const selectedStoreId = ref<number>()
+const creatingStore = ref(false)
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 
 const storeStatus = computed(() => merchantFoodStore.currentStore?.storeStatus === '1'
@@ -80,6 +91,90 @@ async function handleLogout() {
   }
 }
 
+async function openStoreAccessScope() {
+  try {
+    const stores = await merchantFoodStore.loadStores()
+    selectedStoreId.value = merchantFoodStore.currentStoreId ?? stores[0]?.storeId
+    storeAccessVisible.value = true
+  }
+  catch (error) {
+    console.error('加载可访问门店失败:', error)
+    uni.showToast({
+      title: '加载门店失败，请重试',
+      icon: 'none',
+    })
+  }
+}
+
+async function handleStoreAccessConfirm(storeId: number) {
+  const store = merchantFoodStore.stores.find(item => item.storeId === storeId)
+  if (!store) {
+    uni.showToast({
+      title: '门店不存在或已失效',
+      icon: 'none',
+    })
+    return
+  }
+
+  merchantFoodStore.selectStore(storeId)
+  if (resolveStoreAccessAction(store) === 'lock') {
+    uni.navigateTo({
+      url: buildStoreCreateLockRoute(storeId),
+    })
+    return
+  }
+
+  try {
+    await merchantFoodStore.loadProfile(true)
+  }
+  catch (error) {
+    console.error('切换门店失败:', error)
+    uni.showToast({
+      title: '切换门店失败，请重试',
+      icon: 'none',
+    })
+  }
+}
+
+async function handleCreateStore() {
+  if (creatingStore.value)
+    return
+
+  creatingStore.value = true
+  try {
+    const stores = await merchantFoodStore.loadStores()
+    let storeId = resolveStoreIdForCreate(stores)
+
+    if (!canCreateMerchantStore(stores) && !storeId) {
+      throw new Error('当前存在未完成审核的门店，请先完成资料审核')
+    }
+
+    if (!storeId) {
+      const createdStore = await createMerchantStoreDraft()
+      storeId = createdStore.storeId
+    }
+
+    if (!storeId) {
+      throw new Error('创建门店失败，请重试')
+    }
+
+    merchantFoodStore.selectStore(storeId)
+    uni.navigateTo({
+      url: buildStoreCreateLockRoute(storeId),
+    })
+  }
+  catch (error) {
+    console.error('开新店准备失败:', error)
+    uni.showToast({
+      title: error instanceof Error && error.message ? error.message : '开新店准备失败，请重试',
+      icon: 'none',
+    })
+  }
+  finally {
+    creatingStore.value = false
+  }
+}
+
 function handleMenuItemTap(item: (typeof menuItems)[number]) {
   if (item.action === 'logout') {
     void handleLogout()
@@ -108,9 +203,12 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
     <view class="me-page__content">
       <view class="me-header">
         <view class="me-header__main">
-          <text class="me-header__title">
-            {{ storeName }}
-          </text>
+          <view class="me-header__store-switcher" hover-class="me-header__store-switcher--hover" @tap="openStoreAccessScope">
+            <text class="me-header__title">
+              {{ storeName }}
+            </text>
+            <image class="me-header__store-arrow" :src="arrowDownIcon" mode="aspectFit" />
+          </view>
 
           <view class="me-header__status">
             <text class="me-header__status-label">
@@ -174,6 +272,15 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
         </view>
       </view>
     </view>
+
+    <store-access-scope
+      v-model:visible="storeAccessVisible"
+      v-model="selectedStoreId"
+      :stores="merchantFoodStore.stores"
+      :can-create-store="canCreateMerchantStore(merchantFoodStore.stores)"
+      @confirm="handleStoreAccessConfirm"
+      @create-store="handleCreateStore"
+    />
   </view>
 </template>
 
@@ -225,8 +332,20 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
   min-width: 0;
 }
 
+.me-header__store-switcher {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.me-header__store-switcher--hover {
+  opacity: 0.72;
+}
+
 .me-header__title {
   display: block;
+  min-width: 0;
   overflow: hidden;
   color: #202226;
   font-size: 22px;
@@ -234,6 +353,12 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.me-header__store-arrow {
+  width: 26rpx;
+  height: 26rpx;
+  flex-shrink: 0;
 }
 
 .me-header__status {
