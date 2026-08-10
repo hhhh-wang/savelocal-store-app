@@ -318,6 +318,15 @@ onMounted(async () => {
           </view>
 
           <view class="store-address-field__input-wrap">
+
+            <input
+              v-model="form.address"
+              class="store-address-field__input"
+              placeholder="请输入门店地址"
+              placeholder-class="store-address-field__placeholder"
+              @input="handleAddressInput"
+            >
+
             <view
               class="store-address-field__location"
               :class="{ 'store-address-field__location--loading': loadingAddressSuggestions }"
@@ -330,13 +339,6 @@ onMounted(async () => {
               />
             </view>
 
-            <input
-              v-model="form.address"
-              class="store-address-field__input"
-              placeholder="请输入门店地址"
-              placeholder-class="store-address-field__placeholder"
-              @input="handleAddressInput"
-            >
           </view>
 
           <view v-if="loadingAddressSuggestions" class="store-address-field__suggestion-state">
@@ -484,7 +486,7 @@ onMounted(async () => {
 
 .store-address-field,
 .store-address-map-section {
-  padding-bottom: 22rpx;
+  padding-bottom: 10rpx;
 }
 
 .store-address-field {
