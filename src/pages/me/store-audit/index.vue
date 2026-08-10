@@ -1,16 +1,23 @@
 <script setup lang="ts">
+import type { MerchantFoodAddressSuggestion } from '@/api/types/merchant-food'
+import type { MerchantStoreAuditDraft, MerchantStoreAuditMaterials, MerchantStoreAuditOptions } from '@/api/types/merchant-store'
 import type {
+  AuditMaterialsAddressSuggestion,
   AuditMaterialsDocumentItem,
   AuditMaterialsFormValue,
   AuditMaterialsSelectField,
   AuditMaterialsTextField,
 } from '@/components/audit-materials-form/shared'
-import type { MerchantStoreAuditDraft, MerchantStoreAuditMaterials, MerchantStoreAuditOptions } from '@/api/types/merchant-store'
+import { getMerchantFoodAddressSuggestions } from '@/api/merchant-food'
 import { getMerchantStoreAuditDraft, getMerchantStoreAuditOptions, submitMerchantStoreAudit } from '@/api/merchant-store'
+import { resolveAddressSuggestionText } from '@/components/audit-materials-form/address-suggestion'
 import AuditMaterialsForm from '@/components/audit-materials-form/audit-materials-form.vue'
 import { validateAuditMaterials } from '@/components/audit-materials-form/shared'
 import useUpload from '@/hooks/useUpload'
+import { normalizeCoordinate } from '@/pages/me/store-address/shared'
 import documentIcon from '@/static/icons/document.png'
+import locationIcon from '@/static/icons/location-icon.png'
+import { resolveStoreAuditPrimaryAction } from './shared'
 
 defineOptions({
   name: 'StoreAudit',
@@ -43,15 +50,21 @@ const auditVersion = ref(0)
 const auditIssues = ref<{ field: string, message: string }[]>([])
 const loading = ref(true)
 const submitting = ref(false)
+const addressSuggestions = ref<MerchantFoodAddressSuggestion[]>([])
+const loadingAddressSuggestions = ref(false)
+const addressSuggestionVisible = ref(false)
+const addressLocation = reactive({ latitude: 0, longitude: 0 })
+const ADDRESS_SUGGESTION_LIMIT = 10
+let addressSuggestionRequestSeq = 0
 
 const auditIssueAliases: Record<string, string[]> = {
-  mainIndustryCode: ['industry.mainIndustryCode'],
-  storeCategoryCode: ['industry.storeCategoryCode'],
-  storeName: ['store.storeName'],
-  legalPersonName: ['legalEntity.legalPersonName'],
-  legalPersonPhone: ['legalEntity.legalPersonPhone'],
-  storeAddress: ['store.addressText', 'store.addressDetail'],
-  businessLicenseCode: ['legalEntity.unifiedSocialCode'],
+  'mainIndustryCode': ['industry.mainIndustryCode'],
+  'storeCategoryCode': ['industry.storeCategoryCode'],
+  'storeName': ['store.storeName'],
+  'legalPersonName': ['legalEntity.legalPersonName'],
+  'legalPersonPhone': ['legalEntity.legalPersonPhone'],
+  'storeAddress': ['store.addressText', 'store.addressDetail'],
+  'businessLicenseCode': ['legalEntity.unifiedSocialCode'],
   'business-license': ['qualifications.BUSINESS_LICENSE.qualificationImages'],
   'food-permit': ['qualifications.FOOD_LICENSE.qualificationImages'],
   'id-front': ['legalEntity.legalPersonIdFront'],
@@ -59,11 +72,13 @@ const auditIssueAliases: Record<string, string[]> = {
 }
 
 const isReadonly = computed(() => auditStatus.value === '1' || loading.value || submitting.value)
+const primaryAction = computed(() => resolveStoreAuditPrimaryAction(auditStatus.value))
+const primaryButtonText = computed(() => primaryAction.value === 'workbench' ? '去工作台' : '确认提交')
 const statusLabel = computed(() => ({
-  '0': '草稿，可继续完善资料',
-  '1': '审核中，资料已锁定',
-  '2': '审核已通过',
-  '3': '审核驳回，请按问题修改后重新提交',
+  0: '草稿，可继续完善资料',
+  1: '审核中，资料已锁定',
+  2: '审核已通过',
+  3: '审核驳回，请按问题修改后重新提交',
 } as Record<string, string>)[auditStatus.value] || '请完善审核资料')
 
 const fieldIssues = computed<Record<string, string>>(() => {
@@ -124,6 +139,7 @@ const requiredFieldKeys = [
 const requiredDocumentKeys = documents.value.filter(document => document.required).map(document => document.key)
 
 const pendingDocumentKey = ref('')
+const optionsCache = ref<MerchantStoreAuditOptions['mainIndustries']>([])
 
 function fieldIssue(key: string) {
   const keys = auditIssueAliases[key] || []
@@ -135,6 +151,115 @@ function clearFieldIssue(key: string) {
   if (!paths.length)
     return
   auditIssues.value = auditIssues.value.filter(item => !paths.includes(item.field))
+}
+
+function clearAddressSuggestions() {
+  addressSuggestionRequestSeq += 1
+  loadingAddressSuggestions.value = false
+  addressSuggestions.value = []
+  addressSuggestionVisible.value = false
+}
+
+async function requestAddressLocation() {
+  const currentLatitude = normalizeCoordinate(addressLocation.latitude)
+  const currentLongitude = normalizeCoordinate(addressLocation.longitude)
+
+  if (
+    currentLatitude !== undefined
+    && currentLongitude !== undefined
+    && (currentLatitude !== 0 || currentLongitude !== 0)
+  ) {
+    return {
+      latitude: currentLatitude,
+      longitude: currentLongitude,
+    }
+  }
+
+  const location = await uni.getLocation({
+    type: 'gcj02',
+    isHighAccuracy: true,
+    highAccuracyExpireTime: 3000,
+  })
+  const latitude = normalizeCoordinate(location.latitude)
+  const longitude = normalizeCoordinate(location.longitude)
+  if (latitude === undefined || longitude === undefined) {
+    throw new Error('定位结果无效')
+  }
+
+  return { latitude, longitude }
+}
+
+async function loadAddressSuggestions() {
+  const requestSeq = ++addressSuggestionRequestSeq
+  loadingAddressSuggestions.value = true
+  addressSuggestionVisible.value = false
+
+  try {
+    const location = await requestAddressLocation()
+    if (requestSeq !== addressSuggestionRequestSeq)
+      return
+
+    addressLocation.latitude = location.latitude
+    addressLocation.longitude = location.longitude
+    const suggestions = await getMerchantFoodAddressSuggestions({
+      ...location,
+      limit: ADDRESS_SUGGESTION_LIMIT,
+    })
+    if (requestSeq !== addressSuggestionRequestSeq)
+      return
+
+    addressSuggestions.value = (suggestions || []).filter(item =>
+      !!(item.detailAddress || item.title || item.address),
+    )
+    if (!addressSuggestions.value.length) {
+      uni.showToast({ title: '当前位置暂无可选地址', icon: 'none' })
+      return
+    }
+
+    addressSuggestionVisible.value = true
+  }
+  catch (error) {
+    if (requestSeq !== addressSuggestionRequestSeq)
+      return
+
+    console.error('获取审核地址候选失败:', error)
+    uni.showToast({ title: '获取地址失败，请检查定位权限', icon: 'none' })
+  }
+  finally {
+    if (requestSeq === addressSuggestionRequestSeq) {
+      loadingAddressSuggestions.value = false
+    }
+  }
+}
+
+function handleAddressIconTap() {
+  if (isReadonly.value || loadingAddressSuggestions.value)
+    return
+
+  if (addressSuggestions.value.length) {
+    addressSuggestionVisible.value = true
+    return
+  }
+
+  void loadAddressSuggestions()
+}
+
+function handlePageTap() {
+  if (addressSuggestionVisible.value) {
+    addressSuggestionVisible.value = false
+  }
+}
+
+function selectAddressSuggestion(item: AuditMaterialsAddressSuggestion) {
+  const address = resolveAddressSuggestionText(item)
+  if (!address) {
+    uni.showToast({ title: '该地址缺少完整地址信息，请重新选择', icon: 'none' })
+    return
+  }
+
+  form.storeAddress = address
+  clearFieldIssue('storeAddress')
+  clearAddressSuggestions()
 }
 
 function applyDraft(draft: MerchantStoreAuditDraft) {
@@ -185,9 +310,10 @@ function applyDraft(draft: MerchantStoreAuditDraft) {
   }
 }
 
-const optionsCache = ref<MerchantStoreAuditOptions['mainIndustries']>([])
-
 function handleFormUpdate(value: AuditMaterialsFormValue) {
+  if (value.storeAddress !== form.storeAddress) {
+    clearAddressSuggestions()
+  }
   Object.assign(form, value)
 }
 
@@ -251,7 +377,9 @@ const { run: selectAndUpload } = useUpload<'file'>({
       'id-front': 'legalPersonIdFrontUrl',
       'id-back': 'legalPersonIdBackUrl',
     } as Record<string, string>)[document.key]
-    if (fieldKey) form[fieldKey] = fileUrl
+    if (fieldKey) {
+      form[fieldKey] = fileUrl
+    }
     document.issueMessage = ''
     clearFieldIssue(document.key)
     uni.showToast({ title: `${document.title}上传成功`, icon: 'success' })
@@ -267,6 +395,11 @@ function handleDocumentUpload(document: AuditMaterialsDocumentItem) {
 }
 
 async function handleSubmit(value: AuditMaterialsFormValue) {
+  if (primaryAction.value === 'workbench') {
+    uni.switchTab({ url: '/pages/dashboard/index' })
+    return
+  }
+
   if (auditStatus.value === '1' || submitting.value) {
     uni.showToast({ title: '审核中，资料暂不可修改', icon: 'none' })
     return
@@ -326,7 +459,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
 </script>
 
 <template>
-  <view class="store-audit-page">
+  <view class="store-audit-page" @tap="handlePageTap">
     <view class="store-audit-page__content">
       <view class="store-audit-nav">
         <back-button
@@ -352,8 +485,16 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         :readonly="isReadonly"
         :field-issues="fieldIssues"
         :document-icon="documentIcon"
+        :submit-text="primaryButtonText"
+        address-field-key="storeAddress"
+        :address-icon="locationIcon"
+        :address-suggestions="addressSuggestions"
+        :address-suggestion-visible="addressSuggestionVisible"
+        :loading-address-suggestions="loadingAddressSuggestions"
         @update:model-value="handleFormUpdate"
         @clear-field-issue="clearFieldIssue"
+        @address-icon-tap="handleAddressIconTap"
+        @select-address-suggestion="selectAddressSuggestion"
         @upload-document="handleDocumentUpload"
         @submit="handleSubmit"
       />

@@ -35,6 +35,16 @@ export interface AuditMaterialsTextField {
   issueMessage?: string
 }
 
+export interface AuditMaterialsAddressSuggestion {
+  title?: string
+  address?: string
+  detailAddress?: string
+  province?: string
+  city?: string
+  district?: string
+  street?: string
+}
+
 export interface AuditMaterialsDocumentItem {
   key: string
   title: string

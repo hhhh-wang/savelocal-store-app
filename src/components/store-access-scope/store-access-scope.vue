@@ -5,12 +5,14 @@ interface Props {
   visible?: boolean
   stores?: MerchantFoodStore[]
   modelValue?: number
+  canCreateStore?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
   stores: () => [],
   modelValue: undefined,
+  canCreateStore: true,
 })
 
 const emit = defineEmits<{
@@ -125,6 +127,7 @@ function handleCreateStore() {
         </view>
 
         <view
+          v-if="canCreateStore"
           class="store-access-scope__button"
           hover-class="store-access-scope__button--hover"
           @tap="handleCreateStore"

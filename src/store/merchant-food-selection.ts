@@ -3,6 +3,20 @@ export interface StoreSelectionItem {
   auditStatus?: string
 }
 
+export type StoreAccessAction = 'workbench' | 'lock'
+
+export function isStoreApproved(store: StoreSelectionItem): boolean {
+  return store.auditStatus === '2'
+}
+
+export function canCreateStore(stores: StoreSelectionItem[]): boolean {
+  return stores.every(isStoreApproved)
+}
+
+export function resolveStoreAccessAction(store: StoreSelectionItem): StoreAccessAction {
+  return isStoreApproved(store) ? 'workbench' : 'lock'
+}
+
 export function shouldShowStoreAccessScope(
   stores: StoreSelectionItem[],
   mode: string,
@@ -21,5 +35,5 @@ export function resolveCurrentStoreId(
 }
 
 export function resolveStoreIdForCreate(stores: StoreSelectionItem[]): number | undefined {
-  return stores.find(store => store.auditStatus !== '2')?.storeId
+  return stores.find(store => !isStoreApproved(store))?.storeId
 }

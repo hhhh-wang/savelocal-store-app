@@ -5,7 +5,12 @@ import { createMerchantStoreDraft } from '@/api/merchant-store'
 import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/shared'
 import loginImage from '@/static/images/login.png'
 import { useMerchantFoodStore, useTokenStore } from '@/store'
-import { resolveStoreIdForCreate, shouldShowStoreAccessScope } from '@/store/merchant-food-selection'
+import {
+  canCreateStore as canCreateMerchantStore,
+  resolveStoreAccessAction,
+  resolveStoreIdForCreate,
+  shouldShowStoreAccessScope,
+} from '@/store/merchant-food-selection'
 import { HOME_PAGE } from '@/utils'
 
 defineOptions({
@@ -215,11 +220,26 @@ async function continueAfterLogin() {
     return
   }
 
-  finishLogin()
+  if (stores[0]) {
+    handleStoreAccessConfirm(stores[0].storeId)
+  }
 }
 
 function handleStoreAccessConfirm(storeId: number) {
+  const store = merchantFoodStore.stores.find(item => item.storeId === storeId)
+  if (!store) {
+    showPendingToast('门店不存在或已失效')
+    return
+  }
+
   merchantFoodStore.selectStore(storeId)
+  if (resolveStoreAccessAction(store) === 'lock') {
+    uni.navigateTo({
+      url: buildStoreCreateLockRoute(storeId),
+    })
+    return
+  }
+
   finishLogin()
 }
 
@@ -232,6 +252,10 @@ async function handleCreateStore() {
   try {
     const stores = await merchantFoodStore.loadStores()
     let storeId = resolveStoreIdForCreate(stores)
+
+    if (!canCreateMerchantStore(stores) && !storeId) {
+      throw new Error('当前存在未完成审核的门店，请先完成资料审核')
+    }
 
     if (!storeId) {
       const createdStore = await createMerchantStoreDraft()
@@ -474,6 +498,7 @@ async function handleLogin() {
     v-model:visible="storeAccessVisible"
     v-model="selectedStoreId"
     :stores="merchantFoodStore.stores"
+    :can-create-store="canCreateMerchantStore(merchantFoodStore.stores)"
     @confirm="handleStoreAccessConfirm"
     @create-store="handleCreateStore"
   />
