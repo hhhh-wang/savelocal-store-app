@@ -47,6 +47,7 @@ const form = reactive<AuditMaterialsFormValue>({
 const storeId = ref(0)
 const auditStatus = ref('0')
 const auditVersion = ref(0)
+const auditSummary = ref('')
 const auditIssues = ref<{ field: string, message: string }[]>([])
 const loading = ref(true)
 const submitting = ref(false)
@@ -266,6 +267,7 @@ function applyDraft(draft: MerchantStoreAuditDraft) {
   storeId.value = draft.storeId
   auditStatus.value = draft.auditStatus || '0'
   auditVersion.value = draft.auditVersion || 0
+  auditSummary.value = draft.auditSummary || ''
   auditIssues.value = draft.auditIssues || []
   Object.assign(form, {
     ...(draft.materials || {}),
@@ -477,6 +479,11 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         {{ statusLabel }}
       </view>
 
+      <view v-if="auditStatus === '3' && auditSummary" class="store-audit-summary">
+        <text class="store-audit-summary__label">整单驳回说明</text>
+        <text class="store-audit-summary__content">{{ auditSummary }}</text>
+      </view>
+
       <audit-materials-form
         :model-value="form"
         :select-fields="selectFields"
@@ -551,5 +558,30 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
 .store-audit-status--locked {
   background: #f1f2f5;
   color: #727780;
+}
+
+.store-audit-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin: 0 0 18rpx;
+  padding: 18rpx 22rpx;
+  border: 1rpx solid #f1c89f;
+  border-radius: 18rpx;
+  background: #fffaf4;
+}
+
+.store-audit-summary__label {
+  color: #9a4f1a;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.store-audit-summary__content {
+  color: #6f4a2f;
+  font-size: 26rpx;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

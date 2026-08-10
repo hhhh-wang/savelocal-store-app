@@ -143,5 +143,6 @@ export interface MerchantStoreAuditDraft {
   materials: MerchantStoreAuditMaterials
   activeSnapshot?: MerchantStoreAuditSnapshot | null
   pendingSnapshot?: MerchantStoreAuditSnapshot | null
+  auditSummary?: string | null
   auditIssues: MerchantStoreAuditIssue[]
 }
