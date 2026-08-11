@@ -43,6 +43,9 @@ export interface AuditMaterialsAddressSuggestion {
   city?: string
   district?: string
   street?: string
+  latitude?: number
+  longitude?: number
+  adcode?: string
 }
 
 export interface AuditMaterialsDocumentItem {

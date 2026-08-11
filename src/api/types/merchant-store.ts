@@ -6,6 +6,8 @@ export interface MerchantStoreAuditMaterials {
   legalPersonName: string
   legalPersonPhone: string
   storeAddress: string
+  longitude?: number
+  latitude?: number
   businessLicenseCode: string
   businessLicenseUrl: string
   foodPermitUrl: string

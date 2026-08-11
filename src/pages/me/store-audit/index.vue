@@ -64,7 +64,7 @@ const auditIssueAliases: Record<string, string[]> = {
   'storeName': ['store.storeName'],
   'legalPersonName': ['legalEntity.legalPersonName'],
   'legalPersonPhone': ['legalEntity.legalPersonPhone'],
-  'storeAddress': ['store.addressText', 'store.addressDetail'],
+  'storeAddress': ['store.addressText', 'store.addressDetail', 'store.longitude', 'store.latitude'],
   'businessLicenseCode': ['legalEntity.unifiedSocialCode'],
   'business-license': ['qualifications.BUSINESS_LICENSE.qualificationImages'],
   'food-permit': ['qualifications.FOOD_LICENSE.qualificationImages'],
@@ -200,8 +200,6 @@ async function loadAddressSuggestions() {
     if (requestSeq !== addressSuggestionRequestSeq)
       return
 
-    addressLocation.latitude = location.latitude
-    addressLocation.longitude = location.longitude
     const suggestions = await getMerchantFoodAddressSuggestions({
       ...location,
       limit: ADDRESS_SUGGESTION_LIMIT,
@@ -253,12 +251,16 @@ function handlePageTap() {
 
 function selectAddressSuggestion(item: AuditMaterialsAddressSuggestion) {
   const address = resolveAddressSuggestionText(item)
-  if (!address) {
-    uni.showToast({ title: '该地址缺少完整地址信息，请重新选择', icon: 'none' })
+  const latitude = normalizeCoordinate(item.latitude)
+  const longitude = normalizeCoordinate(item.longitude)
+  if (!address || latitude === undefined || longitude === undefined) {
+    uni.showToast({ title: '该地址缺少完整定位信息，请重新选择', icon: 'none' })
     return
   }
 
   form.storeAddress = address
+  addressLocation.latitude = latitude
+  addressLocation.longitude = longitude
   clearFieldIssue('storeAddress')
   clearAddressSuggestions()
 }
@@ -269,11 +271,21 @@ function applyDraft(draft: MerchantStoreAuditDraft) {
   auditVersion.value = draft.auditVersion || 0
   auditSummary.value = draft.auditSummary || ''
   auditIssues.value = draft.auditIssues || []
+  const materials = draft.materials || {} as MerchantStoreAuditMaterials
+  const {
+    longitude: materialLongitude,
+    latitude: materialLatitude,
+    ...formMaterials
+  } = materials
   Object.assign(form, {
-    ...(draft.materials || {}),
+    ...formMaterials,
     auditVersion: String(draft.auditVersion || 0),
   })
   const pending = draft.pendingSnapshot ?? draft.activeSnapshot
+  const latitude = normalizeCoordinate(materialLatitude ?? pending?.store.latitude)
+  const longitude = normalizeCoordinate(materialLongitude ?? pending?.store.longitude)
+  addressLocation.latitude = latitude ?? 0
+  addressLocation.longitude = longitude ?? 0
   const qualifications = pending?.qualifications ?? []
   const findImage = (code: string) => qualifications.find(item => item.qualificationCode === code)?.qualificationImages?.[0] || ''
   const urls = {
@@ -314,6 +326,8 @@ function applyDraft(draft: MerchantStoreAuditDraft) {
 
 function handleFormUpdate(value: AuditMaterialsFormValue) {
   if (value.storeAddress !== form.storeAddress) {
+    addressLocation.latitude = 0
+    addressLocation.longitude = 0
     clearAddressSuggestions()
   }
   Object.assign(form, value)
@@ -425,6 +439,17 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
     return
   }
 
+  const latitude = normalizeCoordinate(addressLocation.latitude)
+  const longitude = normalizeCoordinate(addressLocation.longitude)
+  if (
+    latitude === undefined
+    || longitude === undefined
+    || (latitude === 0 && longitude === 0)
+  ) {
+    uni.showToast({ title: '请通过地址定位选择完整的门店地址', icon: 'none' })
+    return
+  }
+
   submitting.value = true
   try {
     const payload: MerchantStoreAuditMaterials = {
@@ -435,6 +460,8 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
       legalPersonName: value.legalPersonName.trim(),
       legalPersonPhone: value.legalPersonPhone.trim(),
       storeAddress: value.storeAddress.trim(),
+      longitude,
+      latitude,
       businessLicenseCode: value.businessLicenseCode.trim().toUpperCase(),
       businessLicenseUrl: form.businessLicenseUrl || documents.value.find(item => item.key === 'business-license')?.fileUrl || '',
       foodPermitUrl: form.foodPermitUrl || documents.value.find(item => item.key === 'food-permit')?.fileUrl || '',
