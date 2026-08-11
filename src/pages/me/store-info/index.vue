@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { getMerchantStoreAuditDraft } from '@/api/merchant-store'
+import type { MerchantStoreAuditDraft } from '@/api/types/merchant-store'
+import { getMerchantStoreAuditDraft, submitMerchantStoreAudit } from '@/api/merchant-store'
 import {
   formatStoreCategorySummary,
   normalizeStoreCategorySelection,
@@ -11,6 +12,7 @@ import {
 } from '@/pages/me/store-status/shared'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import { useMerchantFoodStore } from '@/store'
+import { resolveStoreInfoAuditNotice, resolveStoreInfoFooterAction } from './shared'
 
 defineOptions({
   name: 'StoreInfo',
@@ -42,7 +44,14 @@ const storeEntryPagePath = '/pages/me/store-entry/index'
 
 const merchantFoodStore = useMerchantFoodStore()
 const isCreateMode = ref(false)
+const submittingAudit = ref(false)
+const auditDraft = ref<MerchantStoreAuditDraft>()
 const pageTitle = computed(() => isCreateMode.value ? '新增门店' : '门店信息')
+const footerAction = computed(() => resolveStoreInfoFooterAction(
+  isCreateMode.value,
+  auditDraft.value?.auditStatus,
+))
+const auditNotice = computed(() => resolveStoreInfoAuditNotice(auditDraft.value))
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 const storeBusinessStatus = computed(() => fromMerchantFoodBusinessTimes(
   merchantFoodStore.profile?.store.storeStatus,
@@ -87,7 +96,8 @@ function openCustomerService() {
 
 async function loadStoreProfile() {
   try {
-    await merchantFoodStore.loadProfile(true)
+    const profile = await merchantFoodStore.loadProfile(true)
+    auditDraft.value = await getMerchantStoreAuditDraft(profile.store.storeId)
   }
   catch (error) {
     console.error('门店资料加载失败:', error)
@@ -155,34 +165,44 @@ function handleRowTap(row: StoreInfoRow) {
 }
 
 async function submitStoreForAudit() {
-  const currentStore = merchantFoodStore.currentStore
+  if (submittingAudit.value) {
+    return
+  }
+
+  submittingAudit.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    await getMerchantStoreAuditDraft(storeId)
-    uni.navigateTo({ url: `/pages/me/store-audit/index?storeId=${storeId}` })
+    const draft = await getMerchantStoreAuditDraft(storeId)
+    if (footerAction.value.action === 'edit') {
+      uni.navigateTo({ url: `${footerAction.value.auditPagePath}?storeId=${storeId}` })
+      return
+    }
+
+    if (draft.auditStatus === '1') {
+      uni.showToast({ title: '资料审核中，请勿重复提交', icon: 'none' })
+      return
+    }
+
+    auditDraft.value = await submitMerchantStoreAudit(storeId, {
+      ...draft.materials,
+      auditVersion: draft.auditVersion,
+    })
+    await merchantFoodStore.loadProfile(true)
+    uni.showToast({ title: '已提交审核', icon: 'success' })
   }
   catch (error) {
-    console.error('打开门店审核资料失败:', error)
+    console.error('提交门店审核资料失败:', error)
     if (error instanceof Error && error.message) {
       uni.showToast({ title: error.message, icon: 'none' })
     }
   }
-}
-
-function openFeedback() {
-  uni.showToast({
-    title: '使用反馈入口待接入',
-    icon: 'none',
-  })
+  finally {
+    submittingAudit.value = false
+  }
 }
 
 function handleFooterTap() {
-  if (isCreateMode.value) {
-    void submitStoreForAudit()
-    return
-  }
-
-  openFeedback()
+  void submitStoreForAudit()
 }
 
 onShow(() => {
@@ -219,6 +239,19 @@ onShow(() => {
         </text>
         <text class="store-info-summary__chevron">
           ›
+        </text>
+      </view>
+
+      <view
+        v-if="auditNotice"
+        class="store-info-audit-notice"
+        :class="{ 'store-info-audit-notice--pending': auditNotice.status === 'pending' }"
+      >
+        <text class="store-info-audit-notice__title">
+          {{ auditNotice.title }}
+        </text>
+        <text class="store-info-audit-notice__detail">
+          {{ auditNotice.detail }}
         </text>
       </view>
 
@@ -262,7 +295,7 @@ onShow(() => {
 
       <view class="store-info-footer">
         <view class="store-info-footer__button" hover-class="store-info-footer__button--hover" @tap="handleFooterTap">
-          {{ isCreateMode ? '填写审核资料' : '使用反馈' }}
+          {{ footerAction.label }}
         </view>
       </view>
     </view>
@@ -354,6 +387,44 @@ onShow(() => {
   gap: 18rpx;
   margin-top: 22rpx;
   padding: 24rpx 22rpx 24rpx 24rpx;
+}
+
+.store-info-audit-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-top: 18rpx;
+  padding: 20rpx 22rpx;
+  border: 1rpx solid #f1c89f;
+  border-radius: 18rpx;
+  background: #fff8ef;
+}
+
+.store-info-audit-notice--pending {
+  border-color: #b9d8ef;
+  background: #f0f8ff;
+}
+
+.store-info-audit-notice__title {
+  color: #a14f16;
+  font-size: 27rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.store-info-audit-notice--pending .store-info-audit-notice__title {
+  color: #2f6f9f;
+}
+
+.store-info-audit-notice__detail {
+  color: #704a2c;
+  font-size: 25rpx;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.store-info-audit-notice--pending .store-info-audit-notice__detail {
+  color: #476a84;
 }
 
 .store-info-summary__name {

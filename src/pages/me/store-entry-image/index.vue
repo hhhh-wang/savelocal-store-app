@@ -37,7 +37,7 @@ const { run: selectAndUpload } = useUpload<'image'>({
       coverImage,
       galleryImages: merchantStoreAudit.snapshot.store.galleryImages || [],
     })
-    uni.showToast({ title: '入口图已保存到审核草稿', icon: 'success' })
+    uni.showToast({ title: '已保存到草稿', icon: 'success' })
   },
 })
 

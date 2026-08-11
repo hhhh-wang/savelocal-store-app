@@ -128,7 +128,7 @@ const { run: selectAndUpload } = useUpload<'image'>({
       item.qualificationImages = nextImageUrls.join(',')
       currentImageIndexes[action.sectionId] = nextIndex
       await saveQualification(item)
-      uni.showToast({ title: action.mode === 'replace' ? '当前图片已替换' : '图片已添加', icon: 'success' })
+      uni.showToast({ title: '已保存到草稿', icon: 'success' })
     }
     catch (error) {
       uni.showToast({ title: error instanceof Error ? error.message : '图片保存失败', icon: 'none' })
@@ -223,7 +223,7 @@ function handleQualificationNo(sectionId: string) {
 
       item.qualificationNo = qualificationNo
       saveQualification(item).then(() => {
-        uni.showToast({ title: qualificationNo ? '证件编号已保存' : '证件编号已清空', icon: 'success' })
+        uni.showToast({ title: '已保存到草稿', icon: 'success' })
       }).catch(() => {})
     },
   })
@@ -236,7 +236,7 @@ async function handleValidToChange(sectionId: string, event: { detail: { value: 
 
   item.validTo = event.detail.value
   await saveQualification(item)
-  uni.showToast({ title: '有效期已保存', icon: 'success' })
+  uni.showToast({ title: '已保存到草稿', icon: 'success' })
 }
 
 function handleDeleteImage(sectionId: string, required: boolean) {
@@ -265,7 +265,7 @@ function handleDeleteImage(sectionId: string, required: boolean) {
       item.qualificationImages = nextImageUrls.join(',')
       currentImageIndexes[sectionId] = Math.min(imageIndex, Math.max(0, nextImageUrls.length - 1))
       saveQualification(item).then(() => {
-        uni.showToast({ title: '当前图片已删除', icon: 'success' })
+        uni.showToast({ title: '已保存到草稿', icon: 'success' })
       }).catch(() => {})
     },
   })

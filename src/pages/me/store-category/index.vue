@@ -162,7 +162,7 @@ async function handleSubmit() {
       storeCategoryCode: draftSelection.value.secondaryId,
     })
     savedSelection.value = normalizeStoreCategorySelection(draftSelection.value)
-    uni.showToast({ title: '已保存到审核草稿', icon: 'success' })
+    uni.showToast({ title: '已保存到草稿', icon: 'success' })
 
     setTimeout(handleClose, 320)
   }

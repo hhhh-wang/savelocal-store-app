@@ -34,6 +34,7 @@ export interface MerchantStoreAuditStoreSection {
   addressDetail?: string
   longitude?: number
   latitude?: number
+  storeStatus?: '0' | '1'
 }
 
 export interface MerchantStoreAuditBusinessHour {
@@ -105,6 +106,7 @@ export interface MerchantStoreAuditCategorySection extends MerchantStoreAuditVer
 
 export interface MerchantStoreAuditBusinessHoursSection extends MerchantStoreAuditVersionedSection {
   businessHours: MerchantStoreAuditBusinessHour[]
+  storeStatus?: '0' | '1'
 }
 
 export interface MerchantStoreAuditPhonesSection extends MerchantStoreAuditVersionedSection {

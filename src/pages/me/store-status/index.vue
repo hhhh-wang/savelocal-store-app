@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { BusinessStatus, StoreBusinessStatusPayload } from '@/components/business-hours-picker/types'
-import { updateMerchantFoodStoreBusinessStatus } from '@/api/merchant-food'
 import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 import {
   cloneStoreBusinessStatus,
@@ -44,7 +43,7 @@ async function syncForm() {
   const profile = await merchantFoodStore.loadProfile(true)
   await merchantStoreAudit.load(profile.store.storeId, true)
   const storedValue = fromMerchantFoodBusinessTimes(
-    profile.store.storeStatus,
+    merchantStoreAudit.snapshot.store.storeStatus || profile.store.storeStatus,
     merchantStoreAudit.snapshot.businessHours,
   )
 
@@ -75,15 +74,12 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    await updateMerchantFoodStoreBusinessStatus(storeId, {
-      storeStatus: form.status === 'pause' ? '1' : '0',
-    })
     await merchantStoreAudit.saveBusinessHours(storeId, {
       businessHours: toMerchantFoodBusinessTimes(form.hours),
+      storeStatus: form.status === 'pause' ? '1' : '0',
     })
-    await merchantFoodStore.loadProfile(true)
 
-    uni.showToast({ title: '营业状态已生效，营业时间已保存到草稿', icon: 'success' })
+    uni.showToast({ title: '已保存到草稿', icon: 'success' })
 
     setTimeout(handleClose, 320)
   }

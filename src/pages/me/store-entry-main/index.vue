@@ -46,7 +46,7 @@ const { run: selectAndUpload } = useUpload<'image'>({
       return
     }
     await merchantStoreAudit.saveImages(storeId, { coverImage, galleryImages: nextGallery })
-    uni.showToast({ title: '主图已保存到审核草稿', icon: 'success' })
+    uni.showToast({ title: '已保存到草稿', icon: 'success' })
   },
 })
 
@@ -81,7 +81,7 @@ async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
     return
   const nextGallery = galleryImages.value.filter((_, imageIndex) => imageIndex !== index)
   await merchantStoreAudit.saveImages(storeId, { coverImage, galleryImages: nextGallery })
-  uni.showToast({ title: '主图修改已保存到审核草稿', icon: 'success' })
+  uni.showToast({ title: '已保存到草稿', icon: 'success' })
 }
 </script>
 

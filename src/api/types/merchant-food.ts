@@ -37,6 +37,7 @@ export interface MerchantFoodStore {
   coverImage?: string
   galleryImages?: string
   storeDesc?: string
+  isPublished?: string
   auditStatus?: MerchantFoodAuditStatus
   storeStatus?: string
   rejectReason?: string

@@ -102,7 +102,7 @@ async function handleSubmit() {
       })),
     })
     phoneNumbers.value = buildInitialPhoneNumbers(merchantStoreAudit.snapshot.phones)
-    uni.showToast({ title: '已保存到审核草稿', icon: 'success' })
+    uni.showToast({ title: '已保存到草稿', icon: 'success' })
   }
   finally {
     submitting.value = false
