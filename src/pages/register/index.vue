@@ -132,12 +132,12 @@ async function handleSendSmsCode() {
   }
   catch (error) {
     console.error('发送注册短信验证码失败:', error)
+    if (captchaEnabled.value && error instanceof Error && error.message.includes('验证码已失效')) {
+      await fetchCaptcha()
+    }
   }
   finally {
     isSendingSms.value = false
-    if (captchaEnabled.value) {
-      await fetchCaptcha()
-    }
   }
 }
 
