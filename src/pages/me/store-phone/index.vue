@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import type { StorePhoneInputItem } from './shared'
+import type { StorePhoneInputItem } from './store-phone'
 import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
-import { buildInitialPhoneNumbers } from './shared'
+import { buildInitialPhoneNumbers } from './store-phone'
 
 defineOptions({
   name: 'StorePhone',

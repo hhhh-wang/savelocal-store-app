@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import StoreCreateLock from '@/components/store-create-lock/store-create-lock.vue'
-import { buildAuditPagePath, defaultAuditPagePath } from './shared'
+import { buildAuditPagePath, defaultAuditPagePath } from './store-create-lock'
 
 definePage({
   style: {

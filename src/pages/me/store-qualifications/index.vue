@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { QualificationSection } from './shared'
+import type { QualificationSection } from './store-qualifications'
 import type { MerchantFoodQualification, MerchantFoodQualificationType } from '@/api/types/merchant-food'
 import { getMerchantStoreAuditOptions } from '@/api/merchant-store'
 import useUpload from '@/hooks/useUpload'
@@ -14,7 +14,7 @@ import {
   normalizeQualificationNo,
   removeQualificationImage,
   replaceQualificationImage,
-} from './shared'
+} from './store-qualifications'
 
 defineOptions({
   name: 'StoreQualifications',

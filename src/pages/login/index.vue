@@ -2,7 +2,7 @@
 import type { IAccountLoginForm } from '@/api/login'
 import { getCaptcha } from '@/api/login'
 import { createMerchantStoreDraft } from '@/api/merchant-store'
-import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/shared'
+import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-create-lock'
 import loginImage from '@/static/images/login.png'
 import { useMerchantFoodStore, useTokenStore } from '@/store'
 import {

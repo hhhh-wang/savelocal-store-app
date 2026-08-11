@@ -57,7 +57,7 @@ const statusOptions = [
 ] as const
 
 const allOrders = ref<OrderItem[]>([])
-const activeTab = ref<OrderTab>('all')
+const activeTab = ref<OrderTab>('todo')
 const activeTimeFilter = ref<TimeFilter>('all')
 const activeStatusFilter = ref<OrderStatus>('all')
 const openDropdown = ref<'time' | 'status' | ''>('')

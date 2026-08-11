@@ -6,7 +6,7 @@ import {
   createDefaultStoreBusinessStatus,
   fromMerchantFoodBusinessTimes,
   toMerchantFoodBusinessTimes,
-} from './shared'
+} from './store-status'
 
 defineOptions({
   name: 'StoreStatus',

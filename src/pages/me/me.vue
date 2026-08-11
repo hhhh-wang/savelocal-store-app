@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { createMerchantStoreDraft } from '@/api/merchant-store'
-import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/shared'
+import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-create-lock'
 import aboutUsIcon from '@/static/icons/me/about-us.png'
 import customerServiceIcon from '@/static/icons/me/customer-service.png'
 import myContractsIcon from '@/static/icons/me/my-contracts.png'

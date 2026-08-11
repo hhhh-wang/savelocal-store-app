@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import type { RegionCodes } from './shared'
+import type { RegionCodes } from './store-address'
 import type { MerchantFoodAddressSuggestion } from '@/api/types/merchant-food'
 import { getMerchantFoodAddressSuggestions } from '@/api/merchant-food'
 import locationIcon from '@/static/icons/location-icon.png'
 import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
-import { normalizeCoordinate, resolveRegionCodesFromAdcode } from './shared'
+import { normalizeCoordinate, resolveRegionCodesFromAdcode } from './store-address'
 
 defineOptions({
   name: 'StoreAddress',

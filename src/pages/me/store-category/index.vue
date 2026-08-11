@@ -1,12 +1,12 @@
 <script lang="ts" setup>
-import type { StoreCategoryPrimaryOption, StoreCategorySecondaryOption, StoreCategorySelection } from './shared'
+import type { StoreCategoryPrimaryOption, StoreCategorySecondaryOption, StoreCategorySelection } from './store-category'
 import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 import {
   createDefaultStoreCategorySelection,
   formatStoreCategoryPath,
   normalizeStoreCategorySelection,
   storeCategoryOptions,
-} from './shared'
+} from './store-category'
 
 defineOptions({
   name: 'StoreCategory',

@@ -14,10 +14,10 @@ import { resolveAddressSuggestionText } from '@/components/audit-materials-form/
 import AuditMaterialsForm from '@/components/audit-materials-form/audit-materials-form.vue'
 import { validateAuditMaterials } from '@/components/audit-materials-form/shared'
 import useUpload from '@/hooks/useUpload'
-import { normalizeCoordinate } from '@/pages/me/store-address/shared'
+import { normalizeCoordinate } from '@/pages/me/store-address/store-address'
 import documentIcon from '@/static/icons/document.png'
 import locationIcon from '@/static/icons/location-icon.png'
-import { resolveStoreAuditPrimaryAction } from './shared'
+import { resolveStoreAuditPrimaryAction } from './store-audit'
 
 defineOptions({
   name: 'StoreAudit',

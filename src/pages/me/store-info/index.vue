@@ -4,15 +4,15 @@ import { getMerchantStoreAuditDraft, submitMerchantStoreAudit } from '@/api/merc
 import {
   formatStoreCategorySummary,
   normalizeStoreCategorySelection,
-} from '@/pages/me/store-category/shared'
+} from '@/pages/me/store-category/store-category'
 import {
   formatBusinessHoursSummary,
   fromMerchantFoodBusinessTimes,
   getBusinessStatusLabel,
-} from '@/pages/me/store-status/shared'
+} from '@/pages/me/store-status/store-status'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import { useMerchantFoodStore } from '@/store'
-import { resolveStoreInfoAuditNotice, resolveStoreInfoFooterAction } from './shared'
+import { resolveStoreInfoAuditNotice, resolveStoreInfoFooterAction } from './store-info'
 
 defineOptions({
   name: 'StoreInfo',
