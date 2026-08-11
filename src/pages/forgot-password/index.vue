@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { ICaptcha } from '@/api/types/login'
+import { getCaptcha, resetMerchantPassword, sendVerificationCodeSms } from '@/api/login'
 import loginImage from '@/static/images/login.png'
 
 defineOptions({
@@ -13,13 +15,38 @@ definePage({
   excludeLoginPath: true,
 })
 
-const isSubmitting = ref(false)
+interface ForgotPasswordFormState {
+  mobile: string
+  smsCode: string
+  password: string
+  confirmPassword: string
+  captchaCode: string
+  captchaUuid: string
+}
 
-const form = reactive({
+const SMS_COUNTDOWN_SECONDS = 60
+const isSubmitting = ref(false)
+const smsCountdown = ref(0)
+const isSendingSms = ref(false)
+const captchaEnabled = ref(true)
+const captchaImageUrl = ref('')
+let smsCountdownTimer: ReturnType<typeof setInterval> | null = null
+
+const form = reactive<ForgotPasswordFormState>({
   mobile: '',
   smsCode: '',
   password: '',
   confirmPassword: '',
+  captchaCode: '',
+  captchaUuid: '',
+})
+
+onLoad(() => {
+  void fetchCaptcha()
+})
+
+onUnload(() => {
+  clearSmsCountdown()
 })
 
 function showPendingToast(title: string) {
@@ -27,6 +54,52 @@ function showPendingToast(title: string) {
     title,
     icon: 'none',
   })
+}
+
+async function fetchCaptcha() {
+  try {
+    const captcha: ICaptcha = await getCaptcha()
+    captchaEnabled.value = captcha.captchaEnabled ?? true
+
+    if (!captchaEnabled.value) {
+      captchaImageUrl.value = ''
+      form.captchaCode = ''
+      form.captchaUuid = ''
+      return
+    }
+
+    const base64Image = captcha.image || captcha.img || ''
+    captchaImageUrl.value = base64Image ? `data:image/gif;base64,${base64Image}` : ''
+    form.captchaCode = ''
+    form.captchaUuid = captcha.uuid || ''
+  }
+  catch (error) {
+    console.error('获取找回密码验证码失败:', error)
+    captchaEnabled.value = false
+    captchaImageUrl.value = ''
+    form.captchaCode = ''
+    form.captchaUuid = ''
+  }
+}
+
+function clearSmsCountdown() {
+  if (smsCountdownTimer) {
+    clearInterval(smsCountdownTimer)
+    smsCountdownTimer = null
+  }
+  smsCountdown.value = 0
+}
+
+function startSmsCountdown() {
+  clearSmsCountdown()
+  smsCountdown.value = SMS_COUNTDOWN_SECONDS
+  smsCountdownTimer = setInterval(() => {
+    if (smsCountdown.value <= 1) {
+      clearSmsCountdown()
+      return
+    }
+    smsCountdown.value -= 1
+  }, 1000)
 }
 
 function validateForm() {
@@ -63,13 +136,45 @@ function validateForm() {
   return true
 }
 
-function handleSendCode() {
-  if (!/^1\d{10}$/.test(form.mobile.trim())) {
+async function handleSendCode() {
+  if (isSendingSms.value || smsCountdown.value > 0) {
+    return
+  }
+
+  const mobile = form.mobile.trim()
+  const captchaCode = form.captchaCode.trim()
+  if (!/^1\d{10}$/.test(mobile)) {
     showPendingToast('请先输入正确的手机号')
     return
   }
 
-  showPendingToast('短信验证码发送待接入')
+  if (captchaEnabled.value && !captchaCode) {
+    showPendingToast('请输入图形验证码')
+    return
+  }
+
+  try {
+    isSendingSms.value = true
+    await sendVerificationCodeSms(
+      mobile,
+      captchaEnabled.value ? captchaCode : undefined,
+      captchaEnabled.value ? form.captchaUuid : undefined,
+    )
+    startSmsCountdown()
+    uni.showToast({
+      title: '验证码已发送',
+      icon: 'success',
+    })
+  }
+  catch (error) {
+    console.error('发送找回密码短信验证码失败:', error)
+    if (captchaEnabled.value && error instanceof Error && error.message.includes('验证码已失效')) {
+      await fetchCaptcha()
+    }
+  }
+  finally {
+    isSendingSms.value = false
+  }
 }
 
 function handleLoginBack() {
@@ -95,7 +200,26 @@ async function handleSubmit() {
 
   try {
     isSubmitting.value = true
-    showPendingToast('找回密码接口待接入')
+    await resetMerchantPassword({
+      mobile: form.mobile.trim(),
+      smsCode: form.smsCode.trim(),
+      password: form.password,
+    })
+
+    uni.showToast({
+      title: '密码重置成功',
+      icon: 'success',
+    })
+
+    setTimeout(() => {
+      uni.redirectTo({
+        url: '/pages/login/index',
+      })
+    }, 600)
+  }
+  catch (error) {
+    console.error('找回密码失败:', error)
+    form.smsCode = ''
   }
   finally {
     isSubmitting.value = false
@@ -141,6 +265,29 @@ async function handleSubmit() {
           placeholder-class="forgot-input__placeholder"
         />
 
+        <view v-if="captchaEnabled" class="forgot-captcha">
+          <view class="forgot-captcha__preview" hover-class="forgot-captcha__preview--hover" @tap="fetchCaptcha">
+            <image
+              v-if="captchaImageUrl"
+              class="forgot-captcha__image"
+              :src="captchaImageUrl"
+              mode="aspectFill"
+            />
+            <text v-else class="forgot-captcha__refresh">
+              换一张
+            </text>
+          </view>
+
+          <input
+            v-model="form.captchaCode"
+            class="forgot-captcha__input"
+            type="text"
+            :maxlength="10"
+            placeholder="请输入验证码"
+            placeholder-class="forgot-input__placeholder"
+          />
+        </view>
+
         <view class="forgot-code">
           <input
             v-model="form.smsCode"
@@ -151,8 +298,12 @@ async function handleSubmit() {
             placeholder-class="forgot-input__placeholder"
           />
 
-          <text class="forgot-code__action" @tap="handleSendCode">
-            获取验证码
+          <text
+            class="forgot-code__action"
+            :class="{ 'forgot-code__action--disabled': isSendingSms || smsCountdown > 0 }"
+            @tap="handleSendCode"
+          >
+            {{ isSendingSms ? '发送中...' : smsCountdown > 0 ? `${smsCountdown}秒后重发` : '获取验证码' }}
           </text>
         </view>
 
@@ -285,6 +436,54 @@ async function handleSubmit() {
   font-size: 32rpx;
 }
 
+.forgot-captcha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210rpx;
+  gap: 20rpx;
+  margin-top: 28rpx;
+}
+
+.forgot-captcha__input {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  height: 96rpx;
+  padding: 0 46rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #f7f0d0 0%, #f9f4db 100%);
+  color: #353535;
+  font-size: 32rpx;
+  box-sizing: border-box;
+}
+
+.forgot-captcha__preview {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96rpx;
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 2rpx rgba(178, 228, 180, 0.85);
+}
+
+.forgot-captcha__preview--hover {
+  opacity: 0.92;
+}
+
+.forgot-captcha__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.forgot-captcha__refresh {
+  color: #8c8c8c;
+  font-size: 26rpx;
+}
+
 .forgot-code {
   display: flex;
   align-items: center;
@@ -309,6 +508,10 @@ async function handleSubmit() {
   color: #ffae12;
   font-size: 28rpx;
   font-weight: 500;
+}
+
+.forgot-code__action--disabled {
+  opacity: 0.55;
 }
 
 .forgot-login-link {

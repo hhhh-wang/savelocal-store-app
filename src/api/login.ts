@@ -30,6 +30,12 @@ export interface IMerchantRegisterForm {
   smsCode: string
 }
 
+export interface IMerchantResetPasswordForm {
+  mobile: string
+  smsCode: string
+  password: string
+}
+
 /**
  * 获取验证码
  * @returns ICaptcha 验证码
@@ -86,6 +92,16 @@ export function merchantRegister(registerForm: IMerchantRegisterForm) {
 }
 
 export const register = merchantRegister
+
+/**
+ * 商家找回密码
+ * @param resetPasswordForm 找回密码表单
+ */
+export function resetMerchantPassword(resetPasswordForm: IMerchantResetPasswordForm) {
+  return http.post<void>('/merchant/auth/reset-password', resetPasswordForm, undefined, undefined, {
+    withAuth: false,
+  })
+}
 
 /**
  * 获取用户信息
