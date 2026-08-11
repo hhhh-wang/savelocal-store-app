@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import storeEntryBanner from '@/static/images/store-entry-banner.png'
-import { useMerchantFoodStore } from '@/store'
+import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 
 defineOptions({
   name: 'StoreEntry',
@@ -17,7 +17,30 @@ const fallbackUrl = '/pages/me/store-info/index'
 const storeEntryImagePagePath = '/pages/me/store-entry-image/index'
 const storeEntryMainPagePath = '/pages/me/store-entry-main/index'
 const merchantFoodStore = useMerchantFoodStore()
-const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
+const merchantStoreAudit = useMerchantStoreAuditStore()
+const storeName = computed(() => merchantStoreAudit.snapshot.store.storeName
+  || merchantFoodStore.currentStore?.storeName
+  || '餐饮门店')
+
+const previewImages = computed(() => {
+  const draftStore = merchantStoreAudit.snapshot.store
+  const activeStore = merchantFoodStore.profile?.store
+  const activeGalleryImages = (activeStore?.galleryImages || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+
+  return [
+    draftStore.coverImage,
+    ...(draftStore.galleryImages || []),
+    activeStore?.coverImage,
+    ...activeGalleryImages,
+  ].filter((item, index, list): item is string => Boolean(item) && list.indexOf(item) === index)
+})
+
+const previewCaption = computed(() => previewImages.value.length
+  ? `点击预览已设置图片（${previewImages.value.length}张）`
+  : '效果示意')
 
 const actionCards = [
   {
@@ -37,9 +60,17 @@ const actionCards = [
 ] as const
 
 function openPreview() {
-  uni.showToast({
-    title: '预览入口待接入',
-    icon: 'none',
+  if (!previewImages.value.length) {
+    uni.showToast({
+      title: '请先设置入口图或主图',
+      icon: 'none',
+    })
+    return
+  }
+
+  uni.previewImage({
+    current: previewImages.value[0],
+    urls: previewImages.value,
   })
 }
 
@@ -59,8 +90,14 @@ function handleActionTap(card: typeof actionCards[number]) {
   }
 }
 
-onShow(() => {
-  merchantFoodStore.loadProfile(true).catch(() => {})
+onShow(async () => {
+  try {
+    const profile = await merchantFoodStore.loadProfile(true)
+    await merchantStoreAudit.load(profile.store.storeId, true)
+  }
+  catch (error) {
+    console.error('门店入口资料加载失败:', error)
+  }
 })
 </script>
 
@@ -89,12 +126,16 @@ onShow(() => {
 
       <view class="store-entry-layout">
         <view class="store-entry-demo">
-          <view class="store-entry-demo__phone">
+          <view
+            class="store-entry-demo__phone"
+            hover-class="store-entry-demo__phone--hover"
+            @tap="openPreview"
+          >
             <image class="store-entry-demo__image" :src="storeEntryBanner" mode="widthFix" />
           </view>
 
           <text class="store-entry-demo__caption">
-            效果示意
+            {{ previewCaption }}
           </text>
         </view>
 
@@ -200,6 +241,10 @@ onShow(() => {
   border-radius: 18rpx;
   background: #f4f4f4;
   box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.08);
+}
+
+.store-entry-demo__phone--hover {
+  opacity: 0.9;
 }
 
 .store-entry-demo__image {

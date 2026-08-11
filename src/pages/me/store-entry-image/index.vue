@@ -17,8 +17,41 @@ definePage({
 const fallbackUrl = '/pages/me/store-entry/index'
 const merchantFoodStore = useMerchantFoodStore()
 const merchantStoreAudit = useMerchantStoreAuditStore()
-const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
-const storeEntryMainImage = computed(() => merchantStoreAudit.snapshot.store.coverImage || storeEntryMainImageFallback)
+const loaded = ref(false)
+const storeName = computed(() => merchantStoreAudit.snapshot.store.storeName
+  || merchantFoodStore.currentStore?.storeName
+  || '餐饮门店')
+const coverImageUrl = computed(() => merchantStoreAudit.snapshot.store.coverImage || '')
+const hasCoverImage = computed(() => Boolean(coverImageUrl.value))
+const canEditEntryImage = computed(() => loaded.value && merchantStoreAudit.editable)
+const uploadActionLabel = computed(() => hasCoverImage.value ? '更换图片' : '上传图片')
+const coverImageIssue = computed(() => merchantStoreAudit.issueMessages['store.coverImage'] || '')
+const entryImageAuditStatus = computed(() => {
+  if (!loaded.value) {
+    return { label: '加载中', tone: 'draft' as const, detail: '' }
+  }
+
+  if (!merchantStoreAudit.snapshot.store.coverImage) {
+    return { label: '待上传', tone: 'draft' as const, detail: '' }
+  }
+
+  if (coverImageIssue.value) {
+    return { label: '审核未通过', tone: 'rejected' as const, detail: coverImageIssue.value }
+  }
+
+  const auditStatus = merchantStoreAudit.draft?.auditStatus
+  if (auditStatus === '1') {
+    return { label: '审核中', tone: 'pending' as const, detail: '' }
+  }
+  if (auditStatus === '2') {
+    return { label: '审核通过', tone: 'approved' as const, detail: '' }
+  }
+  if (auditStatus === '3') {
+    return { label: '待重新提交', tone: 'rejected' as const, detail: '' }
+  }
+
+  return { label: '待提交审核', tone: 'draft' as const, detail: '' }
+})
 
 function uploadedUrl(result: any) {
   return typeof result === 'string' ? result : result?.url || result?.fileUrl || result?.path || ''
@@ -32,23 +65,49 @@ const { run: selectAndUpload } = useUpload<'image'>({
       uni.showToast({ title: '上传结果缺少图片地址', icon: 'none' })
       return
     }
-    const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    await merchantStoreAudit.saveImages(storeId, {
-      coverImage,
-      galleryImages: merchantStoreAudit.snapshot.store.galleryImages || [],
-    })
-    uni.showToast({ title: '已保存到草稿', icon: 'success' })
+    try {
+      const storeId = await merchantFoodStore.ensureCurrentStoreId()
+      await merchantStoreAudit.saveImages(storeId, {
+        coverImage,
+        galleryImages: merchantStoreAudit.snapshot.store.galleryImages || [],
+      })
+      uni.showToast({ title: '已保存到草稿', icon: 'success' })
+    }
+    catch (error) {
+      uni.showToast({
+        title: error instanceof Error && error.message ? error.message : '入口图保存失败',
+        icon: 'none',
+      })
+    }
   },
 })
 
 function handleChangeAvatar() {
+  if (!loaded.value) {
+    uni.showToast({ title: '门店资料加载中', icon: 'none' })
+    return
+  }
+  if (!merchantStoreAudit.editable) {
+    uni.showToast({
+      title: merchantStoreAudit.draft?.auditStatus === '1' ? '资料审核中，暂不可修改' : '当前门店资料不可修改',
+      icon: 'none',
+    })
+    return
+  }
   selectAndUpload()
 }
 
-onMounted(() => {
-  merchantFoodStore.ensureCurrentStoreId()
-    .then(storeId => merchantStoreAudit.load(storeId, true))
-    .catch(() => {})
+onMounted(async () => {
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await merchantStoreAudit.load(storeId, true)
+  }
+  catch (error) {
+    console.error('门店入口图资料加载失败:', error)
+  }
+  finally {
+    loaded.value = true
+  }
 })
 </script>
 
@@ -102,29 +161,54 @@ onMounted(() => {
           </view>
 
           <view class="store-entry-avatar">
-            <image class="store-entry-avatar__preview" :src="storeEntryMainImage" mode="aspectFill" />
+            <image class="store-entry-avatar__preview" :src="storeEntryMainImageFallback" mode="aspectFill" />
 
             <view class="store-entry-avatar__upload-panel">
-              <view class="store-entry-avatar__upload-box">
-                <view class="store-entry-avatar__upload-plus">
-                  <view class="store-entry-avatar__upload-line store-entry-avatar__upload-line--horizontal" />
-                  <view class="store-entry-avatar__upload-line store-entry-avatar__upload-line--vertical" />
-                </view>
-                <text class="store-entry-avatar__upload-text">
-                  上传头像
-                </text>
+              <view
+                class="store-entry-avatar__upload-box"
+                :class="{ 'store-entry-avatar__upload-box--disabled': !canEditEntryImage }"
+                hover-class="store-entry-avatar__upload-box--hover"
+                @tap="handleChangeAvatar"
+              >
+                <image
+                  v-if="coverImageUrl"
+                  class="store-entry-avatar__uploaded-image"
+                  :src="coverImageUrl"
+                  mode="aspectFill"
+                />
+                <template v-else>
+                  <view class="store-entry-avatar__upload-plus">
+                    <view class="store-entry-avatar__upload-line store-entry-avatar__upload-line--horizontal" />
+                    <view class="store-entry-avatar__upload-line store-entry-avatar__upload-line--vertical" />
+                  </view>
+                  <text class="store-entry-avatar__upload-text">
+                    上传头像
+                  </text>
+                </template>
               </view>
             </view>
           </view>
 
+          <view v-if="entryImageAuditStatus.detail" class="store-entry-avatar__issue">
+            {{ entryImageAuditStatus.detail }}
+          </view>
+
           <view class="store-entry-avatar__footer">
-            <view class="store-entry-avatar__status">
+            <view
+              class="store-entry-avatar__status"
+              :class="`store-entry-avatar__status--${entryImageAuditStatus.tone}`"
+            >
               <view class="store-entry-avatar__status-dot" />
-              审核通过
+              {{ entryImageAuditStatus.label }}
             </view>
 
-            <view class="store-entry-avatar__change" hover-class="store-entry-avatar__change--hover" @tap="handleChangeAvatar">
-              更换图片
+            <view
+              class="store-entry-avatar__change"
+              :class="{ 'store-entry-avatar__change--disabled': !canEditEntryImage }"
+              hover-class="store-entry-avatar__change--hover"
+              @tap="handleChangeAvatar"
+            >
+              {{ uploadActionLabel }}
             </view>
           </view>
         </view>
@@ -272,6 +356,7 @@ onMounted(() => {
 
 .store-entry-avatar__upload-box {
   display: flex;
+  overflow: hidden;
   width: 100%;
   height: 400rpx;
   align-items: center;
@@ -281,6 +366,20 @@ onMounted(() => {
   border: 2rpx dashed #d6dbe5;
   border-radius: 24rpx;
   background: linear-gradient(180deg, #fcfcfd 0%, #f7f8fb 100%);
+}
+
+.store-entry-avatar__uploaded-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.store-entry-avatar__upload-box--hover {
+  opacity: 0.86;
+}
+
+.store-entry-avatar__upload-box--disabled {
+  opacity: 0.58;
 }
 
 .store-entry-avatar__upload-plus,
@@ -350,6 +449,49 @@ onMounted(() => {
   box-shadow: inset 0 0 0 6rpx #ebfff5;
 }
 
+.store-entry-avatar__status--pending {
+  border-color: #f0c45b;
+  color: #b87900;
+  background: #fff8df;
+}
+
+.store-entry-avatar__status--pending .store-entry-avatar__status-dot {
+  background: #d99a16;
+  box-shadow: inset 0 0 0 6rpx #fff8df;
+}
+
+.store-entry-avatar__status--rejected {
+  border-color: #f1a6a6;
+  color: #d14343;
+  background: #fff1f1;
+}
+
+.store-entry-avatar__status--rejected .store-entry-avatar__status-dot {
+  background: #d94b4b;
+  box-shadow: inset 0 0 0 6rpx #fff1f1;
+}
+
+.store-entry-avatar__status--draft {
+  border-color: #cfd4dc;
+  color: #717780;
+  background: #f4f5f7;
+}
+
+.store-entry-avatar__status--draft .store-entry-avatar__status-dot {
+  background: #8d939c;
+  box-shadow: inset 0 0 0 6rpx #f4f5f7;
+}
+
+.store-entry-avatar__issue {
+  margin-top: 20rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  color: #c43b3b;
+  font-size: 25rpx;
+  line-height: 1.5;
+  background: #fff1f1;
+}
+
 .store-entry-avatar__change,
 .store-entry-background__upload {
   display: flex;
@@ -371,5 +513,11 @@ onMounted(() => {
 
 .store-entry-avatar__change--hover {
   opacity: 0.86;
+}
+
+.store-entry-avatar__change--disabled {
+  color: #8d929b;
+  background: #e6e8ec;
+  box-shadow: none;
 }
 </style>
