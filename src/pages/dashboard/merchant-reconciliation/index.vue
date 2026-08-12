@@ -325,6 +325,10 @@ function getBillStatusLabel(status: BillStatus) {
           <text class="merchant-balance-card__amount">
             {{ activeSettlementSummary.amount }}
           </text>
+
+          <view class="merchant-balance-card__withdraw">
+            提现
+          </view>
         </view>
       </view>
 
@@ -686,14 +690,31 @@ function getBillStatusLabel(status: BillStatus) {
 }
 
 .merchant-balance-card__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
   margin-top: 26rpx;
 }
 
 .merchant-balance-card__amount {
+  min-width: 0;
+  flex: 1;
   color: #202429;
   font-size: 76rpx;
   font-weight: 700;
   line-height: 1;
+}
+
+.merchant-balance-card__withdraw {
+  flex-shrink: 0;
+  padding: 14rpx 26rpx;
+  border-radius: 18rpx;
+  background: #ff5b4d;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .merchant-section {
