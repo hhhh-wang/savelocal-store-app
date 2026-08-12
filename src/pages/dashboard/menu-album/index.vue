@@ -33,6 +33,7 @@ const isDeleting = ref(false)
 const albumUploadFormData = reactive<{ bizType: string, storeId?: number }>({
   bizType: 'MERCHANT_FOOD_ALBUM',
 })
+const maxAlbumUploadCount = 5
 interface OpenerEventChannel {
   emit: (eventName: string, ...args: any[]) => void
 }
@@ -107,25 +108,40 @@ function uploadedUrl(result: any) {
   return typeof result === 'string' ? result : result?.url || result?.fileUrl || result?.path || ''
 }
 
+let uploadedCount = 0
+let failedCount = 0
+
 const { run: selectAndUpload } = useUpload<'image'>({
   fileType: 'image',
+  count: maxAlbumUploadCount,
   formData: albumUploadFormData,
   success: async (result) => {
     const imageUrl = uploadedUrl(result)
     if (!imageUrl) {
-      uni.showToast({ title: '上传结果缺少图片地址', icon: 'none' })
-      return
+      throw new Error('上传结果缺少图片地址')
     }
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     await addMerchantFoodAlbumImage(storeId, imageUrl)
+    uploadedCount++
+  },
+  error: () => {
+    failedCount++
+  },
+  complete: async () => {
     await loadAlbum()
-    uni.showToast({ title: '已上传，等待审核', icon: 'success' })
+    if (failedCount) {
+      uni.showToast({ title: `${uploadedCount} 张上传成功，${failedCount} 张失败`, icon: 'none' })
+      return
+    }
+    uni.showToast({ title: `已上传 ${uploadedCount} 张，等待审核`, icon: 'success' })
   },
 })
 
 async function handleUpload() {
   try {
     albumUploadFormData.storeId = await merchantFoodStore.ensureCurrentStoreId()
+    uploadedCount = 0
+    failedCount = 0
     selectAndUpload()
   }
   catch (err: any) {
