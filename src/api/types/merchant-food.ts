@@ -1,8 +1,16 @@
-export type MerchantFoodScene = 'ALL' | 'ONSITE' | 'GROUP_BUY'
+export type MerchantFoodScene = 'ALL' | 'ONSITE' | 'TAKEOUT' | 'GROUP_BUY'
 export type MerchantFoodProductType = 'TAKEOUT' | 'DEAL'
 export type MerchantFoodSaleStatus = 'ON_SALE' | 'OFF_SHELF'
 export type MerchantFoodAuditStatus = '0' | '1' | '2'
-export type MerchantFoodOrderStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED'
+export type MerchantFoodOrderStatus
+  = | 'PENDING'
+    | 'PAID'
+    | 'DELIVERING'
+    | 'DELIVERY_EXCEPTION'
+    | 'COMPLETED'
+    | 'CANCELLED'
+    | 'REFUNDING'
+    | 'REFUNDED'
 export type MerchantFoodRefundType = 'BEFORE' | 'AFTER'
 export type MerchantFoodRefundStatus = '0' | '1' | '2' | '3' | '4' | '5'
 
@@ -248,6 +256,22 @@ export interface MerchantFoodOrder {
   orderStatus: MerchantFoodOrderStatus
   statusText: string
   todo: boolean
+  refundId?: number
+  refundAmount?: number
+  refundStatus?: MerchantFoodRefundStatus
+  orderTime?: string
+  payTime?: string
+  customerName?: string
+  customerMobileMask?: string
+  buyerRemark?: string
+  deliveryAddress?: string
+  deliveryStatus?: string
+  dispatchStatus?: string
+  distanceKm?: number | string
+  courierName?: string
+  courierPhone?: string
+  riderUpdateTime?: string
+  productKinds?: number
 }
 
 export interface MerchantFoodOrderItem {
@@ -260,14 +284,45 @@ export interface MerchantFoodOrderItem {
   specNameSnapshot?: string
   imageUrlSnapshot?: string
   unitPrice: number
+  unitSequence?: number
   quantity: number
   totalAmount: number
+}
+
+export interface MerchantFoodOrderFulfillment {
+  dispatchStatus?: string
+  deliveryStatus?: string
+  keloopStatus?: string
+  dispatchFailReason?: string
+  courierName?: string
+  courierTel?: string
+  lastStatusTime?: string
+  deliveryContactName?: string
+  deliveryContactPhone?: string
+  deliveryFullAddress?: string
+  distanceKm?: number | string
+  buyerRemark?: string
+}
+
+export interface MerchantFoodOrderTimeline {
+  logId?: number
+  eventTime?: string
+  createTime?: string
+  deliveryStatus?: string
+  title?: string
+  operatorName?: string
+  operatorTel?: string
 }
 
 export interface MerchantFoodOrderDetail extends MerchantFoodOrder {
   memberId?: number
   memberNickname?: string
   memberMobileMask?: string
+  buyerRemark?: string
+  deliveryAddress?: string
+  fulfillment?: MerchantFoodOrderFulfillment
+  timeline?: MerchantFoodOrderTimeline[]
+  availableActions?: string[]
   items: MerchantFoodOrderItem[]
 }
 

@@ -19,10 +19,11 @@ const merchantFoodStore = useMerchantFoodStore()
 const merchantStoreAudit = useMerchantStoreAuditStore()
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 const galleryImages = computed(() => merchantStoreAudit.snapshot.store.galleryImages || [])
-const storeEntryBackgroundPreview = computed(() => galleryImages.value[0] || storeEntryBackgroundFallback)
 
 const backgroundSlots = computed(() => Array.from({ length: 5 }, (_, index) => ({
   key: `bg-${index + 1}`,
+  index,
+  imageUrl: galleryImages.value[index] || '',
   filled: Boolean(galleryImages.value[index]),
 })))
 
@@ -64,12 +65,11 @@ onMounted(() => {
     .catch(() => {})
 })
 
-async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
+async function handleBackgroundSlotTap(slot: { index: number, filled: boolean }) {
   if (!slot.filled) {
     handleUploadBackground()
     return
   }
-  const index = Number(slot.key.replace('bg-', '')) - 1
   const result = await new Promise<UniApp.ShowModalRes>((resolve) => {
     uni.showModal({ title: '删除主图', content: '确认删除这张门店主图吗？', success: resolve })
   })
@@ -79,7 +79,7 @@ async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
   const coverImage = merchantStoreAudit.snapshot.store.coverImage
   if (!coverImage)
     return
-  const nextGallery = galleryImages.value.filter((_, imageIndex) => imageIndex !== index)
+  const nextGallery = galleryImages.value.filter((_, imageIndex) => imageIndex !== slot.index)
   await merchantStoreAudit.saveImages(storeId, { coverImage, galleryImages: nextGallery })
   uni.showToast({ title: '已保存到草稿', icon: 'success' })
 }
@@ -132,7 +132,7 @@ async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
           </view>
 
           <view class="store-entry-main-example">
-            <image class="store-entry-main-example__image" :src="storeEntryBackgroundPreview" mode="widthFix" />
+            <image class="store-entry-main-example__image" :src="storeEntryBackgroundFallback" mode="widthFix" />
           </view>
 
           <view class="store-entry-main-background">
@@ -141,11 +141,20 @@ async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
                 v-for="slot in backgroundSlots"
                 :key="slot.key"
                 class="store-entry-main-background__slot"
-                :class="{ 'store-entry-main-background__slot--add': slot.filled }"
+                :class="{
+                  'store-entry-main-background__slot--filled': slot.filled,
+                  'store-entry-main-background__slot--add': !slot.filled,
+                }"
                 hover-class="store-entry-main-background__slot--hover"
                 @tap="handleBackgroundSlotTap(slot)"
               >
-                <view v-if="slot.filled" class="store-entry-main-background__plus">
+                <image
+                  v-if="slot.imageUrl"
+                  class="store-entry-main-background__image"
+                  :src="slot.imageUrl"
+                  mode="aspectFill"
+                />
+                <view v-else class="store-entry-main-background__plus">
                   <view class="store-entry-main-background__plus-line store-entry-main-background__plus-line--horizontal" />
                   <view class="store-entry-main-background__plus-line store-entry-main-background__plus-line--vertical" />
                 </view>
@@ -295,6 +304,7 @@ async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
 
 .store-entry-main-background__slot {
   display: flex;
+  overflow: hidden;
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
@@ -305,6 +315,16 @@ async function handleBackgroundSlotTap(slot: { key: string, filled: boolean }) {
 
 .store-entry-main-background__slot--add {
   border-style: dashed;
+}
+
+.store-entry-main-background__slot--filled {
+  border-color: transparent;
+}
+
+.store-entry-main-background__image {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .store-entry-main-background__plus {

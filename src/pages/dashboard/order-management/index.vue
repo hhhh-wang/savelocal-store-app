@@ -1,5 +1,10 @@
 <script lang="ts" setup>
-import type { MerchantFoodOrder } from '@/api/types/merchant-food'
+import type {
+  MerchantFoodOrder,
+  MerchantFoodOrderDetail,
+  MerchantFoodOrderStatus,
+  MerchantFoodScene,
+} from '@/api/types/merchant-food'
 import { getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage } from '@/api/merchant-food'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
 import productImage from '@/static/images/item-image.png'
@@ -18,13 +23,20 @@ definePage({
 
 type OrderTab = 'all' | 'todo'
 type TimeFilter = 'all' | 'quarter'
-type OrderStatus = 'all' | 'pending' | 'completed' | 'cancelled' | 'refunded'
+type OrderStatus = 'all' | Lowercase<MerchantFoodOrderStatus>
 type TodoAction = '联系客户' | '拒绝退款' | '确认退款'
 type NormalAction = '联系客户' | '订单详情'
+type TakeoutAction = '取消订单' | '确认出餐' | '驳回退款' | '确认退款'
+
+interface TakeoutOrderProduct {
+  id: number
+  name: string
+  quantity: number
+}
 
 interface OrderItem {
   id: number
-  scene: 'ONSITE' | 'GROUP_BUY'
+  scene: Exclude<MerchantFoodScene, 'ALL'>
   orderNo: string
   productName: string
   orderTime: string
@@ -35,6 +47,20 @@ interface OrderItem {
   isTodo: boolean
   image: string
   actions: Array<TodoAction | NormalAction>
+  payTime: string
+  customerName: string
+  customerMobileMask: string
+  deliveryAddress: string
+  deliveryStatus: string
+  dispatchStatus: string
+  distanceKm?: number | string
+  courierName: string
+  courierPhone: string
+  riderUpdateTime: string
+  buyerRemark: string
+  products: TakeoutOrderProduct[]
+  productKinds: number
+  detailLoaded: boolean
 }
 
 const fallbackUrl = '/pages/dashboard/index'
@@ -61,15 +87,21 @@ const activeTab = ref<OrderTab>('todo')
 const activeTimeFilter = ref<TimeFilter>('all')
 const activeStatusFilter = ref<OrderStatus>('all')
 const openDropdown = ref<'time' | 'status' | ''>('')
+const expandedOrderIds = ref<number[]>([])
+const loadingOrderIds = ref<number[]>([])
+const currentTimestamp = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | undefined
+let loadSequence = 0
 
 function mapOrder(order: MerchantFoodOrder): OrderItem {
   const status = order.orderStatus.toLowerCase() as Exclude<OrderStatus, 'all'>
+  const productName = order.productName || '订单商品'
   return {
     id: order.orderId,
     scene: order.scene,
     orderNo: order.orderNo,
-    productName: order.productName || '订单商品',
-    orderTime: '--',
+    productName,
+    orderTime: order.scene === 'TAKEOUT' ? order.orderTime || '--' : '--',
     amount: String(order.amount ?? 0),
     quantity: order.quantity || 1,
     status,
@@ -77,10 +109,67 @@ function mapOrder(order: MerchantFoodOrder): OrderItem {
     isTodo: order.todo,
     image: order.imageUrl || productImage,
     actions: order.todo ? ['联系客户', '拒绝退款', '确认退款'] : ['联系客户', '订单详情'],
+    payTime: order.payTime || order.orderTime || '',
+    customerName: order.customerName || '顾客',
+    customerMobileMask: order.customerMobileMask || '',
+    deliveryAddress: order.deliveryAddress || '',
+    deliveryStatus: order.deliveryStatus || '',
+    dispatchStatus: order.dispatchStatus || '',
+    distanceKm: order.distanceKm,
+    courierName: order.courierName || '',
+    courierPhone: order.courierPhone || '',
+    riderUpdateTime: order.riderUpdateTime || '',
+    buyerRemark: order.buyerRemark || '',
+    products: [{ id: order.orderId, name: productName, quantity: order.quantity || 1 }],
+    productKinds: order.productKinds || 1,
+    detailLoaded: false,
+  }
+}
+
+function mergeTakeoutDetail(order: OrderItem, detail: MerchantFoodOrderDetail): OrderItem {
+  const fulfillment = detail.fulfillment || {}
+  const latestTimeline = detail.timeline?.[0]
+  const products = detail.items?.length
+    ? detail.items.map(item => ({
+        id: item.itemId,
+        name: item.productNameSnapshot || '订单商品',
+        quantity: item.quantity || 1,
+      }))
+    : order.products
+
+  return {
+    ...order,
+    productName: detail.productName || order.productName,
+    orderTime: detail.orderTime || order.orderTime,
+    payTime: detail.payTime || detail.orderTime || order.payTime,
+    amount: String(detail.amount ?? order.amount),
+    quantity: detail.quantity || order.quantity,
+    status: detail.orderStatus.toLowerCase() as Exclude<OrderStatus, 'all'>,
+    statusText: detail.statusText || order.statusText,
+    isTodo: detail.todo,
+    customerName: fulfillment.deliveryContactName || detail.memberNickname || order.customerName,
+    customerMobileMask: detail.memberMobileMask || maskPhone(fulfillment.deliveryContactPhone) || order.customerMobileMask,
+    deliveryAddress: fulfillment.deliveryFullAddress || detail.deliveryAddress || order.deliveryAddress,
+    deliveryStatus: fulfillment.deliveryStatus || order.deliveryStatus,
+    dispatchStatus: fulfillment.dispatchStatus || order.dispatchStatus,
+    distanceKm: fulfillment.distanceKm ?? order.distanceKm,
+    courierName: fulfillment.courierName || order.courierName,
+    courierPhone: fulfillment.courierTel || order.courierPhone,
+    riderUpdateTime: latestTimeline?.eventTime
+      || latestTimeline?.createTime
+      || fulfillment.lastStatusTime
+      || order.riderUpdateTime,
+    buyerRemark: detail.buyerRemark || fulfillment.buyerRemark || order.buyerRemark,
+    products,
+    productKinds: products.length,
+    detailLoaded: true,
   }
 }
 
 async function loadOrders() {
+  const sequence = ++loadSequence
+  expandedOrderIds.value = []
+  loadingOrderIds.value = []
   const storeId = await merchantFoodStore.ensureCurrentStoreId()
   const result = await getMerchantFoodOrdersPage({
     storeId,
@@ -91,6 +180,9 @@ async function loadOrders() {
     timeRange: activeTimeFilter.value === 'quarter' ? 'QUARTER' : undefined,
     orderStatus: activeStatusFilter.value === 'all' ? undefined : activeStatusFilter.value.toUpperCase(),
   })
+  if (sequence !== loadSequence)
+    return
+
   allOrders.value = result.rows.map(mapOrder)
 }
 
@@ -104,15 +196,234 @@ const activeStatusLabel = computed(() => {
 
 const filteredOrders = computed(() => allOrders.value)
 
-function isRecentThreeMonths(orderTime: string) {
-  const [datePart] = orderTime.split(' ')
-  const [year, month, day] = datePart.split('/').map(Number)
-  const orderDate = new Date(year, (month || 1) - 1, day || 1)
-  const currentDate = new Date(2026, 4, 26)
-  const compareDate = new Date(currentDate)
-  compareDate.setMonth(compareDate.getMonth() - 3)
+function maskPhone(phone?: string) {
+  if (!phone)
+    return ''
+  return phone.length >= 7 ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : phone
+}
 
-  return orderDate >= compareDate && orderDate <= currentDate
+function normalizeDeliveryStatus(order: OrderItem) {
+  return order.deliveryStatus.toUpperCase()
+}
+
+function isRefundPending(order: OrderItem) {
+  return order.isTodo || order.status === 'refunding'
+}
+
+function getTakeoutStatusText(order: OrderItem) {
+  if (isRefundPending(order))
+    return '待退款'
+  if (order.status === 'refunded')
+    return '已退款'
+  if (order.status === 'cancelled' || normalizeDeliveryStatus(order) === 'CANCELLED')
+    return '已取消'
+  if (order.status === 'delivery_exception' || order.dispatchStatus.toUpperCase() === 'FAILED')
+    return '配送异常'
+
+  const deliveryStatus = normalizeDeliveryStatus(order)
+  if (deliveryStatus === 'COMPLETED')
+    return '已送达'
+  if (deliveryStatus === 'DELIVERING')
+    return '派送中'
+  if (['PENDING', 'DISPATCHED', 'WAITING_ACCEPT', 'PICKING', 'ARRIVED_SHOP'].includes(deliveryStatus))
+    return '待出餐'
+  if (order.status === 'delivering')
+    return '派送中'
+  if (order.status === 'completed')
+    return '已送达'
+  return order.statusText
+}
+
+function getTakeoutStatusTone(order: OrderItem) {
+  if (isRefundPending(order) || order.status === 'delivery_exception')
+    return 'danger'
+  if (getTakeoutStatusText(order) === '待出餐')
+    return 'warning'
+  return 'muted'
+}
+
+function getTakeoutActions(order: OrderItem): TakeoutAction[] {
+  if (isRefundPending(order))
+    return ['驳回退款', '确认退款']
+
+  const deliveryStatus = normalizeDeliveryStatus(order)
+  if (['PENDING', 'DISPATCHED', 'WAITING_ACCEPT', 'PICKING', 'ARRIVED_SHOP'].includes(deliveryStatus))
+    return ['取消订单', '确认出餐']
+  if (order.status === 'paid')
+    return ['取消订单', '确认出餐']
+  return []
+}
+
+function getPreparationActions(order: OrderItem) {
+  return getTakeoutActions(order).filter(action => action === '取消订单' || action === '确认出餐')
+}
+
+function getRefundActions(order: OrderItem) {
+  return getTakeoutActions(order).filter(action => action === '驳回退款' || action === '确认退款')
+}
+
+function hasReportedMeal(order: OrderItem) {
+  return ['DELIVERING', 'COMPLETED'].includes(normalizeDeliveryStatus(order))
+}
+
+function parseDateTime(value: string) {
+  if (!value || value === '--')
+    return 0
+  const timestamp = Date.parse(value.replace(/-/g, '/'))
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function formatDuration(totalSeconds: number) {
+  const seconds = Math.max(0, Math.floor(totalSeconds))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainSeconds = seconds % 60
+  return [hours, minutes, remainSeconds].map(value => String(value).padStart(2, '0')).join(':')
+}
+
+function getPreparationDuration(order: OrderItem) {
+  const startTime = parseDateTime(order.payTime || order.orderTime)
+  if (!startTime)
+    return '00:00:00'
+  const reportedTime = parseDateTime(order.riderUpdateTime)
+  const endTime = hasReportedMeal(order) && reportedTime ? reportedTime : currentTimestamp.value
+  return formatDuration((endTime - startTime) / 1000)
+}
+
+function getPreparationText(order: OrderItem) {
+  if (!order.deliveryStatus) {
+    if (order.status === 'pending')
+      return '等待顾客支付'
+    return '暂无出餐信息'
+  }
+  const duration = getPreparationDuration(order)
+  return hasReportedMeal(order) ? `已上报出餐完成，出餐用时 ${duration}` : `用时 ${duration}`
+}
+
+function getRiderStatusText(order: OrderItem) {
+  const deliveryStatus = normalizeDeliveryStatus(order)
+  const statusMap: Record<string, string> = {
+    PENDING: '等待骑手接单',
+    DISPATCHED: '等待骑手接单',
+    WAITING_ACCEPT: '等待骑手接单',
+    PICKING: '骑手前往取餐',
+    ARRIVED_SHOP: '骑手已到店',
+    DELIVERING: '骑手已取餐',
+    COMPLETED: '订单已送达',
+    CANCELLED: '配送已取消',
+  }
+  return statusMap[deliveryStatus] || (order.courierName ? '配送信息已更新' : '等待骑手接单')
+}
+
+function formatRiderTime(value: string) {
+  if (!value)
+    return '--'
+  const match = value.match(/(\d{2}:\d{2})(?::\d{2})?/)
+  return match?.[1] || value
+}
+
+function formatDistance(distance?: number | string) {
+  const value = Number(distance)
+  if (!Number.isFinite(value) || value <= 0)
+    return '--km'
+  return `${value.toFixed(value < 10 ? 1 : 0).replace(/\.0$/, '')}km`
+}
+
+function getProductSummary(order: OrderItem) {
+  const totalQuantity = order.products.reduce((total, product) => total + product.quantity, 0)
+  return `${order.productKinds}种商品，共${totalQuantity || order.quantity}件`
+}
+
+function formatAmount(amount: string) {
+  const value = Number(amount)
+  return Number.isFinite(value) ? value.toFixed(2) : amount
+}
+
+function isTakeoutExpanded(orderId: number) {
+  return expandedOrderIds.value.includes(orderId)
+}
+
+function isTakeoutLoading(orderId: number) {
+  return loadingOrderIds.value.includes(orderId)
+}
+
+async function toggleTakeoutDetail(order: OrderItem) {
+  if (isTakeoutExpanded(order.id)) {
+    expandedOrderIds.value = expandedOrderIds.value.filter(id => id !== order.id)
+    return
+  }
+
+  expandedOrderIds.value = [...expandedOrderIds.value, order.id]
+  if (order.detailLoaded || isTakeoutLoading(order.id))
+    return
+
+  loadingOrderIds.value = [...loadingOrderIds.value, order.id]
+  try {
+    const detail = await getMerchantFoodOrderDetail('TAKEOUT', order.id)
+    allOrders.value = allOrders.value.map(item => item.id === order.id ? mergeTakeoutDetail(item, detail) : item)
+  }
+  catch {
+    uni.showToast({ title: '订单明细加载失败', icon: 'none' })
+  }
+  finally {
+    loadingOrderIds.value = loadingOrderIds.value.filter(id => id !== order.id)
+  }
+}
+
+function showDeliveryAddress(order: OrderItem) {
+  uni.showModal({
+    title: '配送地址',
+    content: order.deliveryAddress || '暂无配送地址',
+    showCancel: false,
+  })
+}
+
+function makePhoneCall(phoneNumber: string, title: string) {
+  if (!phoneNumber) {
+    uni.showToast({ title: '暂无联系电话', icon: 'none' })
+    return
+  }
+  uni.makePhoneCall({
+    phoneNumber,
+    fail: () => uni.showModal({ title, content: phoneNumber, showCancel: false }),
+  })
+}
+
+async function contactTakeoutCustomer(order: OrderItem) {
+  const result = await getMerchantFoodOrderContact(order.scene, order.id)
+  makePhoneCall(result.contact, '客户联系方式')
+}
+
+function contactCourier(order: OrderItem) {
+  makePhoneCall(order.courierPhone, '骑手联系方式')
+}
+
+function handleTakeoutAction(action: TakeoutAction, order: OrderItem) {
+  if (action === '驳回退款' || action === '确认退款') {
+    uni.navigateTo({ url: `/pages/dashboard/after-sales/index?keyword=${encodeURIComponent(order.orderNo)}` })
+    return
+  }
+
+  uni.showModal({
+    title: action,
+    content: action === '确认出餐' ? '确认出餐接口暂未接入，请联系平台处理。' : '取消配送订单接口暂未接入，请联系平台处理。',
+    showCancel: false,
+  })
+}
+
+function startClock() {
+  stopClock()
+  currentTimestamp.value = Date.now()
+  clockTimer = setInterval(() => {
+    currentTimestamp.value = Date.now()
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer !== undefined) {
+    clearInterval(clockTimer)
+    clockTimer = undefined
+  }
 }
 
 function handleClose() {
@@ -169,8 +480,12 @@ async function handleOrderAction(action: TodoAction | NormalAction, order: Order
 }
 
 onShow(() => {
+  startClock()
   loadOrders().catch(() => {})
 })
+
+onHide(stopClock)
+onUnmounted(stopClock)
 </script>
 
 <template>
@@ -275,66 +590,212 @@ onShow(() => {
       </view>
 
       <view class="order-list">
-        <view v-for="order in filteredOrders" :key="order.id" class="order-card">
-          <view class="order-card__header">
-            <text class="order-card__no">
-              订单编号:{{ order.orderNo }}
-            </text>
-            <text
-              class="order-card__status"
-              :class="{
-                'order-card__status--pending': order.status === 'pending',
-              }"
-            >
-              {{ order.statusText }}
-            </text>
-          </view>
+        <template v-for="order in filteredOrders" :key="order.id">
+          <view v-if="order.scene === 'TAKEOUT'" class="takeout-order-card">
+            <view class="takeout-order-card__header">
+              <text class="takeout-order-card__no">
+                订单编号:{{ order.orderNo }}
+              </text>
+              <text
+                class="takeout-order-card__status"
+                :class="`takeout-order-card__status--${getTakeoutStatusTone(order)}`"
+              >
+                {{ getTakeoutStatusText(order) }}
+              </text>
+            </view>
 
-          <view class="order-card__body">
-            <image class="order-card__image" :src="order.image" mode="aspectFill" />
-
-            <view class="order-card__info">
-              <view class="order-card__main">
-                <text class="order-card__title">
-                  {{ order.productName }}
-                </text>
-
-                <view class="order-card__price">
-                  <text class="order-card__currency">
-                    ¥
+            <view class="takeout-order-card__section takeout-order-card__customer">
+              <view class="takeout-order-card__main-row">
+                <view class="takeout-order-card__customer-info">
+                  <text class="takeout-order-card__customer-name">
+                    {{ order.customerName }}
                   </text>
-                  <text class="order-card__amount">
-                    {{ order.amount }}
+                  <text class="takeout-order-card__customer-mobile">
+                    手机号{{ order.customerMobileMask || '----' }}
                   </text>
-                  <text class="order-card__unit">
-                    元
-                  </text>
+                </view>
+                <view class="takeout-order-card__phone" @tap.stop="contactTakeoutCustomer(order)">
+                  ☎
                 </view>
               </view>
 
-              <view class="order-card__meta">
-                <text class="order-card__time">
-                  下单时间：{{ order.orderTime }}
+              <text class="takeout-order-card__tag">
+                外卖配送
+              </text>
+
+              <view class="takeout-order-card__address" @tap.stop="showDeliveryAddress(order)">
+                <text>{{ formatDistance(order.distanceKm) }}</text>
+                <text class="takeout-order-card__address-separator">|</text>
+                <text class="takeout-order-card__address-text">
+                  {{ order.deliveryAddress || '配送地址加载中' }}
                 </text>
-                <text class="order-card__count">
-                  （共{{ order.quantity }}件）
+                <text class="takeout-order-card__address-arrow">›</text>
+              </view>
+            </view>
+
+            <view class="takeout-order-card__section takeout-order-card__preparation">
+              <text class="takeout-order-card__preparation-text">
+                {{ getPreparationText(order) }}
+              </text>
+              <view v-if="getPreparationActions(order).length" class="takeout-order-card__actions">
+                <view
+                  v-for="action in getPreparationActions(order)"
+                  :key="action"
+                  class="takeout-order-card__action"
+                  :class="{ 'takeout-order-card__action--primary': action === '确认出餐' }"
+                  @tap.stop="handleTakeoutAction(action, order)"
+                >
+                  {{ action }}
+                </view>
+              </view>
+            </view>
+
+            <view class="takeout-order-card__section takeout-order-card__rider">
+              <view class="takeout-order-card__main-row">
+                <text class="takeout-order-card__rider-name">
+                  {{ order.courierName || '骑手待接单' }}
                 </text>
+                <view
+                  v-if="order.courierPhone"
+                  class="takeout-order-card__phone"
+                  @tap.stop="contactCourier(order)"
+                >
+                  ☎
+                </view>
+              </view>
+
+              <view class="takeout-order-card__rider-meta">
+                <view class="takeout-order-card__rider-progress">
+                  <text>{{ formatRiderTime(order.riderUpdateTime) }}</text>
+                  <text>{{ getRiderStatusText(order) }}</text>
+                </view>
+                <view v-if="getRefundActions(order).length" class="takeout-order-card__actions">
+                  <view
+                    v-for="action in getRefundActions(order)"
+                    :key="action"
+                    class="takeout-order-card__action"
+                    :class="{ 'takeout-order-card__action--danger': action === '确认退款' }"
+                    @tap.stop="handleTakeoutAction(action, order)"
+                  >
+                    {{ action }}
+                  </view>
+                </view>
+              </view>
+            </view>
+
+            <view v-if="order.buyerRemark" class="takeout-order-card__remark">
+              <text class="takeout-order-card__remark-label">
+                备注
+              </text>
+              <text class="takeout-order-card__remark-text">
+                {{ order.buyerRemark }}
+              </text>
+            </view>
+
+            <view class="takeout-order-card__summary">
+              <text class="takeout-order-card__summary-count">
+                {{ getProductSummary(order) }}
+              </text>
+              <text class="takeout-order-card__income">
+                ‹ 预计收入
+                <text class="takeout-order-card__income-amount">
+                  ¥{{ formatAmount(order.amount) }}
+                </text>
+              </text>
+            </view>
+
+            <view
+              v-if="!isTakeoutExpanded(order.id)"
+              class="takeout-order-card__toggle"
+              @tap.stop="toggleTakeoutDetail(order)"
+            >
+              展开完整信息⌄
+            </view>
+
+            <view v-else class="takeout-order-card__products">
+              <view v-if="isTakeoutLoading(order.id)" class="takeout-order-card__products-loading">
+                商品明细加载中...
+              </view>
+              <template v-else>
+                <view v-for="product in order.products" :key="product.id" class="takeout-order-card__product">
+                  <text class="takeout-order-card__product-name">
+                    {{ product.name }}
+                  </text>
+                  <text
+                    class="takeout-order-card__product-count"
+                    :class="{ 'takeout-order-card__product-count--multiple': product.quantity > 1 }"
+                  >
+                    x{{ product.quantity }}
+                  </text>
+                </view>
+              </template>
+              <view class="takeout-order-card__toggle" @tap.stop="toggleTakeoutDetail(order)">
+                折叠信息⌃
               </view>
             </view>
           </view>
 
-          <view class="order-card__actions">
-            <view
-              v-for="action in order.actions"
-              :key="action"
-              class="order-card__action"
-              hover-class="order-card__action--hover"
-              @tap.stop="handleOrderAction(action, order)"
-            >
-              {{ action }}
+          <view v-else class="order-card">
+            <view class="order-card__header">
+              <text class="order-card__no">
+                订单编号:{{ order.orderNo }}
+              </text>
+              <text
+                class="order-card__status"
+                :class="{
+                  'order-card__status--pending': order.status === 'pending',
+                }"
+              >
+                {{ order.statusText }}
+              </text>
+            </view>
+
+            <view class="order-card__body">
+              <image class="order-card__image" :src="order.image" mode="aspectFill" />
+
+              <view class="order-card__info">
+                <view class="order-card__main">
+                  <text class="order-card__title">
+                    {{ order.productName }}
+                  </text>
+
+                  <view class="order-card__price">
+                    <text class="order-card__currency">
+                      ¥
+                    </text>
+                    <text class="order-card__amount">
+                      {{ order.amount }}
+                    </text>
+                    <text class="order-card__unit">
+                      元
+                    </text>
+                  </view>
+                </view>
+
+                <view class="order-card__meta">
+                  <text class="order-card__time">
+                    下单时间：{{ order.orderTime }}
+                  </text>
+                  <text class="order-card__count">
+                    （共{{ order.quantity }}件）
+                  </text>
+                </view>
+              </view>
+            </view>
+
+            <view class="order-card__actions">
+              <view
+                v-for="action in order.actions"
+                :key="action"
+                class="order-card__action"
+                hover-class="order-card__action--hover"
+                @tap.stop="handleOrderAction(action, order)"
+              >
+                {{ action }}
+              </view>
             </view>
           </view>
-        </view>
+        </template>
 
         <view v-if="!filteredOrders.length" class="order-empty">
           <text class="order-empty__title">
@@ -505,6 +966,317 @@ onShow(() => {
   flex-direction: column;
   gap: 20rpx;
   padding: 18rpx;
+}
+
+.takeout-order-card {
+  overflow: hidden;
+  padding: 0 24rpx 24rpx;
+  border-radius: 22rpx;
+  background: #fff;
+  box-shadow: 0 8rpx 26rpx rgba(79, 84, 98, 0.05);
+}
+
+.takeout-order-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  min-height: 84rpx;
+  border-bottom: 2rpx dotted #e7e8eb;
+}
+
+.takeout-order-card__no {
+  overflow: hidden;
+  flex: 1;
+  color: #72757b;
+  font-size: 25rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.takeout-order-card__status {
+  flex-shrink: 0;
+  font-size: 29rpx;
+  font-weight: 500;
+}
+
+.takeout-order-card__status--warning {
+  color: #ff9f17;
+}
+
+.takeout-order-card__status--danger {
+  color: #ff3f4f;
+}
+
+.takeout-order-card__status--muted {
+  color: #64676d;
+}
+
+.takeout-order-card__section {
+  padding: 24rpx 0 20rpx;
+  border-bottom: 2rpx dotted #e7e8eb;
+}
+
+.takeout-order-card__main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.takeout-order-card__customer-info {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 12rpx;
+}
+
+.takeout-order-card__customer-name,
+.takeout-order-card__rider-name {
+  overflow: hidden;
+  color: #22252a;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.takeout-order-card__customer-mobile {
+  color: #6d7076;
+  font-size: 21rpx;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.takeout-order-card__phone {
+  display: flex;
+  width: 44rpx;
+  height: 44rpx;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #101216;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1;
+  background: #f7f7f8;
+}
+
+.takeout-order-card__tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30rpx;
+  margin-top: 8rpx;
+  padding: 0 8rpx;
+  border: 1rpx solid #d9dbdf;
+  border-radius: 4rpx;
+  color: #85888e;
+  font-size: 18rpx;
+  line-height: 1;
+}
+
+.takeout-order-card__address {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7rpx;
+  margin-top: 8rpx;
+  color: #777a81;
+  font-size: 22rpx;
+  line-height: 1.35;
+}
+
+.takeout-order-card__address-separator {
+  color: #c0c2c7;
+}
+
+.takeout-order-card__address-text {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.takeout-order-card__address-arrow {
+  flex-shrink: 0;
+  color: #9b9da2;
+  font-size: 28rpx;
+}
+
+.takeout-order-card__preparation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.takeout-order-card__preparation-text {
+  flex: 1;
+  color: #25282d;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.takeout-order-card__actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12rpx;
+}
+
+.takeout-order-card__action {
+  display: flex;
+  min-width: 112rpx;
+  height: 44rpx;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14rpx;
+  border: 2rpx solid #8c8f95;
+  border-radius: 999rpx;
+  color: #686b71;
+  font-size: 24rpx;
+  line-height: 1;
+  background: #fff;
+}
+
+.takeout-order-card__action--primary {
+  border-color: #f2af25;
+  color: #f2a713;
+}
+
+.takeout-order-card__action--danger {
+  border-color: #ff5864;
+  color: #ff4654;
+}
+
+.takeout-order-card__rider-meta {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 10rpx;
+}
+
+.takeout-order-card__rider-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  color: #777a80;
+  font-size: 21rpx;
+  line-height: 1.25;
+}
+
+.takeout-order-card__remark {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 22rpx;
+  padding: 12rpx 14rpx;
+  background: #fffbea;
+}
+
+.takeout-order-card__remark-label {
+  display: flex;
+  min-width: 42rpx;
+  height: 30rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5rpx;
+  color: #fff;
+  font-size: 18rpx;
+  font-weight: 700;
+  background: #ff7417;
+}
+
+.takeout-order-card__remark-text {
+  overflow: hidden;
+  flex: 1;
+  color: #303238;
+  font-size: 26rpx;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.takeout-order-card__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding: 22rpx 0 16rpx;
+}
+
+.takeout-order-card__summary-count {
+  color: #282b30;
+  font-size: 30rpx;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.takeout-order-card__income {
+  color: #686b71;
+  font-size: 23rpx;
+  white-space: nowrap;
+}
+
+.takeout-order-card__income-amount {
+  margin-left: 5rpx;
+  color: #2e3136;
+  font-size: 29rpx;
+  font-weight: 700;
+}
+
+.takeout-order-card__toggle {
+  color: #777a80;
+  font-size: 22rpx;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.takeout-order-card__products {
+  padding-top: 4rpx;
+}
+
+.takeout-order-card__products-loading {
+  padding: 18rpx 0;
+  color: #8b8e94;
+  font-size: 25rpx;
+  text-align: center;
+}
+
+.takeout-order-card__product {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  min-height: 48rpx;
+  color: #46494f;
+  font-size: 28rpx;
+}
+
+.takeout-order-card__product-name {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.takeout-order-card__product-count {
+  flex-shrink: 0;
+  color: #4f5257;
+}
+
+.takeout-order-card__product-count--multiple {
+  color: #ff4654;
+}
+
+.takeout-order-card__products .takeout-order-card__toggle {
+  margin-top: 12rpx;
 }
 
 .order-card {
