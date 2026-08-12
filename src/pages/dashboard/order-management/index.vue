@@ -7,6 +7,8 @@ import type {
 } from '@/api/types/merchant-food'
 import { getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage } from '@/api/merchant-food'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
+import arrowUpIcon from '@/static/icons/arrow-up.png'
+import phoneIcon from '@/static/icons/phone.png'
 import productImage from '@/static/images/item-image.png'
 import { useMerchantFoodStore } from '@/store'
 
@@ -615,7 +617,7 @@ onUnmounted(stopClock)
                   </text>
                 </view>
                 <view class="takeout-order-card__phone" @tap.stop="contactTakeoutCustomer(order)">
-                  ☎
+                  <image class="takeout-order-card__phone-icon" :src="phoneIcon" mode="aspectFit" />
                 </view>
               </view>
 
@@ -660,7 +662,7 @@ onUnmounted(stopClock)
                   class="takeout-order-card__phone"
                   @tap.stop="contactCourier(order)"
                 >
-                  ☎
+                  <image class="takeout-order-card__phone-icon" :src="phoneIcon" mode="aspectFit" />
                 </view>
               </view>
 
@@ -709,7 +711,8 @@ onUnmounted(stopClock)
               class="takeout-order-card__toggle"
               @tap.stop="toggleTakeoutDetail(order)"
             >
-              展开完整信息⌄
+              展开完整信息
+              <image class="takeout-order-card__toggle-icon takeout-order-card__toggle-icon--down" :src="arrowUpIcon" mode="aspectFit" />
             </view>
 
             <view v-else class="takeout-order-card__products">
@@ -730,7 +733,8 @@ onUnmounted(stopClock)
                 </view>
               </template>
               <view class="takeout-order-card__toggle" @tap.stop="toggleTakeoutDetail(order)">
-                折叠信息⌃
+                折叠信息
+                <image class="takeout-order-card__toggle-icon" :src="arrowUpIcon" mode="aspectFit" />
               </view>
             </view>
           </view>
@@ -1064,6 +1068,11 @@ onUnmounted(stopClock)
   background: #f7f7f8;
 }
 
+.takeout-order-card__phone-icon {
+  width: 26rpx;
+  height: 26rpx;
+}
+
 .takeout-order-card__tag {
   display: inline-flex;
   align-items: center;
@@ -1232,10 +1241,24 @@ onUnmounted(stopClock)
 }
 
 .takeout-order-card__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6rpx;
   color: #777a80;
   font-size: 22rpx;
   line-height: 1.4;
   text-align: right;
+}
+
+.takeout-order-card__toggle-icon {
+  width: 18rpx;
+  height: 12rpx;
+  flex-shrink: 0;
+}
+
+.takeout-order-card__toggle-icon--down {
+  transform: rotate(180deg);
 }
 
 .takeout-order-card__products {
