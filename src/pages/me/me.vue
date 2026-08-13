@@ -1,14 +1,14 @@
 <script lang="ts" setup>
 import { createMerchantStoreDraft } from '@/api/merchant-store'
 import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-create-lock'
+import arrowDownIcon from '@/static/icons/arrow-down.png'
 import aboutUsIcon from '@/static/icons/me/about-us.png'
 import customerServiceIcon from '@/static/icons/me/customer-service.png'
 import myContractsIcon from '@/static/icons/me/my-contracts.png'
 import notificationSettingsIcon from '@/static/icons/me/notification-settings.png'
-import rulesCenterIcon from '@/static/icons/me/rules-center.png'
+import settlementAccountIcon from '@/static/icons/me/rules-center.png'
 import storeInfoIcon from '@/static/icons/me/store-info.png'
 import violationRecordsIcon from '@/static/icons/me/violation-records.png'
-import arrowDownIcon from '@/static/icons/arrow-down.png'
 import settingIcon from '@/static/icons/setting.png'
 import { useMerchantFoodStore } from '@/store'
 import {
@@ -65,7 +65,7 @@ const menuItems: MenuItem[] = [
   { title: '我的合同', icon: myContractsIcon, path: '/pages/me/my-contracts/index' },
   { title: '联系客服', icon: customerServiceIcon },
   { title: '违规记录', icon: violationRecordsIcon },
-  { title: '规则中心', icon: rulesCenterIcon },
+  { title: '结算账户', icon: settlementAccountIcon, path: '/pages/me/settlement-account/index' },
   { title: '关于我们', icon: aboutUsIcon },
   { title: '退出登录', action: 'logout' },
 ]
