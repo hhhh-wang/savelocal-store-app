@@ -23,19 +23,20 @@ interface ProductCard {
 
 const productCards: ProductCard[] = [
   {
-    title: '商品库',
-    subtitle: '管理门店所有上线菜品信息',
-    image: dishLibraryImage,
-    themeClass: 'product-management-card--library',
-    path: '/pages/dashboard/product-library/index',
-  },
-  {
     title: '商品图片',
     subtitle: '图文结合，效果更好',
-    image: menuItemImage,
+    image: dishLibraryImage,
     themeClass: 'product-management-card--image',
     path: '/pages/dashboard/menu-album/index',
   },
+  {
+    title: '商品库',
+    subtitle: '管理门店所有上线菜品信息',
+    image: menuItemImage,
+    themeClass: 'product-management-card--library',
+    path: '/pages/dashboard/product-library/index',
+  },
+  
 ]
 
 function handleCardTap(card: ProductCard) {
