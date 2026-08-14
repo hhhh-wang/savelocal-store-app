@@ -11,6 +11,8 @@ import type {
   MerchantFoodPageResult,
   MerchantFoodProduct,
   MerchantFoodProductPayload,
+  MerchantFoodQuickStatus,
+  MerchantFoodQuickStatusPayload,
   MerchantFoodReconciliationOverview,
   MerchantFoodReconciliationQuery,
   MerchantFoodRefund,
@@ -43,6 +45,14 @@ export function getMerchantFoodAddressSuggestions(params: {
 
 export function updateMerchantFoodStoreBusinessStatus(storeId: number, payload: MerchantFoodBusinessStatusPayload) {
   return http.put<void>(`${storeBase}/${storeId}/business-status`, payload)
+}
+
+export function getMerchantFoodStoreQuickStatus(storeId: number) {
+  return http.get<MerchantFoodQuickStatus>(`${storeBase}/${storeId}/quick-status`)
+}
+
+export function updateMerchantFoodStoreQuickStatus(storeId: number, payload: MerchantFoodQuickStatusPayload) {
+  return http.put<void>(`${storeBase}/${storeId}/quick-status`, payload)
 }
 
 export function getMerchantFoodAlbumPage(storeId: number, params: MerchantFoodPageParams & { auditStatus?: MerchantFoodAuditStatus }) {

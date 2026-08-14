@@ -109,6 +109,17 @@ export interface MerchantFoodBusinessStatusPayload {
   storeStatus: '0' | '1'
 }
 
+export type MerchantFoodQuickStatusValue = '0' | '1' | '2'
+
+export interface MerchantFoodQuickStatus {
+  storeStatus: MerchantFoodQuickStatusValue
+  adjustable: boolean
+}
+
+export interface MerchantFoodQuickStatusPayload {
+  storeStatus: MerchantFoodQuickStatusValue
+}
+
 export interface MerchantFoodProfileChangePayload {
   changeType: 'NAME' | 'ADDRESS' | 'PROFILE'
   storeName?: string

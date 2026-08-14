@@ -4,6 +4,7 @@ import { getMerchantFoodBillsPage, getMerchantFoodReconciliationOverview } from 
 import calendarMonthIcon from '@/static/icons/calendar-month.png'
 import storeIcon from '@/static/icons/store-icon.png'
 import { useMerchantFoodStore } from '@/store'
+import { WITHDRAWAL_PATHS } from './withdrawal'
 
 defineOptions({
   name: 'MerchantReconciliation',
@@ -155,6 +156,10 @@ function handleClose() {
   uni.reLaunch({
     url: fallbackUrl,
   })
+}
+
+function openWithdrawalOverview() {
+  uni.navigateTo({ url: WITHDRAWAL_PATHS.overview })
 }
 
 function sceneParam(tab: SettlementTab) {
@@ -326,7 +331,11 @@ function getBillStatusLabel(status: BillStatus) {
             {{ activeSettlementSummary.amount }}
           </text>
 
-          <view class="merchant-balance-card__withdraw">
+          <view
+            class="merchant-balance-card__withdraw"
+            hover-class="merchant-balance-card__withdraw--hover"
+            @tap="openWithdrawalOverview"
+          >
             提现
           </view>
         </view>
@@ -715,6 +724,10 @@ function getBillStatusLabel(status: BillStatus) {
   font-size: 28rpx;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.merchant-balance-card__withdraw--hover {
+  opacity: 0.82;
 }
 
 .merchant-section {

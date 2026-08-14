@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { MerchantFoodQuickStatus, MerchantFoodQuickStatusValue } from '@/api/types/merchant-food'
+import { getMerchantFoodStoreQuickStatus, updateMerchantFoodStoreQuickStatus } from '@/api/merchant-food'
 import { createMerchantStoreDraft } from '@/api/merchant-store'
 import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-create-lock'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
@@ -35,15 +37,80 @@ const isLoggingOut = ref(false)
 const storeAccessVisible = ref(false)
 const selectedStoreId = ref<number>()
 const creatingStore = ref(false)
+const quickStatus = ref<MerchantFoodQuickStatus>()
+const updatingQuickStatus = ref(false)
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 
-const storeStatus = computed(() => merchantFoodStore.currentStore?.storeStatus === '1'
-  ? { label: '暂停营业', color: '#a0a4ab' }
-  : { label: '营业中', color: '#6bc93f' })
+const quickStatusOptions: Array<{
+  value: MerchantFoodQuickStatusValue
+  label: string
+  color: string
+}> = [
+  { value: '0', label: '营业中', color: '#6bc93f' },
+  { value: '1', label: '关店', color: '#a0a4ab' },
+  { value: '2', label: '休息中', color: '#f0a020' },
+]
+
+const storeStatus = computed(() => {
+  return quickStatusOptions.find(option => option.value === quickStatus.value?.storeStatus)
+    ?? quickStatusOptions[1]
+})
 
 onShow(() => {
-  merchantFoodStore.loadProfile(true).catch(() => {})
+  loadMeStoreStatus().catch(() => {})
 })
+
+async function loadMeStoreStatus() {
+  const profile = await merchantFoodStore.loadProfile(true)
+  quickStatus.value = await getMerchantFoodStoreQuickStatus(profile.store.storeId)
+}
+
+async function applyQuickStatus(value: MerchantFoodQuickStatusValue) {
+  if (updatingQuickStatus.value || value === quickStatus.value?.storeStatus)
+    return
+
+  updatingQuickStatus.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await updateMerchantFoodStoreQuickStatus(storeId, { storeStatus: value })
+    quickStatus.value = { storeStatus: value, adjustable: true }
+    await merchantFoodStore.loadProfile(true)
+    uni.showToast({ title: '店铺状态已更新', icon: 'success' })
+  }
+  catch (error) {
+    console.error('调整店铺状态失败:', error)
+    uni.showToast({
+      title: error instanceof Error && error.message ? error.message : '状态更新失败，请重试',
+      icon: 'none',
+    })
+    await loadMeStoreStatus().catch(() => {})
+  }
+  finally {
+    updatingQuickStatus.value = false
+  }
+}
+
+function openQuickStatusPicker() {
+  if (!quickStatus.value) {
+    uni.showToast({ title: '店铺状态加载中', icon: 'none' })
+    return
+  }
+  if (!quickStatus.value.adjustable) {
+    uni.showToast({ title: '门店资料尚未审核通过，暂不能调整', icon: 'none' })
+    return
+  }
+  if (updatingQuickStatus.value)
+    return
+
+  uni.showActionSheet({
+    itemList: quickStatusOptions.map(option => option.label),
+    success: ({ tapIndex }) => {
+      const selected = quickStatusOptions[tapIndex]
+      if (selected)
+        void applyQuickStatus(selected.value)
+    },
+  })
+}
 
 const walletItems = [
   { label: '今日到账', value: '25.9', subtext: '去查看' },
@@ -117,6 +184,7 @@ async function handleStoreAccessConfirm(storeId: number) {
   }
 
   merchantFoodStore.selectStore(storeId)
+  quickStatus.value = undefined
   if (resolveStoreAccessAction(store) === 'lock') {
     uni.navigateTo({
       url: buildStoreCreateLockRoute(storeId),
@@ -125,7 +193,7 @@ async function handleStoreAccessConfirm(storeId: number) {
   }
 
   try {
-    await merchantFoodStore.loadProfile(true)
+    await loadMeStoreStatus()
   }
   catch (error) {
     console.error('切换门店失败:', error)
@@ -214,11 +282,22 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
             <text class="me-header__status-label">
               店铺状态:
             </text>
-            <view class="me-header__status-pill">
+            <view
+              class="me-header__status-pill"
+              :class="{ 'me-header__status-pill--disabled': !quickStatus?.adjustable }"
+              hover-class="me-header__status-pill--hover"
+              @tap="openQuickStatusPicker"
+            >
               <text class="me-header__status-dot" :style="{ backgroundColor: storeStatus.color }" />
               <text class="me-header__status-text">
                 {{ storeStatus.label }}
               </text>
+              <image
+                v-if="quickStatus?.adjustable"
+                class="me-header__status-arrow"
+                :src="arrowDownIcon"
+                mode="aspectFit"
+              />
             </view>
           </view>
         </view>
@@ -383,6 +462,14 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.me-header__status-pill--hover {
+  opacity: 0.76;
+}
+
+.me-header__status-pill--disabled {
+  opacity: 0.72;
+}
+
 .me-header__status-dot {
   display: block;
   width: 14rpx;
@@ -393,6 +480,12 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
 .me-header__status-text {
   color: #30343a;
   font-size: 24rpx;
+}
+
+.me-header__status-arrow {
+  width: 22rpx;
+  height: 22rpx;
+  flex-shrink: 0;
 }
 
 .me-header__actions {
