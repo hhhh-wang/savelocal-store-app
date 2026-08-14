@@ -1,9 +1,12 @@
 <script lang="ts" setup>
-import {
-  createMerchantProfitSharingBindQr,
-  getMerchantProfitSharingReceiver,
-} from '@/api/merchant-profit-sharing'
+import type { SettlementAccountType } from './settlement-account'
+import { getMerchantProfitSharingReceiver } from '@/api/merchant-profit-sharing'
 import { useMerchantFoodStore } from '@/store'
+import {
+  merchantAccountPath,
+  personalAccountPath,
+  resolveBoundAccountType,
+} from './settlement-account'
 
 defineOptions({ name: 'SettlementAccount' })
 
@@ -16,23 +19,20 @@ definePage({
 
 const merchantFoodStore = useMerchantFoodStore()
 const loading = ref(false)
-const qrLoading = ref(false)
 const receiver = ref<Awaited<ReturnType<typeof getMerchantProfitSharingReceiver>>>()
-const qr = ref<Awaited<ReturnType<typeof createMerchantProfitSharingBindQr>>>()
-const storeName = computed(() => merchantFoodStore.currentStore?.storeName || qr.value?.storeName || '当前门店')
-const isBound = computed(() => receiver.value?.bindStatus === 'BOUND')
+
+const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '当前门店')
+const boundAccountType = computed(() => resolveBoundAccountType(receiver.value))
 
 onShow(() => {
-  void loadPage()
+  void loadAccountStatus()
 })
 
-async function loadPage() {
+async function loadAccountStatus() {
   loading.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     receiver.value = await getMerchantProfitSharingReceiver(storeId)
-    if (!isBound.value)
-      await refreshQr(storeId)
   }
   catch (error) {
     console.error('加载结算账户失败:', error)
@@ -42,75 +42,97 @@ async function loadPage() {
   }
 }
 
-async function refreshQr(storeId = merchantFoodStore.currentStoreId) {
-  if (!storeId || qrLoading.value)
-    return
-  qrLoading.value = true
-  try {
-    qr.value = await createMerchantProfitSharingBindQr(storeId)
-  }
-  catch (error) {
-    console.error('生成绑定二维码失败:', error)
-  }
-  finally {
-    qrLoading.value = false
-  }
+function getOptionStatus(type: SettlementAccountType) {
+  if (loading.value)
+    return '查询中'
+  if (boundAccountType.value === type)
+    return '当前使用'
+  if (boundAccountType.value)
+    return '需先解绑当前方式'
+  return '未绑定'
 }
 
-function goBack() {
-  uni.navigateBack()
+function openAccount(type: SettlementAccountType) {
+  uni.navigateTo({
+    url: type === 'personal' ? personalAccountPath : merchantAccountPath,
+  })
 }
 </script>
 
 <template>
   <view class="settlement-page">
-    <view class="settlement-page__header">
-      <view class="settlement-page__back" @tap="goBack">
-        ‹
-      </view>
-      <text class="settlement-page__title">结算账户</text>
-      <view class="settlement-page__back settlement-page__back--placeholder" />
+    <view class="settlement-header">
+      <back-button color="#25282d" background="transparent" size="64rpx" />
+      <text class="settlement-header__title">结算账户</text>
+      <view class="settlement-header__spacer" />
     </view>
 
-    <view class="settlement-page__content">
-      <view class="settlement-card settlement-card--status">
-        <view class="settlement-card__eyebrow">
-          当前门店
-        </view>
-        <text class="settlement-card__store">{{ storeName }}</text>
-        <view v-if="isBound" class="settlement-status settlement-status--success">
-          <text class="settlement-status__dot" />
-          <text>个人微信已绑定</text>
-        </view>
-        <view v-else class="settlement-status">
-          <text class="settlement-status__dot settlement-status__dot--pending" />
-          <text>尚未绑定个人微信</text>
-        </view>
-        <text v-if="isBound" class="settlement-card__masked">
-          {{ receiver?.receiverName || '微信收款人' }} · {{ receiver?.receiverAccountMasked || '已授权' }}
-        </text>
+    <view class="settlement-content">
+      <view class="settlement-intro">
+        <text class="settlement-intro__eyebrow">{{ storeName }}</text>
+        <text class="settlement-intro__title">选择结算方式</text>
+        <text class="settlement-intro__desc">每个门店仅能绑定一种方式，用于接收微信支付分账款项。</text>
       </view>
 
-      <view v-if="!isBound" class="settlement-card settlement-card--qr">
-        <text class="settlement-card__title">绑定个人微信</text>
-        <text class="settlement-card__desc">请使用需要收款的个人微信扫描二维码，并在微信小程序中确认绑定</text>
-        <view v-if="qr?.qrCode" class="settlement-qr-wrap">
-          <image class="settlement-qr" :src="qr.qrCode" mode="aspectFit" />
+      <view class="settlement-options">
+        <view
+          class="settlement-option"
+          hover-class="settlement-option--hover"
+          @tap="openAccount('personal')"
+        >
+          <view class="settlement-option__icon settlement-option__icon--personal">
+            <view class="i-carbon-user-avatar-filled settlement-option__icon-glyph" />
+          </view>
+          <view class="settlement-option__body">
+            <view class="settlement-option__heading">
+              <text class="settlement-option__title">个人微信</text>
+              <view
+                class="settlement-option__status"
+                :class="{ 'settlement-option__status--active': boundAccountType === 'personal' }"
+              >
+                <view v-if="boundAccountType === 'personal'" class="i-carbon-checkmark settlement-option__check" />
+                <text>{{ getOptionStatus('personal') }}</text>
+              </view>
+            </view>
+            <text class="settlement-option__desc">由收款人扫码授权，无需手动填写 OpenID</text>
+            <text v-if="boundAccountType === 'personal'" class="settlement-option__account">
+              {{ receiver?.receiverName || '微信收款人' }} · {{ receiver?.receiverAccountMasked || '已授权' }}
+            </text>
+          </view>
+          <view class="i-carbon-chevron-right settlement-option__arrow" />
         </view>
-        <view v-else class="settlement-qr settlement-qr--empty">
-          <text>{{ qrLoading || loading ? '正在生成二维码' : '二维码暂不可用' }}</text>
+
+        <view
+          class="settlement-option"
+          hover-class="settlement-option--hover"
+          @tap="openAccount('merchant')"
+        >
+          <view class="settlement-option__icon settlement-option__icon--merchant">
+            <view class="i-carbon-store settlement-option__icon-glyph" />
+          </view>
+          <view class="settlement-option__body">
+            <view class="settlement-option__heading">
+              <text class="settlement-option__title">微信支付商户号</text>
+              <view
+                class="settlement-option__status"
+                :class="{ 'settlement-option__status--active': boundAccountType === 'merchant' }"
+              >
+                <view v-if="boundAccountType === 'merchant'" class="i-carbon-checkmark settlement-option__check" />
+                <text>{{ getOptionStatus('merchant') }}</text>
+              </view>
+            </view>
+            <text class="settlement-option__desc">适用于已开通微信支付的企业、个体户或小微商户</text>
+            <text v-if="boundAccountType === 'merchant'" class="settlement-option__account">
+              {{ receiver?.receiverName || '微信支付商户' }} · {{ receiver?.receiverAccountMasked || '已绑定' }}
+            </text>
+          </view>
+          <view class="i-carbon-chevron-right settlement-option__arrow" />
         </view>
-        <text v-if="qr?.expiresIn" class="settlement-card__hint">二维码 {{ Math.floor(qr.expiresIn / 60) }} 分钟内有效</text>
-        <text class="settlement-card__safe">微信授权后由系统获取 OpenID，无需手动填写</text>
-        <button class="settlement-card__refresh" :loading="qrLoading" @tap="refreshQr()">
-          刷新二维码
-        </button>
       </view>
 
-      <view v-else class="settlement-card settlement-card--notice">
-        <text class="settlement-card__title">绑定已完成</text>
-        <text class="settlement-card__desc">后续符合条件的订单会按分账规则结算到该个人微信。</text>
-        <text class="settlement-card__hint">如需更换收款微信，请联系平台运营解绑后重新绑定。</text>
+      <view class="settlement-note">
+        <view class="i-carbon-information settlement-note__icon" />
+        <text>更换已绑定的结算方式前，请先联系平台运营解绑。</text>
       </view>
     </view>
   </view>
@@ -119,150 +141,183 @@ function goBack() {
 <style lang="scss" scoped>
 .settlement-page {
   min-height: 100vh;
-  background: #f6f7f9;
-  color: #1e2329;
+  background: #f4f5f7;
+  color: #202328;
 }
 
-.settlement-page__header {
-  height: 112rpx;
-  padding: 0 32rpx;
-  display: flex;
+.settlement-header {
+  display: grid;
+  grid-template-columns: 64rpx 1fr 64rpx;
   align-items: center;
-  justify-content: space-between;
+  min-height: 88rpx;
+  padding: calc(env(safe-area-inset-top) + 12rpx) 24rpx 12rpx;
+  border-bottom: 1rpx solid #eceef1;
   background: #fff;
-  border-bottom: 1rpx solid #edf0f2;
 }
 
-.settlement-page__back {
-  width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 48rpx;
-  color: #20262e;
-}
-
-.settlement-page__back--placeholder {
-  opacity: 0;
-}
-.settlement-page__title {
+.settlement-header__title {
   font-size: 34rpx;
-  font-weight: 650;
-}
-.settlement-page__content {
-  padding: 28rpx 32rpx 64rpx;
-}
-
-.settlement-card {
-  margin-bottom: 24rpx;
-  padding: 32rpx;
-  background: #fff;
-  border-radius: 18rpx;
-  box-shadow: 0 12rpx 36rpx rgba(27, 36, 47, 0.05);
-}
-
-.settlement-card__eyebrow {
-  color: #8a929b;
-  font-size: 24rpx;
-}
-.settlement-card__store {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 38rpx;
-  font-weight: 650;
-}
-.settlement-card__title {
-  display: block;
-  font-size: 32rpx;
-  font-weight: 650;
-}
-.settlement-card__desc {
-  display: block;
-  margin-top: 14rpx;
-  color: #747d87;
-  line-height: 1.65;
-  font-size: 26rpx;
-}
-.settlement-card__masked {
-  display: block;
-  margin-top: 14rpx;
-  color: #59636e;
-  font-size: 26rpx;
-}
-
-.settlement-status {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  margin-top: 22rpx;
-  color: #8a6b1f;
-  font-size: 26rpx;
-}
-.settlement-status--success {
-  color: #21865a;
-}
-.settlement-status__dot {
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 50%;
-  background: #2bb673;
-}
-.settlement-status__dot--pending {
-  background: #e0ad3d;
-}
-
-.settlement-card--qr {
+  font-weight: 700;
   text-align: center;
 }
-.settlement-qr-wrap {
-  width: 480rpx;
-  height: 480rpx;
-  margin: 28rpx auto 16rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff;
+
+.settlement-header__spacer {
+  width: 64rpx;
+  height: 64rpx;
 }
-.settlement-qr {
-  width: 460rpx;
-  height: 460rpx;
+
+.settlement-content {
+  padding: 40rpx 28rpx calc(env(safe-area-inset-bottom) + 48rpx);
 }
-.settlement-qr--empty {
-  margin: 28rpx auto 16rpx;
+
+.settlement-intro {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #9aa1a9;
-  background: #f5f6f7;
+  flex-direction: column;
+}
+
+.settlement-intro__eyebrow {
+  color: #687079;
+  font-size: 25rpx;
+}
+
+.settlement-intro__title {
+  margin-top: 10rpx;
+  color: #171a1f;
+  font-size: 42rpx;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.settlement-intro__desc {
+  margin-top: 14rpx;
+  color: #767d86;
   font-size: 26rpx;
+  line-height: 1.65;
 }
-.settlement-card__hint,
-.settlement-card__safe {
+
+.settlement-options {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  margin-top: 34rpx;
+}
+
+.settlement-option {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  min-height: 176rpx;
+  padding: 28rpx 24rpx;
+  border: 1rpx solid #e7e9ec;
+  border-radius: 16rpx;
+  box-sizing: border-box;
+  background: #fff;
+  box-shadow: 0 10rpx 24rpx rgba(26, 32, 44, 0.05);
+}
+
+.settlement-option--hover {
+  opacity: 0.82;
+}
+
+.settlement-option__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 84rpx;
+  height: 84rpx;
+  flex-shrink: 0;
+  border-radius: 16rpx;
+}
+
+.settlement-option__icon--personal {
+  background: #e9f7f0;
+  color: #12845c;
+}
+
+.settlement-option__icon--merchant {
+  background: #fff3dc;
+  color: #a76700;
+}
+
+.settlement-option__icon-glyph {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+.settlement-option__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.settlement-option__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.settlement-option__title {
+  min-width: 0;
+  color: #202328;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.settlement-option__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4rpx;
+  flex-shrink: 0;
+  color: #9298a0;
+  font-size: 21rpx;
+  line-height: 1.4;
+}
+
+.settlement-option__status--active {
+  color: #16835c;
+}
+
+.settlement-option__check {
+  width: 24rpx;
+  height: 24rpx;
+}
+
+.settlement-option__desc,
+.settlement-option__account {
   display: block;
-  color: #9aa1a9;
+  margin-top: 10rpx;
+  color: #7e858e;
+  font-size: 23rpx;
+  line-height: 1.55;
+}
+
+.settlement-option__account {
+  color: #4e5965;
+}
+
+.settlement-option__arrow {
+  width: 32rpx;
+  height: 32rpx;
+  flex-shrink: 0;
+  color: #b1b6bd;
+}
+
+.settlement-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+  margin-top: 28rpx;
+  padding: 0 4rpx;
+  color: #858c94;
   font-size: 23rpx;
   line-height: 1.6;
 }
-.settlement-card__safe {
-  margin-top: 8rpx;
-  color: #5a8b76;
-}
-.settlement-card__refresh {
-  margin: 24rpx auto 0;
-  width: 270rpx;
-  height: 76rpx;
-  line-height: 76rpx;
-  border: 0;
-  border-radius: 40rpx;
-  background: #202a34;
-  color: #fff;
-  font-size: 27rpx;
-}
-.settlement-card__refresh::after {
-  border: 0;
-}
-.settlement-card--notice {
-  padding-bottom: 36rpx;
+
+.settlement-note__icon {
+  width: 28rpx;
+  height: 28rpx;
+  flex-shrink: 0;
+  margin-top: 4rpx;
 }
 </style>
