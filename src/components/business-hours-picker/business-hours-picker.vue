@@ -32,7 +32,10 @@ const nextRangeId = ref(1)
 const innerValue = ref<BusinessHoursValue>(normalizeValue(props.modelValue))
 
 watch(() => props.modelValue, (value) => {
-  innerValue.value = normalizeValue(value)
+  const normalizedValue = normalizeValue(value)
+  if (!isSameValue(innerValue.value, normalizedValue)) {
+    innerValue.value = normalizedValue
+  }
   syncNextRangeId()
   ensureActiveRange()
 }, {
@@ -41,7 +44,10 @@ watch(() => props.modelValue, (value) => {
 })
 
 watch(innerValue, (value) => {
-  emit('update:modelValue', cloneValue(value))
+  const normalizedModelValue = normalizeValue(props.modelValue)
+  if (!isSameValue(value, normalizedModelValue)) {
+    emit('update:modelValue', cloneValue(value))
+  }
 }, { deep: true })
 
 const canAddRange = computed(() => {
@@ -74,6 +80,18 @@ function cloneValue(value: BusinessHoursValue): BusinessHoursValue {
     mode: value.mode,
     ranges: value.ranges.map(cloneRange),
   }
+}
+
+function isSameValue(left: BusinessHoursValue, right: BusinessHoursValue) {
+  return left.mode === right.mode
+    && left.ranges.length === right.ranges.length
+    && left.ranges.every((range, index) => {
+      const other = right.ranges[index]
+      return other
+        && range.id === other.id
+        && range.start === other.start
+        && range.end === other.end
+    })
 }
 
 function sortRanges(ranges: BusinessHoursRange[]) {

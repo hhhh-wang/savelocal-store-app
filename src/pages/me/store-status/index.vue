@@ -182,7 +182,7 @@ onMounted(() => {
 .store-status-page {
   position: relative;
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
   background: linear-gradient(180deg, #ffffff 0%, #f9f9fb 18%, #f5f6f9 100%);
 }
 
