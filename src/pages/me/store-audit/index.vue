@@ -90,7 +90,6 @@ const fieldIssues = computed<Record<string, string>>(() => {
     'legalPersonName',
     'legalPersonPhone',
     'storeAddress',
-    'businessLicenseCode',
   ]
   return Object.fromEntries(formFieldKeys.flatMap((key) => {
     const paths = auditIssueAliases[key] || []
@@ -123,7 +122,6 @@ const textFields: AuditMaterialsTextField[] = [
   { key: 'legalPersonName', label: '法人姓名', required: true, placeholder: '请输入法人姓名' },
   { key: 'legalPersonPhone', label: '法人电话', required: true, type: 'tel', placeholder: '请输入法人电话' },
   { key: 'storeAddress', label: '门店地址', required: true, placeholder: '请输入门店地址' },
-  { key: 'businessLicenseCode', label: '营业执照信用代码', required: true, placeholder: '请输入统一社会信用代码' },
 ]
 
 const documents = ref<AuditMaterialsDocumentItem[]>([
