@@ -1,16 +1,18 @@
 <script lang="ts" setup>
+import type { AssistantTabKey } from './message-shared'
 import type { MerchantMessage, MerchantMessageSummary } from '@/api/types/merchant-message'
 import { getMerchantMessages, getMerchantMessageSummary } from '@/api/merchant-message'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import afterSalesIcon from '@/static/icons/dashboard/after-sales.png'
 import allIcon from '@/static/icons/dashboard/all.png'
+import groupBuyRedemptionIcon from '@/static/icons/dashboard/group-buy-redemption.png'
 import merchantReconciliationIcon from '@/static/icons/dashboard/merchant-reconciliation.png'
 import orderManagementIcon from '@/static/icons/dashboard/order-management.png'
 import productManagementIcon from '@/static/icons/dashboard/product-management.png'
 import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
 import { useMerchantFoodStore } from '@/store'
+import { GROUP_BUY_REDEMPTION_PATH } from './group-buy-redemption/redemption'
 import { categoryForTab } from './message-shared'
-import type { AssistantTabKey } from './message-shared'
 
 defineOptions({
   name: 'Home',
@@ -28,7 +30,6 @@ definePage({
 })
 
 const merchantFoodStore = useMerchantFoodStore()
-const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 
 onShow(() => {
   merchantFoodStore.loadProfile(true).catch(() => {})
@@ -151,6 +152,12 @@ function openCustomerService() {
   })
 }
 
+function openGroupBuyRedemption() {
+  uni.navigateTo({
+    url: GROUP_BUY_REDEMPTION_PATH,
+  })
+}
+
 function handleMenuTap(item: DashboardMenuItem) {
   if (item.path) {
     uni.navigateTo({
@@ -173,9 +180,14 @@ function handleMenuTap(item: DashboardMenuItem) {
 
     <view class="dashboard-page__content">
       <view class="dashboard-header">
-        <text class="dashboard-header__title">
-          {{ storeName }}
-        </text>
+        <view
+          class="dashboard-header__icon-button"
+          hover-class="dashboard-header__icon-button--hover"
+          aria-label="团购核销"
+          @tap="openGroupBuyRedemption"
+        >
+          <image class="dashboard-header__redemption-icon" :src="groupBuyRedemptionIcon" mode="aspectFit" />
+        </view>
 
         <view class="dashboard-header__actions">
           <view class="dashboard-header__icon-button" hover-class="dashboard-header__icon-button--hover" @tap="openCustomerService">
@@ -330,17 +342,6 @@ function handleMenuTap(item: DashboardMenuItem) {
   padding: 10rpx 8rpx 0;
 }
 
-.dashboard-header__title {
-  flex: 1;
-  overflow: hidden;
-  color: #1f2023;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .dashboard-header__actions {
   display: flex;
   align-items: center;
@@ -365,6 +366,11 @@ function handleMenuTap(item: DashboardMenuItem) {
 .dashboard-header__icon {
   width: 42rpx;
   height: 42rpx;
+}
+
+.dashboard-header__redemption-icon {
+  width: 50rpx;
+  height: 50rpx;
 }
 
 .stats-card,

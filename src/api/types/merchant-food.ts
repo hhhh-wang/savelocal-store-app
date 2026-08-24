@@ -331,6 +331,7 @@ export interface MerchantFoodOrderDetail extends MerchantFoodOrder {
   memberMobileMask?: string
   buyerRemark?: string
   deliveryAddress?: string
+  voucherQrContent?: string
   fulfillment?: MerchantFoodOrderFulfillment
   timeline?: MerchantFoodOrderTimeline[]
   availableActions?: string[]

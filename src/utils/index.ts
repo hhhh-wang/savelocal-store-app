@@ -127,13 +127,13 @@ export function getEnvBaseUrl() {
   // const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'http://192.168.0.2:8090'
   // const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'http://192.168.0.2:8090'
 
-  const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://test-mini.shuomishengda.cn'
-  const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://test-mini.shuomishengda.cn'
-  const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://test-mini.shuomishengda.cn'
+  // const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://test-mini.shuomishengda.cn'
+  // const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://test-mini.shuomishengda.cn'
+  // const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://test-mini.shuomishengda.cn'
 
-  // const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://mini.shuomishengda.cn'
-  // const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://mini.shuomishengda.cn'
-  // const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://mini.shuomishengda.cn'
+  const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://mbiz.shuomishengda.cn'
+  const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://mbiz.shuomishengda.cn'
+  const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://mbiz.shuomishengda.cn'
 
   // 微信小程序端环境区分
   if (isMpWeixin) {

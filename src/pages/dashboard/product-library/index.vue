@@ -3,6 +3,7 @@ import type { MerchantFoodProduct } from '@/api/types/merchant-food'
 import {
   batchOffShelfMerchantFoodProducts,
   getMerchantFoodProductsPage,
+  updateMerchantFoodProductSort,
   updateMerchantFoodProductStatus,
 } from '@/api/merchant-food'
 import productImage from '@/static/images/item-image.png'
@@ -19,7 +20,7 @@ definePage({
   },
 })
 
-type ProductStatus = '上架' | '下架'
+type ProductStatus = '已上架' | '已下架' | '审批中' | '已驳回'
 type ProductAction = '上架' | '下架'
 interface ProductEditorPayload {
   name: string
@@ -38,30 +39,38 @@ interface ProductItem {
   unitLabel: string
   price: string
   status: ProductStatus
-  actionLabel: ProductAction
+  actionLabel: ProductAction | null
   image: string
+  sortNum: number
 }
 
-type HeaderAction = '批量下架' | '新建商品'
+type HeaderAction = '批量下架' | '排序' | '新建商品'
 
 const fallbackUrl = '/pages/dashboard/product-management/index'
 const merchantFoodStore = useMerchantFoodStore()
 const isBatchMode = ref(false)
+const isSortMode = ref(false)
+const isSavingSort = ref(false)
 const selectedProductIds = ref<number[]>([])
 
 const products = ref<ProductItem[]>([])
 
 function mapProduct(product: MerchantFoodProduct): ProductItem {
   const firstSpec = product.specs?.[0]
+  const isPending = product.auditStatus === '0'
+  const isRejected = product.auditStatus === '2'
+  const isOnSale = product.auditStatus === '1' && product.saleStatus === 'ON_SALE'
+
   return {
     id: product.productId,
     name: product.productName,
     stock: firstSpec?.stockQuantity || 0,
     unitLabel: product.productType === 'DEAL' ? '团购' : '外卖',
     price: String(firstSpec?.salePrice ?? '0.00'),
-    status: product.saleStatus === 'ON_SALE' ? '上架' : '下架',
-    actionLabel: product.saleStatus === 'ON_SALE' ? '下架' : '上架',
+    status: isPending ? '审批中' : isRejected ? '已驳回' : isOnSale ? '已上架' : '已下架',
+    actionLabel: isPending ? null : isOnSale ? '下架' : '上架',
     image: product.coverImageUrl || productImage,
+    sortNum: product.sortNum ?? 0,
   }
 }
 
@@ -113,6 +122,8 @@ function navigateToEditor(mode: 'create' | 'edit', product?: ProductItem) {
 
 async function handleHeaderAction(action: HeaderAction) {
   if (action === '批量下架') {
+    if (isSortMode.value)
+      return
     if (isBatchMode.value && selectedProductIds.value.length) {
       const storeId = await merchantFoodStore.ensureCurrentStoreId()
       await batchOffShelfMerchantFoodProducts(storeId, selectedProductIds.value)
@@ -128,6 +139,15 @@ async function handleHeaderAction(action: HeaderAction) {
       selectedProductIds.value = []
     }
 
+    return
+  }
+
+  if (action === '排序') {
+    if (isBatchMode.value)
+      return
+    isSortMode.value = !isSortMode.value
+    if (!isSortMode.value)
+      uni.showToast({ title: '排序已保存', icon: 'success' })
     return
   }
 
@@ -148,6 +168,9 @@ async function handleProductAction(product: ProductItem, action: 'detail' | 'sto
     return
   }
 
+  if (isSortMode.value)
+    return
+
   if (action === 'edit' || action === 'detail') {
     navigateToEditor('edit', product)
     return
@@ -162,7 +185,7 @@ async function handleProductAction(product: ProductItem, action: 'detail' | 'sto
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     await updateMerchantFoodProductStatus(storeId, product.id, action === '上架' ? 'ON_SALE' : 'OFF_SHELF')
     await loadProducts()
-    uni.showToast({ title: `${action}成功`, icon: 'success' })
+    uni.showToast({ title: action === '上架' ? '已提交审批' : '下架成功', icon: 'success' })
     return
   }
 
@@ -178,6 +201,33 @@ async function handleProductAction(product: ProductItem, action: 'detail' | 'sto
     title: `${product.name}${actionTextMap[action]}待接入`,
     icon: 'none',
   })
+}
+
+async function moveProduct(productIndex: number, offset: -1 | 1) {
+  if (isSavingSort.value)
+    return
+  const targetIndex = productIndex + offset
+  if (targetIndex < 0 || targetIndex >= products.value.length)
+    return
+
+  const previousProducts = [...products.value]
+  const reorderedProducts = [...products.value]
+  const [movedProduct] = reorderedProducts.splice(productIndex, 1)
+  reorderedProducts.splice(targetIndex, 0, movedProduct)
+  products.value = reorderedProducts
+  isSavingSort.value = true
+
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await updateMerchantFoodProductSort(storeId, reorderedProducts.map(product => product.id))
+  }
+  catch {
+    products.value = previousProducts
+    uni.showToast({ title: '排序保存失败，请重试', icon: 'none' })
+  }
+  finally {
+    isSavingSort.value = false
+  }
 }
 
 function toggleProductSelection(productId: number) {
@@ -224,9 +274,10 @@ onShow(() => {
           {{ isBatchMode ? `已选择${selectedCount}个` : `${totalCount}个商品` }}
         </text>
 
-        <view class="product-library-toolbar__actions">
-          <view
-            class="product-library-toolbar__button"
+          <view class="product-library-toolbar__actions">
+            <view
+              v-if="!isSortMode"
+              class="product-library-toolbar__button"
             hover-class="product-library-toolbar__button--hover"
             :class="{ 'product-library-toolbar__button--active': isBatchMode }"
             @tap="handleHeaderAction('批量下架')"
@@ -238,6 +289,16 @@ onShow(() => {
             v-if="!isBatchMode"
             class="product-library-toolbar__button"
             hover-class="product-library-toolbar__button--hover"
+            :class="{ 'product-library-toolbar__button--active': isSortMode }"
+            @tap="handleHeaderAction('排序')"
+          >
+            {{ isSortMode ? '完成排序' : '排序' }}
+          </view>
+
+          <view
+            v-if="!isBatchMode && !isSortMode"
+            class="product-library-toolbar__button"
+            hover-class="product-library-toolbar__button--hover"
             @tap="handleHeaderAction('新建商品')"
           >
             新建商品
@@ -247,10 +308,10 @@ onShow(() => {
 
       <view class="product-library-list">
         <view
-          v-for="product in products"
+          v-for="(product, productIndex) in products"
           :key="product.id"
           class="product-item"
-          :class="{ 'product-item--batch': isBatchMode }"
+          :class="{ 'product-item--batch': isBatchMode, 'product-item--sort': isSortMode }"
           hover-class="product-item--hover"
           @tap="handleProductAction(product, 'detail')"
         >
@@ -298,13 +359,41 @@ onShow(() => {
                 <text
                   class="product-item__status"
                   :class="{
-                    'product-item__status--offline': product.status === '下架',
+                    'product-item__status--offline': product.status === '已下架',
+                    'product-item__status--pending': product.status === '审批中',
+                    'product-item__status--rejected': product.status === '已驳回',
                   }"
                 >
-                  已{{ product.status }}
+                  {{ product.status }}
                 </text>
 
-                <view v-if="!isBatchMode" class="product-item__actions">
+                <view v-if="isSortMode" class="product-item__sort-controls">
+                  <text class="product-item__sort-index">
+                    {{ productIndex + 1 }}
+                  </text>
+
+                  <view
+                    class="product-item__sort-button"
+                    :class="{ 'product-item__sort-button--disabled': productIndex === 0 || isSavingSort }"
+                    hover-class="product-item__action-button--hover"
+                    title="上移"
+                    @tap.stop="moveProduct(productIndex, -1)"
+                  >
+                    ↑
+                  </view>
+
+                  <view
+                    class="product-item__sort-button"
+                    :class="{ 'product-item__sort-button--disabled': productIndex === products.length - 1 || isSavingSort }"
+                    hover-class="product-item__action-button--hover"
+                    title="下移"
+                    @tap.stop="moveProduct(productIndex, 1)"
+                  >
+                    ↓
+                  </view>
+                </view>
+
+                <view v-else-if="!isBatchMode" class="product-item__actions">
                   <view
                     class="product-item__action-button"
                     hover-class="product-item__action-button--hover"
@@ -322,6 +411,7 @@ onShow(() => {
                   </view>
 
                   <view
+                    v-if="product.actionLabel"
                     class="product-item__action-button"
                     hover-class="product-item__action-button--hover"
                     @tap.stop="handleProductAction(product, product.actionLabel)"
@@ -453,6 +543,10 @@ onShow(() => {
   align-items: center;
 }
 
+.product-item--sort {
+  align-items: center;
+}
+
 .product-item--hover {
   opacity: 0.94;
 }
@@ -581,6 +675,14 @@ onShow(() => {
 }
 
 .product-item__status--offline {
+  color: #7f848d;
+}
+
+.product-item__status--pending {
+  color: #ff8b1f;
+}
+
+.product-item__status--rejected {
   color: #ff4949;
 }
 
@@ -590,6 +692,42 @@ onShow(() => {
   justify-content: flex-end;
   gap: 16rpx;
   flex-wrap: wrap;
+}
+
+.product-item__sort-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+
+.product-item__sort-index {
+  min-width: 40rpx;
+  color: #7f848d;
+  font-size: 28rpx;
+  text-align: center;
+}
+
+.product-item__sort-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60rpx;
+  height: 60rpx;
+  border: 2rpx solid #d5d7dc;
+  border-radius: 10rpx;
+  color: #4b4f56;
+  font-size: 34rpx;
+  line-height: 1;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.product-item__sort-button--disabled {
+  color: #c8cbd0;
+  border-color: #eceef1;
+  pointer-events: none;
 }
 
 .product-item__price {

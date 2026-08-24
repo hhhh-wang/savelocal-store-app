@@ -159,7 +159,12 @@ function handleClose() {
 }
 
 function openWithdrawalOverview() {
-  uni.navigateTo({ url: WITHDRAWAL_PATHS.overview })
+  const tradeScene = activeSettlementTab.value === 'group'
+    ? 'FOOD_DEAL'
+    : activeSettlementTab.value === 'onsite'
+      ? 'FOOD_ONSITE'
+      : 'STORE_BUYOUT'
+  uni.navigateTo({ url: `${WITHDRAWAL_PATHS.overview}?tradeScene=${tradeScene}` })
 }
 
 function sceneParam(tab: SettlementTab) {

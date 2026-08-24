@@ -234,8 +234,9 @@ onLoad((options) => {
         </view>
       </view>
 
-      <view v-if="!selectMode" class="menu-album-actions">
+      <view class="menu-album-actions">
         <view
+          v-if="!selectMode"
           class="menu-album-actions__button menu-album-actions__button--delete"
           :class="{ 'menu-album-actions__button--disabled': !selectedImageIds.length || isDeleting }"
           hover-class="menu-album-actions__button--hover"
@@ -247,9 +248,6 @@ onLoad((options) => {
         <view class="menu-album-actions__button menu-album-actions__button--upload" hover-class="menu-album-actions__button--hover" @tap="handleUpload">
           上传图片
         </view>
-      </view>
-      <view v-else class="menu-album-select-bar">
-        仅展示审核通过图片
       </view>
     </view>
   </view>
@@ -431,18 +429,5 @@ onLoad((options) => {
 
 .menu-album-actions__button--hover {
   opacity: 0.86;
-}
-
-.menu-album-select-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 84rpx;
-  margin-top: 22rpx;
-  border-radius: 10rpx;
-  color: #6f7681;
-  font-size: 28rpx;
-  background: #ffffff;
-  box-shadow: inset 0 0 0 2rpx #ececec;
 }
 </style>

@@ -91,6 +91,10 @@ export function batchOffShelfMerchantFoodProducts(storeId: number, productIds: n
   return http.put<void>(`${storeBase}/${storeId}/products/batch-off-shelf`, { productIds })
 }
 
+export function updateMerchantFoodProductSort(storeId: number, productIds: number[]) {
+  return http.put<void>(`${storeBase}/${storeId}/products/sort`, { productIds })
+}
+
 export function getMerchantFoodOrdersPage(params: MerchantFoodPageParams & {
   storeId: number
   scene?: MerchantFoodScene
@@ -108,6 +112,10 @@ export function getMerchantFoodOrderDetail(scene: Exclude<MerchantFoodScene, 'AL
 
 export function getMerchantFoodOrderContact(scene: Exclude<MerchantFoodScene, 'ALL'>, orderId: number) {
   return http.get<MerchantFoodOrderContactResult>(`/merchant/food/orders/${scene}/${orderId}/contact`)
+}
+
+export function redeemMerchantFoodGroupBuy(payload: { storeId: number, voucherCode: string }) {
+  return http.post<MerchantFoodOrderDetail>('/merchant/food/orders/group-buy/redemptions', payload)
 }
 
 export function getMerchantFoodRefundsPage(params: MerchantFoodPageParams & {
