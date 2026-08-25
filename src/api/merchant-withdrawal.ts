@@ -75,8 +75,23 @@ export interface MerchantWithdrawApplyPayload {
   remark?: string
 }
 
+export interface MerchantWithdrawTransferConfirmQr {
+  qrCode: string
+  expiresIn: number
+  storeName?: string
+  tradeScene?: string
+  availableAmount?: number
+}
+
 export function getMerchantWithdrawContext(storeId: number, tradeScene = 'STORE_BUYOUT') {
   return http.get<MerchantWithdrawContext>('/merchant/finance/withdrawals/context', {
+    storeId,
+    tradeScene,
+  })
+}
+
+export function createMerchantWithdrawTransferConfirmQr(storeId: number, tradeScene = 'STORE_BUYOUT') {
+  return http.get<MerchantWithdrawTransferConfirmQr>('/merchant/finance/withdrawals/transfer-confirm-qr', {
     storeId,
     tradeScene,
   })
