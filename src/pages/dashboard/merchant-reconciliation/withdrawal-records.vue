@@ -63,9 +63,9 @@ function statusLabel(status?: string) {
     0: '待审核',
     1: '审核驳回',
     2: '待打款',
-    3: '分账中',
-    4: '分账成功',
-    5: '分账失败',
+    3: '转账中',
+    4: '转账成功',
+    5: '转账失败',
   }[String(status || '')] || '处理中'
 }
 
@@ -94,8 +94,8 @@ function profitSharingStatusLabel(status?: string) {
   return {
     PENDING: '待处理',
     PROCESSING: '处理中',
-    SUCCESS: '分账成功',
-    FAILED: '分账失败',
+    SUCCESS: '转账成功',
+    FAILED: '转账失败',
   }[String(status || '')] || '处理中'
 }
 
@@ -135,11 +135,11 @@ function showAgreement() {
         <view class="withdrawal-record__main">
           <view class="withdrawal-record__destination">
             <text>{{ record.withdrawNo || '提现记录' }}</text>
-            <text>{{ record.storeName || '当前门店' }} · {{ sceneLabel(record.tradeScene) }}</text>
+            <text>{{ record.storeNameSnapshot || '当前门店' }} · {{ sceneLabel(record.tradeScene) }}</text>
           </view>
           <text class="withdrawal-record__amount">¥ {{ formatAmount(record.payableAmount) }}</text>
         </view>
-        <text class="withdrawal-record__account">{{ record.profitSharingReceiverName || record.settlementNameSnapshot || '微信分账接收方' }}</text>
+        <text class="withdrawal-record__account">{{ record.profitSharingReceiverName || record.settlementNameSnapshot || '微信收款用户' }}</text>
         <view class="withdrawal-record__meta">
           <text>{{ record.transferFinishTime || record.transferTime || record.createTime || '-' }}</text>
           <text class="withdrawal-record__status" :class="`withdrawal-record__status--${statusTone(record.withdrawStatus)}`">{{ statusLabel(record.withdrawStatus) }}</text>
@@ -172,15 +172,18 @@ function showAgreement() {
             <view class="withdrawal-detail-row">
               <text>状态</text><text :class="`withdrawal-record__status--${statusTone(selectedWithdrawal.withdrawStatus)}`">{{ statusLabel(selectedWithdrawal.withdrawStatus) }}</text>
             </view>
+            <view v-if="selectedWithdrawal.wxTransferBillNo" class="withdrawal-detail-row">
+              <text>微信转账单号</text><text>{{ selectedWithdrawal.wxTransferBillNo }}</text>
+            </view>
             <view class="withdrawal-detail-row">
-              <text>分账接收方</text><text>{{ selectedWithdrawal.profitSharingReceiverName || selectedWithdrawal.settlementNameSnapshot || '-' }}</text>
+              <text>转账收款方</text><text>{{ selectedWithdrawal.profitSharingReceiverName || selectedWithdrawal.settlementNameSnapshot || '-' }}</text>
             </view>
             <view v-if="selectedWithdrawal.transferFailReason" class="withdrawal-detail-error">
               {{ selectedWithdrawal.transferFailReason }}
             </view>
           </view>
           <view class="withdrawal-detail-section-title">
-            订单分账明细
+            原结算明细
           </view>
           <view v-for="detail in selectedDetails" :key="detail.detailId" class="withdrawal-detail-item">
             <view class="withdrawal-detail-item__top">
@@ -190,7 +193,7 @@ function showAgreement() {
               <text>{{ sceneLabel(detail.tradeScene) }}</text><text>{{ profitSharingStatusLabel(detail.profitSharingStatus) }}</text>
             </view>
             <view v-if="detail.wxProfitSharingOrderId" class="withdrawal-detail-item__sub">
-              微信分账单号：{{ detail.wxProfitSharingOrderId }}
+              原分账单号：{{ detail.wxProfitSharingOrderId }}
             </view>
             <view v-if="detail.profitSharingFailReason" class="withdrawal-detail-error">
               {{ detail.profitSharingFailReason }}

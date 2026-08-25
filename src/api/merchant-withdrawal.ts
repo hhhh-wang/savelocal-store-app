@@ -15,6 +15,7 @@ export interface MerchantWithdrawContext {
   receiverName?: string
   receiverBindStatus?: string
   receiverStatus?: string
+  transferAccountReady?: boolean
 }
 
 export interface MerchantWithdrawApply {
@@ -29,14 +30,18 @@ export interface MerchantWithdrawApply {
   profitSharingReceiverName?: string
   withdrawStatus: string
   transferFailReason?: string
-  storeName?: string
+  storeNameSnapshot?: string
   merchantName?: string
   serviceFee?: number
   settlementNameSnapshot?: string
   transferTime?: string
   transferFinishTime?: string
+  wxTransferBillNo?: string
   settlementCount?: number
   createTime?: string
+  transferPackageInfo?: string
+  transferMchId?: string
+  transferAppId?: string
 }
 
 export interface MerchantWithdrawApplyDetail {
@@ -81,11 +86,14 @@ export function applyMerchantWithdraw(payload: MerchantWithdrawApplyPayload) {
   return http.post<MerchantWithdrawApply>('/merchant/finance/withdrawals', payload)
 }
 
-export function refreshMerchantWithdrawProfitSharing(withdrawId: number) {
+export function refreshMerchantWithdrawTransfer(withdrawId: number) {
   return http.post<MerchantWithdrawApply>(
-    `/merchant/finance/withdrawals/${withdrawId}/profit-sharing`,
+    `/merchant/finance/withdrawals/${withdrawId}/transfer`,
   )
 }
+
+/** @deprecated compatibility alias for older pages. */
+export const refreshMerchantWithdrawProfitSharing = refreshMerchantWithdrawTransfer
 
 export function listMerchantWithdrawals(storeId: number, pageNum = 1, pageSize = 20, tradeScene?: string) {
   return http.get<MerchantWithdrawPage>('/merchant/finance/withdrawals/page', {

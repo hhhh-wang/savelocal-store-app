@@ -3,7 +3,7 @@ import type { MerchantWithdrawContext } from '@/api/merchant-withdrawal'
 import {
   applyMerchantWithdraw,
   getMerchantWithdrawContext,
-  refreshMerchantWithdrawProfitSharing,
+  refreshMerchantWithdrawTransfer,
 } from '@/api/merchant-withdrawal'
 import { useMerchantFoodStore } from '@/store'
 import WithdrawalPageHeader from './components/withdrawal-page-header.vue'
@@ -29,8 +29,9 @@ const totalAmount = computed(() => availableAmount.value.toLocaleString('en-US',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 }))
-const receiverReady = computed(() => withdrawContext.value?.receiverBindStatus === 'BOUND'
-  && withdrawContext.value?.receiverStatus === '0')
+const receiverReady = computed(() => withdrawContext.value?.transferAccountReady === true
+  || (withdrawContext.value?.receiverBindStatus === 'BOUND'
+    && withdrawContext.value?.receiverStatus === '0'))
 const processingWithdrawId = computed(() => withdrawContext.value?.processingWithdrawId)
 
 onLoad((options) => {
@@ -70,7 +71,7 @@ function confirmWithdrawal(content: string) {
     uni.showModal({
       title: '确认提现',
       content,
-      confirmText: '确认分账',
+      confirmText: '确认转账',
       success: result => resolve(result.confirm),
       fail: () => resolve(false),
     })
@@ -85,15 +86,44 @@ function wait(milliseconds: number) {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
 }
 
+async function launchTransferConfirmation(result: Awaited<ReturnType<typeof applyMerchantWithdraw>>) {
+  if (!result.transferPackageInfo)
+    return
+  // #ifdef H5
+  const bridge = (globalThis as { WeixinJSBridge?: { invoke: (name: string, params: Record<string, string>, callback: (value: { err_msg?: string }) => void) => void } }).WeixinJSBridge
+  if (!bridge) {
+    uni.showModal({ title: '请在微信中打开', content: '商家转账收款确认页需要在微信客户端中打开。', showCancel: false })
+    return
+  }
+  await new Promise<void>((resolve) => {
+    bridge.invoke('requestMerchantTransfer', {
+      mchId: result.transferMchId || '',
+      appId: result.transferAppId || '',
+      package: result.transferPackageInfo || '',
+    }, response => {
+      if (response?.err_msg === 'requestMerchantTransfer:ok')
+        uni.showToast({ title: '已打开收款确认页', icon: 'none' })
+      else if (response?.err_msg === 'requestMerchantTransfer:cancel')
+        uni.showToast({ title: '已取消收款', icon: 'none' })
+      else if (response?.err_msg)
+        uni.showToast({ title: '收款确认页打开失败', icon: 'none' })
+      resolve()
+    })
+  })
+  // #endif
+}
+
 async function refreshProcessingWithdrawal(result: Awaited<ReturnType<typeof applyMerchantWithdraw>>) {
   let latest = result
   for (let attempt = 0; attempt < 3 && latest.withdrawStatus === '3' && !latest.transferFailReason; attempt += 1) {
     await wait((attempt + 1) * 800)
     try {
-      latest = await refreshMerchantWithdrawProfitSharing(latest.withdrawId)
+      if (latest.transferPackageInfo)
+        return latest
+      latest = await refreshMerchantWithdrawTransfer(latest.withdrawId)
     }
     catch (error) {
-      console.warn('刷新微信分账结果失败:', error)
+      console.warn('刷新微信商家转账结果失败:', error)
       break
     }
   }
@@ -111,19 +141,20 @@ async function submitWithdrawal() {
     return
 
   if (processingWithdrawId.value) {
-    const confirmed = await confirmWithdrawal('当前已有提现分账处理中，是否重试？')
+    const confirmed = await confirmWithdrawal('当前已有提现转账处理中，是否重试？')
     if (!confirmed)
       return
     submitting.value = true
     try {
-      const result = await refreshMerchantWithdrawProfitSharing(processingWithdrawId.value)
+      const result = await refreshMerchantWithdrawTransfer(processingWithdrawId.value)
+      await launchTransferConfirmation(result)
       if (result.withdrawStatus === '4') {
-        uni.showToast({ title: '提现分账成功', icon: 'success' })
+        uni.showToast({ title: '提现转账成功', icon: 'success' })
       }
       else {
         uni.showModal({
-          title: '分账处理中',
-          content: result.transferFailReason || '分账仍未完成，请稍后重试。',
+          title: result.transferPackageInfo ? '请确认收款' : '转账处理中',
+          content: result.transferPackageInfo ? '请在微信收款确认页完成收款。' : (result.transferFailReason || '转账仍未完成，请稍后重试。'),
           showCancel: false,
         })
       }
@@ -140,8 +171,8 @@ async function submitWithdrawal() {
 
   if (!receiverReady.value) {
     uni.showModal({
-      title: '请先绑定分账账户',
-      content: '当前门店尚未绑定可用的微信分账接收方，绑定后才能提现。',
+      title: '请先绑定微信收款账户',
+      content: '当前商户尚未绑定可用于商家转账的微信OpenID，绑定后才能提现。',
       confirmText: '去绑定',
       success: (result) => {
         if (result.confirm)
@@ -155,8 +186,8 @@ async function submitWithdrawal() {
     return
   }
 
-  const receiver = `${context.receiverName || '微信分账用户'} ${context.receiverAccountMasked || ''}`.trim()
-  const confirmed = await confirmWithdrawal(`将 ¥${totalAmount.value} 分账至 ${receiver}，是否继续？`)
+  const receiver = `${context.receiverName || '微信收款用户'} ${context.receiverAccountMasked || ''}`.trim()
+  const confirmed = await confirmWithdrawal(`将 ¥${totalAmount.value} 转账至 ${receiver}，是否继续？`)
   if (!confirmed)
     return
 
@@ -167,14 +198,15 @@ async function submitWithdrawal() {
       tradeScene: context.tradeScene,
       applyAmount: availableAmount.value,
     })
+    await launchTransferConfirmation(submitted)
     const result = await refreshProcessingWithdrawal(submitted)
     if (result.withdrawStatus === '4') {
-      uni.showToast({ title: '提现分账成功', icon: 'success' })
+      uni.showToast({ title: '提现转账成功', icon: 'success' })
     }
     else {
       uni.showModal({
-        title: '分账处理中',
-        content: result.transferFailReason || '提现已提交至微信，处理结果请稍后查看。',
+        title: result.transferPackageInfo ? '请确认收款' : '转账处理中',
+        content: result.transferPackageInfo ? '请在微信收款确认页完成收款。' : (result.transferFailReason || '提现已提交至微信，处理结果请稍后查看。'),
         showCancel: false,
       })
     }
@@ -208,8 +240,8 @@ async function submitWithdrawal() {
         <text class="balance-panel__label">总金额（元）</text>
         <text class="balance-panel__amount">{{ loading ? '--' : totalAmount }}</text>
         <text class="balance-panel__available">可提现金额（元）：{{ loading ? '--' : totalAmount }}</text>
-        <text v-if="withdrawContext?.receiverId" class="balance-panel__receiver">
-          到账账户：{{ withdrawContext.receiverName || '微信分账用户' }} {{ withdrawContext.receiverAccountMasked || '' }}
+        <text v-if="withdrawContext?.transferAccountReady || withdrawContext?.receiverId" class="balance-panel__receiver">
+          到账账户：{{ withdrawContext.receiverName || '微信收款用户' }} {{ withdrawContext.receiverAccountMasked || '' }}
         </text>
 
         <button
@@ -222,7 +254,7 @@ async function submitWithdrawal() {
           @keyup.enter="submitWithdrawal"
           @tap="submitWithdrawal"
         >
-          {{ processingWithdrawId ? '重试分账' : '提现' }}
+          {{ processingWithdrawId ? '重试转账' : '提现' }}
         </button>
       </view>
     </view>

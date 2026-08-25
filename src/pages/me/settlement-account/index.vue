@@ -1,11 +1,10 @@
 <script lang="ts" setup>
-import type { SettlementAccountType } from './settlement-account'
 import { getMerchantProfitSharingReceiver } from '@/api/merchant-profit-sharing'
 import { useMerchantFoodStore } from '@/store'
 import {
-  merchantAccountPath,
   personalAccountPath,
-  resolveBoundAccountType,
+  isLegacyMerchantBound,
+  isPersonalWechatBound,
 } from './settlement-account'
 
 defineOptions({ name: 'SettlementAccount' })
@@ -22,7 +21,8 @@ const loading = ref(false)
 const receiver = ref<Awaited<ReturnType<typeof getMerchantProfitSharingReceiver>>>()
 
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '当前门店')
-const boundAccountType = computed(() => resolveBoundAccountType(receiver.value))
+const personalWechatBound = computed(() => isPersonalWechatBound(receiver.value))
+const legacyMerchantBound = computed(() => isLegacyMerchantBound(receiver.value))
 
 onShow(() => {
   void loadAccountStatus()
@@ -42,19 +42,19 @@ async function loadAccountStatus() {
   }
 }
 
-function getOptionStatus(type: SettlementAccountType) {
+function getOptionStatus() {
   if (loading.value)
     return '查询中'
-  if (boundAccountType.value === type)
+  if (personalWechatBound.value)
     return '当前使用'
-  if (boundAccountType.value)
-    return '需先解绑当前方式'
+  if (legacyMerchantBound.value)
+    return '需运营解绑'
   return '未绑定'
 }
 
-function openAccount(type: SettlementAccountType) {
+function openAccount() {
   uni.navigateTo({
-    url: type === 'personal' ? personalAccountPath : merchantAccountPath,
+    url: personalAccountPath,
   })
 }
 </script>
@@ -70,15 +70,15 @@ function openAccount(type: SettlementAccountType) {
     <view class="settlement-content">
       <view class="settlement-intro">
         <text class="settlement-intro__eyebrow">{{ storeName }}</text>
-        <text class="settlement-intro__title">选择结算方式</text>
-        <text class="settlement-intro__desc">每个门店仅能绑定一种方式，用于接收微信支付分账款项。</text>
+        <text class="settlement-intro__title">绑定收款账户</text>
+        <text class="settlement-intro__desc">使用个人微信授权，用于接收商家转账提现。</text>
       </view>
 
       <view class="settlement-options">
         <view
           class="settlement-option"
           hover-class="settlement-option--hover"
-          @tap="openAccount('personal')"
+          @tap="openAccount"
         >
           <view class="settlement-option__icon settlement-option__icon--personal">
             <view class="i-carbon-user-avatar-filled settlement-option__icon-glyph" />
@@ -88,46 +88,23 @@ function openAccount(type: SettlementAccountType) {
               <text class="settlement-option__title">个人微信</text>
               <view
                 class="settlement-option__status"
-                :class="{ 'settlement-option__status--active': boundAccountType === 'personal' }"
+                :class="{ 'settlement-option__status--active': personalWechatBound }"
               >
-                <view v-if="boundAccountType === 'personal'" class="i-carbon-checkmark settlement-option__check" />
-                <text>{{ getOptionStatus('personal') }}</text>
+                <view v-if="personalWechatBound" class="i-carbon-checkmark settlement-option__check" />
+                <text>{{ getOptionStatus() }}</text>
               </view>
             </view>
             <text class="settlement-option__desc">由收款人扫码授权，无需手动填写 OpenID</text>
-            <text v-if="boundAccountType === 'personal'" class="settlement-option__account">
+            <text v-if="personalWechatBound" class="settlement-option__account">
               {{ receiver?.receiverName || '微信收款人' }} · {{ receiver?.receiverAccountMasked || '已授权' }}
+            </text>
+            <text v-else-if="legacyMerchantBound" class="settlement-option__account settlement-option__account--warning">
+              当前为历史商户号绑定，请联系平台运营解绑后再绑定个人微信
             </text>
           </view>
           <view class="i-carbon-chevron-right settlement-option__arrow" />
         </view>
 
-        <view
-          class="settlement-option"
-          hover-class="settlement-option--hover"
-          @tap="openAccount('merchant')"
-        >
-          <view class="settlement-option__icon settlement-option__icon--merchant">
-            <view class="i-carbon-store settlement-option__icon-glyph" />
-          </view>
-          <view class="settlement-option__body">
-            <view class="settlement-option__heading">
-              <text class="settlement-option__title">微信支付商户号</text>
-              <view
-                class="settlement-option__status"
-                :class="{ 'settlement-option__status--active': boundAccountType === 'merchant' }"
-              >
-                <view v-if="boundAccountType === 'merchant'" class="i-carbon-checkmark settlement-option__check" />
-                <text>{{ getOptionStatus('merchant') }}</text>
-              </view>
-            </view>
-            <text class="settlement-option__desc">适用于已开通微信支付的企业、个体户或小微商户</text>
-            <text v-if="boundAccountType === 'merchant'" class="settlement-option__account">
-              {{ receiver?.receiverName || '微信支付商户' }} · {{ receiver?.receiverAccountMasked || '已绑定' }}
-            </text>
-          </view>
-          <view class="i-carbon-chevron-right settlement-option__arrow" />
-        </view>
       </view>
 
       <view class="settlement-note">
@@ -232,11 +209,6 @@ function openAccount(type: SettlementAccountType) {
 .settlement-option__icon--personal {
   background: #e9f7f0;
   color: #12845c;
-}
-
-.settlement-option__icon--merchant {
-  background: #fff3dc;
-  color: #a76700;
 }
 
 .settlement-option__icon-glyph {

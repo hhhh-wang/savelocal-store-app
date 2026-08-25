@@ -17,17 +17,6 @@ export interface MerchantProfitSharingBindQr {
   expiresIn: number
 }
 
-export interface MerchantProfitSharingBindRequest {
-  storeId: number
-  tradeScene?: string
-  receiverType: 'MERCHANT_ID' | 'PERSONAL_OPENID'
-  receiverAccount?: string
-  receiverName?: string
-  relationType?: string
-  customRelation?: string
-  remark?: string
-}
-
 export function getMerchantProfitSharingReceiver(storeId: number, tradeScene = 'STORE_BUYOUT') {
   return http.get<MerchantProfitSharingReceiver>('/merchant/finance/profit-sharing-receiver', {
     storeId,
@@ -40,8 +29,4 @@ export function createMerchantProfitSharingBindQr(storeId: number, tradeScene = 
     storeId,
     tradeScene,
   })
-}
-
-export function bindMerchantProfitSharingReceiver(data: MerchantProfitSharingBindRequest) {
-  return http.post<MerchantProfitSharingReceiver>('/merchant/finance/profit-sharing-receiver', data)
 }

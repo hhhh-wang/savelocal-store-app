@@ -274,10 +274,10 @@ onShow(() => {
           {{ isBatchMode ? `已选择${selectedCount}个` : `${totalCount}个商品` }}
         </text>
 
-          <view class="product-library-toolbar__actions">
-            <view
-              v-if="!isSortMode"
-              class="product-library-toolbar__button"
+        <view class="product-library-toolbar__actions">
+          <view
+            v-if="!isSortMode"
+            class="product-library-toolbar__button"
             hover-class="product-library-toolbar__button--hover"
             :class="{ 'product-library-toolbar__button--active': isBatchMode }"
             @tap="handleHeaderAction('批量下架')"

@@ -52,6 +52,7 @@ interface SelectedAlbumImage {
 const fallbackUrl = '/pages/dashboard/product-library/index'
 const merchantFoodStore = useMerchantFoodStore()
 const productId = ref<number>()
+const productSortNum = ref(0)
 const submitting = ref(false)
 const specOptions = ['锅', '包', '例', '袋', '1升桶', '玻璃瓶'] as const
 let nextSpecKey = 1
@@ -113,6 +114,7 @@ function applyFormValues(values: ProductEditorForm) {
 }
 
 function applyProduct(product: MerchantFoodProduct) {
+  productSortNum.value = product.sortNum ?? 0
   applyFormValues({
     name: product.productName,
     imageText: product.coverImageUrl ? '已选择图片' : '',
@@ -284,6 +286,7 @@ async function handleSubmit() {
       productDesc: form.specs.find(spec => spec.display)?.detailItems[0]?.trim() || '',
       packingFee: Number(form.packingFee || 0),
       singleNoDelivery: form.kind === 'takeout' && form.singleNoDelivery,
+      sortNum: productSortNum.value,
       specs: buildSpecPayloads(form.specs),
     }
     if (editorMode.value === 'create') {

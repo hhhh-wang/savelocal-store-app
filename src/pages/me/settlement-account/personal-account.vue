@@ -4,7 +4,7 @@ import {
   getMerchantProfitSharingReceiver,
 } from '@/api/merchant-profit-sharing'
 import { useMerchantFoodStore } from '@/store'
-import { resolveBoundAccountType } from './settlement-account'
+import { isLegacyMerchantBound, isPersonalWechatBound } from './settlement-account'
 
 defineOptions({ name: 'SettlementPersonalAccount' })
 
@@ -22,9 +22,8 @@ const receiver = ref<Awaited<ReturnType<typeof getMerchantProfitSharingReceiver>
 const qr = ref<Awaited<ReturnType<typeof createMerchantProfitSharingBindQr>>>()
 
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || qr.value?.storeName || '当前门店')
-const boundAccountType = computed(() => resolveBoundAccountType(receiver.value))
-const isPersonalBound = computed(() => boundAccountType.value === 'personal')
-const isMerchantBound = computed(() => boundAccountType.value === 'merchant')
+const isPersonalBound = computed(() => isPersonalWechatBound(receiver.value))
+const isLegacyMerchantBoundValue = computed(() => isLegacyMerchantBound(receiver.value))
 
 onShow(() => {
   void loadPage()
@@ -35,7 +34,7 @@ async function loadPage() {
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     receiver.value = await getMerchantProfitSharingReceiver(storeId)
-    if (!boundAccountType.value)
+    if (!isPersonalBound.value && !isLegacyMerchantBoundValue.value)
       await refreshQr(storeId)
     else
       qr.value = undefined
@@ -49,7 +48,7 @@ async function loadPage() {
 }
 
 async function refreshQr(storeId = merchantFoodStore.currentStoreId) {
-  if (!storeId || qrLoading.value || boundAccountType.value)
+  if (!storeId || qrLoading.value || isPersonalBound.value || isLegacyMerchantBoundValue.value)
     return
   qrLoading.value = true
   try {
@@ -93,9 +92,6 @@ async function refreshQr(storeId = merchantFoodStore.currentStoreId) {
         <text v-if="isPersonalBound" class="account-status__account">
           {{ receiver?.receiverName || '微信收款人' }} · {{ receiver?.receiverAccountMasked || '已授权' }}
         </text>
-        <text v-else-if="isMerchantBound" class="account-status__warning">
-          当前门店已绑定微信支付商户号，不能同时绑定个人微信。
-        </text>
         <text v-else-if="receiver?.syncFailReason" class="account-status__error">
           上次绑定失败：{{ receiver.syncFailReason }}
         </text>
@@ -105,10 +101,10 @@ async function refreshQr(storeId = merchantFoodStore.currentStoreId) {
         <text>正在加载账户信息</text>
       </view>
 
-      <view v-else-if="isMerchantBound" class="account-panel account-panel--notice">
+      <view v-else-if="isLegacyMerchantBoundValue" class="account-panel account-panel--notice">
         <view class="i-carbon-locked account-panel__notice-icon" />
-        <text class="account-panel__title">暂时无法绑定</text>
-        <text class="account-panel__desc">如需改用个人微信，请联系平台运营解绑当前商户号后再操作。</text>
+        <text class="account-panel__title">暂时无法绑定个人微信</text>
+        <text class="account-panel__desc">当前门店存在历史商户号绑定，请联系平台运营解绑后，再绑定个人微信用于商家转账提现。</text>
       </view>
 
       <view v-else-if="!isPersonalBound" class="account-panel account-panel--qr">
@@ -138,7 +134,7 @@ async function refreshQr(storeId = merchantFoodStore.currentStoreId) {
       <view v-else class="account-panel account-panel--notice">
         <view class="i-carbon-checkmark-filled account-panel__notice-icon account-panel__notice-icon--success" />
         <text class="account-panel__title">绑定已完成</text>
-        <text class="account-panel__desc">符合条件的订单会按分账规则结算到该个人微信。</text>
+        <text class="account-panel__desc">提现时将通过微信商家转账到该个人微信。</text>
         <text class="account-panel__hint">如需更换收款方式，请联系平台运营解绑。</text>
       </view>
     </view>
