@@ -53,7 +53,8 @@ function buildBillGroups(bills: MerchantFoodCommissionBill[]) {
     const timeValue = resolveBillTime(bill)
     const date = formatGroupDate(timeValue)
     const group = groups.get(date) || { timeValue, expense: 0, income: 0, items: [] }
-    const fee = Number(bill.platformTechFeeAmount || 0)
+    // 商家账单的技术服务费按商家让利比例的实际扣减金额展示。
+    const fee = Number(bill.benefitAmount || 0)
     const settlement = Number(bill.settlementAmount || 0)
     group.expense += fee
     group.items.push({

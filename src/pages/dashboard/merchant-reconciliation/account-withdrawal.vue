@@ -29,7 +29,16 @@ const qrVisible = ref(false)
 const tradeScene = ref('STORE_BUYOUT')
 
 const availableAmount = computed(() => Number(withdrawContext.value?.availableAmount || 0))
-const totalAmount = computed(() => availableAmount.value.toLocaleString('en-US', {
+const frozenAmount = computed(() => Number(withdrawContext.value?.frozenAmount || 0))
+const totalAmount = computed(() => Number(withdrawContext.value?.totalAmount ?? availableAmount.value + frozenAmount.value).toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}))
+const availableAmountText = computed(() => availableAmount.value.toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}))
+const frozenAmountText = computed(() => frozenAmount.value.toLocaleString('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 }))
@@ -132,7 +141,8 @@ async function showTransferConfirmQr() {
       <view class="balance-panel">
         <text class="balance-panel__label">总金额（元）</text>
         <text class="balance-panel__amount">{{ loading ? '--' : totalAmount }}</text>
-        <text class="balance-panel__available">可提现金额（元）：{{ loading ? '--' : totalAmount }}</text>
+        <text class="balance-panel__available">可提现金额（元）：{{ loading ? '--' : availableAmountText }}</text>
+        <text class="balance-panel__frozen">冻结金额（元）：{{ loading ? '--' : frozenAmountText }}</text>
         <text v-if="withdrawContext?.transferAccountReady || withdrawContext?.receiverId" class="balance-panel__receiver">
           到账账户：{{ withdrawContext.receiverName || '微信收款用户' }} {{ withdrawContext.receiverAccountMasked || '' }}
         </text>
@@ -180,7 +190,7 @@ async function showTransferConfirmQr() {
         </view>
         <image class="transfer-qr-dialog__image" :src="transferConfirmQr.qrCode" mode="aspectFit" />
         <text class="transfer-qr-dialog__hint">请使用微信扫码，或长按识别小程序码。</text>
-        <text class="transfer-qr-dialog__amount">确认金额：¥{{ totalAmount }}</text>
+        <text class="transfer-qr-dialog__amount">确认金额：¥{{ availableAmountText }}</text>
       </view>
     </view>
   </view>
@@ -273,6 +283,12 @@ async function showTransferConfirmQr() {
   margin-top: 30rpx;
   color: #ababab;
   font-size: 31rpx;
+}
+
+.balance-panel__frozen {
+  margin-top: 10rpx;
+  color: #ababab;
+  font-size: 28rpx;
 }
 
 .balance-panel__receiver {

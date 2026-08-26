@@ -4,7 +4,9 @@ export interface MerchantWithdrawContext {
   storeId: number
   storeName?: string
   tradeScene: string
+  totalAmount: number
   availableAmount: number
+  frozenAmount: number
   availableSettlementCount: number
   processingWithdrawId?: number
   processingWithdrawStatus?: string
