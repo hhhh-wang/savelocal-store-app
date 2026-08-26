@@ -63,7 +63,7 @@ onLoad((options) => {
 <template>
   <view class="message-detail-page">
     <view class="message-detail-nav">
-      <back-button fallback-url="/pages/dashboard/index" fallback-mode="switchTab" />
+      <back-button fallback-url="/pages/dashboard/index" fallback-mode="switchTab" color="#000000" />
       <text class="message-detail-nav__title">消息详情</text>
       <view class="message-detail-nav__spacer" />
     </view>
