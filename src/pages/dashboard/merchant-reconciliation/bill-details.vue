@@ -1,7 +1,10 @@
 <script lang="ts" setup>
-import type { BillKind } from './withdrawal'
+import type { MerchantFoodCommissionBill } from '@/api/types/merchant-food'
+import { getMerchantFoodCommissionBillsPage } from '@/api/merchant-food'
+import { useMerchantFoodStore } from '@/store'
+import type { BillDetailGroup, BillDetailItem, BillKind } from './withdrawal'
 import WithdrawalPageHeader from './components/withdrawal-page-header.vue'
-import { BILL_DETAIL_GROUPS, WITHDRAWAL_PATHS } from './withdrawal'
+import { WITHDRAWAL_PATHS } from './withdrawal'
 
 defineOptions({ name: 'MerchantBillDetails' })
 
@@ -18,9 +21,106 @@ const billIconMap: Record<BillKind, string> = {
   income: 'i-carbon-money',
 }
 
-function showPrototypeNotice(title: string) {
-  uni.showToast({ title, icon: 'none' })
+const merchantFoodStore = useMerchantFoodStore()
+const billGroups = ref<BillDetailGroup[]>([])
+const commissionBills = ref<MerchantFoodCommissionBill[]>([])
+const loading = ref(false)
+const pageNum = ref(0)
+const hasMore = ref(true)
+
+function toAmount(value?: number) {
+  return Number(value || 0).toFixed(2)
 }
+
+function resolveBillTime(bill: MerchantFoodCommissionBill) {
+  return bill.billTime || ''
+}
+
+function formatGroupDate(value: string) {
+  const date = new Date(value.replace(/-/g, '/'))
+  if (Number.isNaN(date.getTime()))
+    return '其他'
+  return `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, '0')}月${String(date.getDate()).padStart(2, '0')}日`
+}
+
+function formatTime(value: string) {
+  return value.length >= 19 ? value.slice(11, 19) : '--'
+}
+
+function buildBillGroups(bills: MerchantFoodCommissionBill[]) {
+  const groups = new Map<string, { timeValue: string, expense: number, income: number, items: BillDetailItem[] }>()
+  for (const bill of bills) {
+    const timeValue = resolveBillTime(bill)
+    const date = formatGroupDate(timeValue)
+    const group = groups.get(date) || { timeValue, expense: 0, income: 0, items: [] }
+    const fee = Number(bill.platformTechFeeAmount || 0)
+    const settlement = Number(bill.settlementAmount || 0)
+    group.expense += fee
+    group.items.push({
+      id: `${bill.foodOrderId}-fee`,
+      kind: 'fee',
+      description: `技术服务费-订单${bill.orderNo}`,
+      time: formatTime(timeValue),
+      amount: `-${toAmount(fee)}`,
+    })
+    if (settlement > 0) {
+      group.income += settlement
+      group.items.push({
+        id: `${bill.foodOrderId}-income`,
+        kind: 'income',
+        description: `交易收入-订单${bill.orderNo}`,
+        time: formatTime(timeValue),
+        amount: `+${toAmount(settlement)}`,
+      })
+    }
+    groups.set(date, group)
+  }
+  return Array.from(groups.entries())
+    .sort((left, right) => right[1].timeValue.localeCompare(left[1].timeValue))
+    .map(([date, group]) => ({
+      date,
+      expense: toAmount(group.expense),
+      income: toAmount(group.income),
+      items: group.items,
+    }))
+}
+
+async function loadBills(loadMore = false) {
+  if (loading.value || (loadMore && !hasMore.value))
+    return
+  loading.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const nextPage = loadMore ? pageNum.value + 1 : 1
+    const result = await getMerchantFoodCommissionBillsPage({ storeId, pageNum: nextPage, pageSize: 20 })
+    const rows = result.rows || []
+    commissionBills.value = loadMore ? [...commissionBills.value, ...rows] : rows
+    pageNum.value = nextPage
+    hasMore.value = commissionBills.value.length < Number(result.total || 0)
+    billGroups.value = buildBillGroups(commissionBills.value)
+  }
+  catch {
+    if (!loadMore) {
+      commissionBills.value = []
+      billGroups.value = []
+    }
+    uni.showToast({ title: '账单明细加载失败', icon: 'none' })
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+function reloadBills() {
+  pageNum.value = 0
+  hasMore.value = true
+  commissionBills.value = []
+  billGroups.value = []
+  loadBills()
+}
+
+onShow(reloadBills)
+onReachBottom(() => loadBills(true))
 </script>
 
 <template>
@@ -28,21 +128,16 @@ function showPrototypeNotice(title: string) {
     <withdrawal-page-header title="账单明细" :fallback-url="WITHDRAWAL_PATHS.overview" />
 
     <view class="bill-groups">
-      <view v-for="(group, groupIndex) in BILL_DETAIL_GROUPS" :key="group.date" class="bill-group">
+      <view v-for="group in billGroups" :key="group.date" class="bill-group">
         <view class="bill-group__header">
           <view class="bill-group__summary">
-            <view class="bill-group__date-row" @tap="showPrototypeNotice('日期选择暂未开放')">
+            <view class="bill-group__date-row">
               <text class="bill-group__date">{{ group.date }}</text>
-              <view v-if="groupIndex === 0" class="i-carbon-chevron-down bill-group__date-arrow" />
             </view>
             <view class="bill-group__totals">
               <text>支出 ¥ {{ group.expense }}</text>
               <text>收入 ¥ {{ group.income }}</text>
             </view>
-          </view>
-          <view v-if="groupIndex === 0" class="bill-group__filter" @tap="showPrototypeNotice('筛选暂未开放')">
-            <text>筛选</text>
-            <view class="i-carbon-filter bill-group__filter-icon" />
           </view>
         </view>
 
@@ -61,6 +156,9 @@ function showPrototypeNotice(title: string) {
           </view>
         </view>
       </view>
+      <view v-if="!loading && !billGroups.length" class="bill-empty">暂无账单明细</view>
+      <view v-else-if="loading" class="bill-page-status">加载中</view>
+      <view v-else-if="!hasMore" class="bill-page-status">没有更多了</view>
     </view>
 
     <view class="bill-tabbar">
@@ -81,7 +179,6 @@ function showPrototypeNotice(title: string) {
 
 .bill-group__header,
 .bill-group__date-row,
-.bill-group__filter,
 .bill-item,
 .bill-tabbar {
   display: flex;
@@ -112,30 +209,12 @@ function showPrototypeNotice(title: string) {
   line-height: 1.4;
 }
 
-.bill-group__date-arrow {
-  width: 28rpx;
-  height: 28rpx;
-  color: #6e6e6e;
-}
-
 .bill-group__totals {
   display: flex;
   gap: 24rpx;
   margin-top: 4rpx;
   color: #aaa;
   font-size: 26rpx;
-}
-
-.bill-group__filter {
-  gap: 10rpx;
-  flex-shrink: 0;
-  font-size: 29rpx;
-}
-
-.bill-group__filter-icon {
-  width: 30rpx;
-  height: 30rpx;
-  color: #6f6f6f;
 }
 
 .bill-group__items {
@@ -212,6 +291,20 @@ function showPrototypeNotice(title: string) {
 
 .bill-item__amount--income {
   color: #fb6800;
+}
+
+.bill-empty {
+  padding: 96rpx 32rpx;
+  color: #999;
+  font-size: 28rpx;
+  text-align: center;
+}
+
+.bill-page-status {
+  padding: 28rpx 32rpx;
+  color: #999;
+  font-size: 26rpx;
+  text-align: center;
 }
 
 .bill-tabbar {

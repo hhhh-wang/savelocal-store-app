@@ -475,7 +475,19 @@ async function handleOrderAction(action: TodoAction | NormalAction, order: Order
   if (action === '订单详情') {
     const detail = await getMerchantFoodOrderDetail(order.scene, order.id)
     const items = detail.items?.map(item => `${item.productNameSnapshot} x${item.quantity}`).join('\n')
-    uni.showModal({ title: `订单 ${detail.orderNo}`, content: items || `${detail.productName} x${detail.quantity}`, showCancel: false })
+    const formatAmount = (value?: number) => `¥${Number(value || 0).toFixed(2)}`
+    const financials = [
+      `商家让利：${formatAmount(detail.benefitAmount)}`,
+      detail.orderStatus === 'REFUNDED'
+        ? '技术服务费：¥0.00（整单退款免收）'
+        : `技术服务费：${formatAmount(detail.platformTechFeeAmount)}`,
+      `商家结算：${formatAmount(detail.settlementAmount)}`,
+    ]
+    uni.showModal({
+      title: `订单 ${detail.orderNo}`,
+      content: [items || `${detail.productName} x${detail.quantity}`, ...financials].join('\n'),
+      showCancel: false,
+    })
     return
   }
   uni.navigateTo({ url: `/pages/dashboard/after-sales/index?keyword=${encodeURIComponent(order.orderNo)}` })

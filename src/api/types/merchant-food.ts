@@ -332,6 +332,12 @@ export interface MerchantFoodOrderDetail extends MerchantFoodOrder {
   buyerRemark?: string
   deliveryAddress?: string
   voucherQrContent?: string
+  benefitRateMilli?: number
+  techFeeRateMilli?: number
+  benefitAmount?: number
+  platformTechFeeAmount?: number
+  settlementAmount?: number
+  refundAmount?: number
   fulfillment?: MerchantFoodOrderFulfillment
   timeline?: MerchantFoodOrderTimeline[]
   availableActions?: string[]
@@ -402,6 +408,38 @@ export interface MerchantFoodBill {
   settlementAmount: number
   settlementStatus: string
   withdrawId?: number
+  plannedAvailableTime?: string
+  availableTime?: string
+  createTime?: string
+}
+
+/** 对账页订单结算列表，不包含技术服务费字段。 */
+export interface MerchantFoodSettlementOrder {
+  settlementId: number
+  settlementNo: string
+  scene: Exclude<MerchantFoodScene, 'ALL'>
+  orderId: number
+  orderNo: string
+  settlementAmount: number
+  settlementStatus: string
+  withdrawId?: number
+  plannedAvailableTime?: string
+  availableTime?: string
+  createTime?: string
+}
+
+export interface MerchantFoodCommissionBill {
+  foodOrderId: number
+  unifiedOrderId: number
+  orderNo: string
+  scene: Exclude<MerchantFoodScene, 'ALL'>
+  originalAmount: number
+  benefitAmount: number
+  platformTechFeeAmount: number
+  settlementAmount: number
+  refundAmount: number
+  orderStatus: MerchantFoodOrderStatus
+  billTime?: string
 }
 
 export interface MerchantFoodReconciliationQuery {

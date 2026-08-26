@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { MerchantFoodBill, MerchantFoodReconciliationStat } from '@/api/types/merchant-food'
-import { getMerchantFoodBillsPage, getMerchantFoodReconciliationOverview } from '@/api/merchant-food'
+import type { MerchantFoodReconciliationStat, MerchantFoodSettlementOrder } from '@/api/types/merchant-food'
+import { getMerchantFoodReconciliationOverview, getMerchantFoodSettlementOrdersPage } from '@/api/merchant-food'
 import calendarMonthIcon from '@/static/icons/calendar-month.png'
 import storeIcon from '@/static/icons/store-icon.png'
 import { useMerchantFoodStore } from '@/store'
@@ -18,7 +18,7 @@ definePage({
 })
 
 type SettlementTab = 'all' | 'onsite' | 'group'
-type BillStatus = 'settled' | 'pending'
+type BillStatus = 'settled' | 'pending' | 'closed'
 
 interface SettlementSummary {
   amount: string
@@ -182,17 +182,19 @@ function applyStat(tab: SettlementTab, stat: MerchantFoodReconciliationStat) {
   ]
 }
 
-function mapBill(item: MerchantFoodBill): BillItem {
-  const settled = item.settlementStatus === '1' || item.settlementStatus === 'SETTLED'
+function mapBill(item: MerchantFoodSettlementOrder): BillItem {
+  const settled = item.settlementStatus === '2' || item.settlementStatus === '3' || item.settlementStatus === 'SETTLED'
+  const closed = item.settlementStatus === '4' || item.settlementStatus === 'CLOSED'
+  const billTime = item.availableTime || item.plannedAvailableTime || item.createTime || '--'
   return {
     id: String(item.settlementId),
-    date: '--',
-    status: settled ? 'settled' : 'pending',
+    date: billTime.slice(0, 10),
+    status: closed ? 'closed' : settled ? 'settled' : 'pending',
     summaryAmount: Number(item.settlementAmount || 0).toFixed(2),
-    description: settled ? '平台已完成结算' : '平台结算处理中',
+    description: closed ? '订单退款，结算已关闭' : settled ? '平台已完成结算' : '平台结算处理中',
     referenceNo: `结算单号：${item.settlementNo}`,
-    transferDate: '--',
-    transferLabel: settled ? '已结算' : '待平台结算',
+    transferDate: billTime,
+    transferLabel: closed ? '已关闭' : settled ? '已结算' : '待平台结算',
     transferAmount: Number(item.settlementAmount || 0).toFixed(2),
     settlementType: item.scene === 'ONSITE' ? 'onsite' : 'group',
   }
@@ -204,7 +206,7 @@ async function loadReconciliation() {
   const month = activeBillFilter.value === 'all' ? undefined : activeBillFilter.value
   const [overview, bills] = await Promise.all([
     getMerchantFoodReconciliationOverview({ storeId, scene, month, todayOnly: onlyTodayBills.value }),
-    getMerchantFoodBillsPage({ storeId, scene, month, todayOnly: onlyTodayBills.value, pageNum: 1, pageSize: 100 }),
+    getMerchantFoodSettlementOrdersPage({ storeId, scene, month, todayOnly: onlyTodayBills.value, pageNum: 1, pageSize: 100 }),
   ])
   applyStat('all', overview.all)
   applyStat('onsite', overview.onsite)
@@ -271,7 +273,11 @@ onShow(() => {
 })
 
 function getBillStatusLabel(status: BillStatus) {
-  return status === 'settled' ? '已结算' : '待结算'
+  if (status === 'settled')
+    return '已结算'
+  if (status === 'closed')
+    return '已关闭'
+  return '待结算'
 }
 </script>
 
@@ -933,6 +939,10 @@ function getBillStatusLabel(status: BillStatus) {
 
 .merchant-bill-card__status-icon--pending {
   background: linear-gradient(180deg, #ffd4d1 0%, #ff6f66 100%);
+}
+
+.merchant-bill-card__status-icon--closed {
+  background: #b8bbc1;
 }
 
 .merchant-bill-card__status-text {

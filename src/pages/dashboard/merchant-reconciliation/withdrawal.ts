@@ -74,31 +74,6 @@ export interface BillDetailGroup {
   items: BillDetailItem[]
 }
 
-export const BILL_DETAIL_GROUPS: BillDetailGroup[] = [
-  {
-    date: '2026年08月14日',
-    expense: '1.62',
-    income: '272.40',
-    items: [
-      { id: '260803-53823-coupon', kind: 'coupon', description: '优惠券结算-订单结算260803-53823...', time: '10:24:43', amount: '+6.35' },
-      { id: '260803-53823-fee', kind: 'fee', description: '技术服务费-订单结算260803-53823...', time: '10:24:43', amount: '-0.54' },
-      { id: '260803-53823-income', kind: 'income', description: '交易收入-订单结算260803-53823...', time: '10:24:43', amount: '+84.45' },
-      { id: '260803-53054-fee', kind: 'fee', description: '技术服务费-订单结算260803-53054...', time: '10:19:47', amount: '-0.54' },
-      { id: '260803-53054-income', kind: 'income', description: '交易收入-订单结算260803-53054...', time: '10:19:47', amount: '+90.80' },
-      { id: '260803-310042-fee', kind: 'fee', description: '技术服务费-订单结算260803-310042...', time: '10:19:47', amount: '-0.54' },
-      { id: '260803-310042-income', kind: 'income', description: '交易收入-订单结算260803-310042...', time: '10:19:47', amount: '+90.80' },
-    ],
-  },
-  {
-    date: '2026年08月13日',
-    expense: '92.97',
-    income: '363.84',
-    items: [
-      { id: '260808-113644-income', kind: 'income', description: '交易收入-订单结算260808-113644...', time: '16:54:45', amount: '+90.80' },
-    ],
-  },
-]
-
 export function validateWithdrawalAmount(value: string, availableBalance: number): string | undefined {
   const normalizedValue = value.trim()
 
