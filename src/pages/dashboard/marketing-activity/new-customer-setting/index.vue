@@ -171,7 +171,6 @@ onLoad((options) => {
         </text>
 
         <view class="discount-setting-nav__rules" hover-class="discount-setting-nav__rules--hover" @tap="showActivityRules">
-          <view class="i-carbon-information discount-setting-nav__rules-icon" />
           <text>活动说明</text>
         </view>
       </view>
@@ -327,16 +326,14 @@ onLoad((options) => {
   align-items: center;
   gap: 6rpx;
   color: #34363b;
-  font-size: 24rpx;
+  font-size: 30rpx;
 }
 
 .discount-setting-nav__rules--hover {
   opacity: 0.7;
 }
 
-.discount-setting-nav__rules-icon {
-  font-size: 32rpx;
-}
+
 
 .activity-product-card {
   display: flex;
@@ -376,7 +373,7 @@ onLoad((options) => {
   display: -webkit-box;
   overflow: hidden;
   color: #202332;
-  font-size: 35rpx;
+  font-size: 34rpx;
   font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -419,7 +416,7 @@ onLoad((options) => {
   display: block;
   margin: 22rpx 0 14rpx;
   color: #3a3d43;
-  font-size: 28rpx;
+  font-size: 34rpx;
   font-weight: 700;
 }
 
@@ -450,7 +447,7 @@ onLoad((options) => {
   flex-shrink: 0;
   align-items: center;
   color: #303238;
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 500;
 }
 
@@ -486,7 +483,7 @@ onLoad((options) => {
   width: 220rpx;
   height: 34rpx;
   color: #202226;
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 600;
   text-align: right;
 }
@@ -533,7 +530,7 @@ onLoad((options) => {
   max-width: 220rpx;
   overflow: hidden;
   color: #a9aaae;
-  font-size: 22rpx;
+  font-size: 30rpx;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -544,7 +541,7 @@ onLoad((options) => {
   align-items: center;
   gap: 4rpx;
   color: #a9aaae;
-  font-size: 22rpx;
+  font-size: 30rpx;
 }
 
 .discount-setting-row__value--stock {
@@ -558,7 +555,7 @@ onLoad((options) => {
   align-items: center;
   gap: 6rpx;
   color: #4c4f56;
-  font-size: 23rpx;
+  font-size: 30rpx;
 }
 
 .discount-setting-radio {
@@ -591,7 +588,7 @@ onLoad((options) => {
   height: 100%;
   box-sizing: border-box;
   color: #34363b;
-  font-size: 24rpx;
+  font-size: 30rpx;
   text-align: center;
 }
 
@@ -613,7 +610,7 @@ onLoad((options) => {
   gap: 7rpx;
   margin-bottom: 16rpx;
   color: #5f6269;
-  font-size: 21rpx;
+  font-size: 30rpx;
 }
 
 .discount-setting-checkbox {
@@ -647,7 +644,7 @@ onLoad((options) => {
   border: 0;
   border-radius: 12rpx;
   color: #26200a;
-  font-size: 27rpx;
+  font-size: 30rpx;
   font-weight: 600;
   background: #ffcc05;
 }
