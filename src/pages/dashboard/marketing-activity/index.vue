@@ -82,7 +82,6 @@ function handleActivityTap(activity: MarketingActivity) {
             </text>
           </view>
 
-          <view class="marketing-activity-card__arrow i-carbon-chevron-right" />
         </view>
       </view>
     </view>
@@ -186,18 +185,7 @@ function handleActivityTap(activity: MarketingActivity) {
   white-space: nowrap;
 }
 
-.marketing-activity-card__arrow {
-  display: flex;
-  width: 96rpx;
-  height: 96rpx;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: #ff751a;
-  color: #fff;
-  font-size: 54rpx;
-}
+
 
 @media (max-width: 700rpx) {
   .marketing-activity-page__content {
@@ -237,10 +225,6 @@ function handleActivityTap(activity: MarketingActivity) {
     font-size: 25rpx;
   }
 
-  .marketing-activity-card__arrow {
-    width: 74rpx;
-    height: 74rpx;
-    font-size: 42rpx;
-  }
+
 }
 </style>
