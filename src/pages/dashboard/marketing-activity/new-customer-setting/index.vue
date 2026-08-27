@@ -341,8 +341,10 @@ onLoad((options) => {
 .activity-product-card {
   display: flex;
   gap: 16rpx;
-  margin-top: 22rpx;
-  padding: 20rpx;
+  width: calc(100% + 16rpx);
+  margin: 32rpx -8rpx 34rpx;
+  padding: 26rpx 24rpx;
+  box-sizing: border-box;
   border-radius: 14rpx;
   background: #fff;
 }
@@ -374,7 +376,7 @@ onLoad((options) => {
   display: -webkit-box;
   overflow: hidden;
   color: #202332;
-  font-size: 27rpx;
+  font-size: 35rpx;
   font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -386,7 +388,7 @@ onLoad((options) => {
 .activity-product-card__id,
 .activity-product-card__meta {
   color: #a4a5aa;
-  font-size: 22rpx;
+  font-size: 30rpx;
   line-height: 1.25;
 }
 
@@ -492,12 +494,12 @@ onLoad((options) => {
 .discount-setting-row__unit {
   flex-shrink: 0;
   color: #4d5057;
-  font-size: 24rpx;
+  font-size: 30rpx;
 }
 
 .discount-setting-row__range {
   color: #c3c4c8;
-  font-size: 22rpx;
+  font-size: 30rpx;
 }
 
 .discount-setting-row__preview {
@@ -505,7 +507,7 @@ onLoad((options) => {
   min-width: 244rpx;
   margin-top: 0;
   color: #9fa1a7;
-  font-size: 21rpx;
+  font-size: 30rpx;
   line-height: 2;
   text-align: right;
 }
