@@ -56,7 +56,7 @@ const selectedProductIds = ref<number[]>([])
 const products = ref<ProductItem[]>([])
 
 function mapProduct(product: MerchantFoodProduct): ProductItem {
-  const firstSpec = product.specs?.[0]
+  const displaySpec = product.specs?.find(spec => spec.isDisplay === '1') ?? product.specs?.[0]
   const isPending = product.auditStatus === '0'
   const isRejected = product.auditStatus === '2'
   const isOnSale = product.auditStatus === '1' && product.saleStatus === 'ON_SALE'
@@ -64,9 +64,9 @@ function mapProduct(product: MerchantFoodProduct): ProductItem {
   return {
     id: product.productId,
     name: product.productName,
-    stock: firstSpec?.stockQuantity || 0,
+    stock: displaySpec?.stockQuantity || 0,
     unitLabel: product.productType === 'DEAL' ? '团购' : '外卖',
-    price: String(firstSpec?.salePrice ?? '0.00'),
+    price: String(displaySpec?.salePrice ?? '0.00'),
     status: isPending ? '审批中' : isRejected ? '已驳回' : isOnSale ? '已上架' : '已下架',
     actionLabel: isPending ? null : isOnSale ? '下架' : '上架',
     image: product.coverImageUrl || productImage,
