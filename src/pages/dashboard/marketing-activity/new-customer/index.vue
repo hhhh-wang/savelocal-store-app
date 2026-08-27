@@ -118,6 +118,35 @@ function toggleDiscount(product: DiscountProduct) {
   uni.showToast({ title: isActive ? '已取消立减活动' : '已设置立减活动', icon: 'success' })
 }
 
+function openDiscountSetting(product: DiscountProduct) {
+  const query = [
+    `id=${product.id}`,
+    `name=${encodeURIComponent(product.name)}`,
+    `image=${encodeURIComponent(product.image)}`,
+    `price=${product.price}`,
+    `stock=${product.stock}`,
+    `status=${product.isSelling ? 'selling' : 'off-shelf'}`,
+  ].join('&')
+
+  uni.navigateTo({
+    url: `/pages/dashboard/marketing-activity/new-customer-setting/index?${query}`,
+    events: {
+      discountPublished: (productId: number) => {
+        if (!activeProductIds.value.includes(productId))
+          activeProductIds.value = [...activeProductIds.value, productId]
+      },
+    },
+  })
+}
+
+function handleDiscountAction(product: DiscountProduct) {
+  if (activeProductIds.value.includes(product.id)) {
+    toggleDiscount(product)
+    return
+  }
+  openDiscountSetting(product)
+}
+
 onShow(() => {
   loadProducts().catch(() => {})
 })
@@ -216,25 +245,28 @@ onShow(() => {
 
             <view class="discount-product-card__footer">
               <view class="discount-product-card__status-wrap">
-                <text class="discount-product-card__current-label">当前价:</text>
-                <text class="discount-product-card__price">¥ {{ product.price.toFixed(2) }}</text>
-                <text class="discount-product-card__divider">|</text>
-                <text class="discount-product-card__current-label">状态:</text>
-                <text
-                  class="discount-product-card__status"
-                  :class="{
-                    'discount-product-card__status--active': activeProductIds.includes(product.id),
-                    'discount-product-card__status--selling': !activeProductIds.includes(product.id) && product.isSelling,
-                  }"
-                >
-                  {{ statusLabel(product) }}
-                </text>
+                <view class="discount-product-card__status-line">
+                  <text class="discount-product-card__current-label">当前价:</text>
+                  <text class="discount-product-card__price">¥ {{ product.price.toFixed(2) }}</text>
+                </view>
+                <view class="discount-product-card__status-line">
+                  <text class="discount-product-card__current-label">状态:</text>
+                  <text
+                    class="discount-product-card__status"
+                    :class="{
+                      'discount-product-card__status--active': activeProductIds.includes(product.id),
+                      'discount-product-card__status--selling': !activeProductIds.includes(product.id) && product.isSelling,
+                    }"
+                  >
+                    {{ statusLabel(product) }}
+                  </text>
+                </view>
               </view>
 
               <view
                 class="discount-product-card__action"
                 hover-class="discount-product-card__action--hover"
-                @tap="toggleDiscount(product)"
+                @tap="handleDiscountAction(product)"
               >
                 {{ activeProductIds.includes(product.id) ? '取消活动' : '设置立减' }}
               </view>
@@ -296,7 +328,7 @@ onShow(() => {
 
 .product-type-tabs__item {
   display: flex;
-  min-height: 88rpx;
+  min-height: 70rpx;
   align-items: center;
   justify-content: center;
   color: #7a7b7e;
@@ -432,8 +464,7 @@ onShow(() => {
 
 .discount-product-card__stock,
 .discount-product-card__id,
-.discount-product-card__current-label,
-.discount-product-card__divider {
+.discount-product-card__current-label {
   color: #a4a5aa;
   font-size: 26rpx;
 }
@@ -458,19 +489,20 @@ onShow(() => {
   display: flex;
   min-width: 0;
   flex: 1;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.discount-product-card__status-line {
+  display: flex;
   align-items: baseline;
   gap: 8rpx;
-  flex-wrap: wrap;
 }
 
 .discount-product-card__price {
   color: #ff633e;
   font-size: 31rpx;
   line-height: 1.25;
-}
-
-.discount-product-card__divider {
-  color: #d2d3d5;
 }
 
 .discount-product-card__status {
@@ -554,8 +586,7 @@ onShow(() => {
 
   .discount-product-card__stock,
   .discount-product-card__id,
-  .discount-product-card__current-label,
-  .discount-product-card__divider {
+  .discount-product-card__current-label {
     font-size: 22rpx;
   }
 
