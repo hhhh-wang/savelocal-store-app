@@ -3,8 +3,8 @@ import type { AssistantTabKey } from './message-shared'
 import type { MerchantMessage, MerchantMessageSummary } from '@/api/types/merchant-message'
 import { getMerchantMessages, getMerchantMessageSummary } from '@/api/merchant-message'
 import customerServiceIcon from '@/static/icons/customer-service.png'
+import activityIcon from '@/static/icons/dashboard/activity-icon.png'
 import afterSalesIcon from '@/static/icons/dashboard/after-sales.png'
-import allIcon from '@/static/icons/dashboard/all.png'
 import groupBuyRedemptionIcon from '@/static/icons/dashboard/group-buy-redemption.png'
 import merchantReconciliationIcon from '@/static/icons/dashboard/merchant-reconciliation.png'
 import orderManagementIcon from '@/static/icons/dashboard/order-management.png'
@@ -74,7 +74,11 @@ const menuList: DashboardMenuItem[] = [
     icon: afterSalesIcon,
     path: '/pages/dashboard/after-sales/index',
   },
-  { title: '全部', icon: allIcon },
+  {
+    title: '营销活动',
+    icon: activityIcon,
+    path: '/pages/dashboard/marketing-activity/index',
+  },
 ]
 
 const assistantTabs = [
