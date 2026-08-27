@@ -37,8 +37,12 @@ const activities: MarketingActivity[] = [
 ]
 
 function handleActivityTap(activity: MarketingActivity) {
-  const title = activity.type === 'new-customer' ? '新客立减活动' : '满减活动'
-  uni.showToast({ title: `${title}暂未开放`, icon: 'none' })
+  if (activity.type === 'new-customer') {
+    uni.navigateTo({ url: '/pages/dashboard/marketing-activity/new-customer/index' })
+    return
+  }
+
+  uni.showToast({ title: '满减活动暂未开放', icon: 'none' })
 }
 </script>
 
@@ -81,7 +85,6 @@ function handleActivityTap(activity: MarketingActivity) {
               {{ activity.description }}
             </text>
           </view>
-
         </view>
       </view>
     </view>
@@ -185,8 +188,6 @@ function handleActivityTap(activity: MarketingActivity) {
   white-space: nowrap;
 }
 
-
-
 @media (max-width: 700rpx) {
   .marketing-activity-page__content {
     padding-right: 28rpx;
@@ -224,7 +225,5 @@ function handleActivityTap(activity: MarketingActivity) {
   .marketing-activity-card__description {
     font-size: 25rpx;
   }
-
-
 }
 </style>
