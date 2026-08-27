@@ -394,6 +394,13 @@ export interface MerchantFoodReconciliationOverview {
   groupBuy: MerchantFoodReconciliationStat
 }
 
+export interface MerchantFoodWalletSummary {
+  availableAmount: number
+  frozenAmount: number
+  todayRefundAmount: number
+  totalAmount: number
+}
+
 export interface MerchantFoodBill {
   settlementId: number
   settlementNo: string

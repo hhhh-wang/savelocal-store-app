@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { MerchantFoodQuickStatus, MerchantFoodQuickStatusValue } from '@/api/types/merchant-food'
-import { getMerchantFoodStoreQuickStatus, updateMerchantFoodStoreQuickStatus } from '@/api/merchant-food'
+import type { MerchantFoodQuickStatus, MerchantFoodQuickStatusValue, MerchantFoodWalletSummary } from '@/api/types/merchant-food'
+import { getMerchantFoodStoreQuickStatus, getMerchantFoodWalletSummary, updateMerchantFoodStoreQuickStatus } from '@/api/merchant-food'
 import { createMerchantStoreDraft } from '@/api/merchant-store'
 import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-create-lock'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
@@ -38,6 +38,7 @@ const storeAccessVisible = ref(false)
 const selectedStoreId = ref<number>()
 const creatingStore = ref(false)
 const quickStatus = ref<MerchantFoodQuickStatus>()
+const walletSummary = ref<MerchantFoodWalletSummary>()
 const updatingQuickStatus = ref(false)
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 
@@ -58,11 +59,17 @@ const storeStatus = computed(() => {
 
 onShow(() => {
   loadMeStoreStatus().catch(() => {})
+  loadWalletSummary().catch(() => {})
 })
 
 async function loadMeStoreStatus() {
   const profile = await merchantFoodStore.loadProfile(true)
   quickStatus.value = await getMerchantFoodStoreQuickStatus(profile.store.storeId)
+}
+
+async function loadWalletSummary() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  walletSummary.value = await getMerchantFoodWalletSummary(storeId)
 }
 
 async function applyQuickStatus(value: MerchantFoodQuickStatusValue) {
@@ -112,12 +119,16 @@ function openQuickStatusPicker() {
   })
 }
 
-const walletItems = [
-  { label: '今日到账', value: '25.9', subtext: '去查看' },
-  { label: '待到账', value: '25.9', subtext: '查余额' },
-  { label: '最近入账', value: '25.9', subtext: '05-14' },
-  { label: '余额(元)', value: '25.9', subtext: '可提现' },
-]
+function formatWalletAmount(value?: number) {
+  return Number(value || 0).toFixed(2)
+}
+
+const walletItems = computed(() => [
+  { label: '今日到账', value: formatWalletAmount(walletSummary.value?.availableAmount) },
+  { label: '待到账', value: formatWalletAmount(walletSummary.value?.frozenAmount) },
+  { label: '今日退款金额', value: formatWalletAmount(walletSummary.value?.todayRefundAmount) },
+  { label: '余额(元)', value: formatWalletAmount(walletSummary.value?.totalAmount) },
+])
 
 interface MenuItem {
   title: string
@@ -185,6 +196,7 @@ async function handleStoreAccessConfirm(storeId: number) {
 
   merchantFoodStore.selectStore(storeId)
   quickStatus.value = undefined
+  walletSummary.value = undefined
   if (resolveStoreAccessAction(store) === 'lock') {
     uni.navigateTo({
       url: buildStoreCreateLockRoute(storeId),
@@ -194,6 +206,7 @@ async function handleStoreAccessConfirm(storeId: number) {
 
   try {
     await loadMeStoreStatus()
+    await loadWalletSummary()
   }
   catch (error) {
     console.error('切换门店失败:', error)
@@ -202,6 +215,10 @@ async function handleStoreAccessConfirm(storeId: number) {
       icon: 'none',
     })
   }
+}
+
+function openWallet() {
+  uni.navigateTo({ url: '/pages/dashboard/merchant-reconciliation/index' })
 }
 
 async function handleCreateStore() {
@@ -309,7 +326,7 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
         </view>
       </view>
 
-      <view class="wallet-card">
+      <view class="wallet-card" hover-class="wallet-card--hover" @tap="openWallet">
         <view class="wallet-card__header">
           <text class="wallet-card__title">
             我的钱包
@@ -326,9 +343,6 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
             </text>
             <text class="wallet-card__value">
               {{ item.value }}
-            </text>
-            <text class="wallet-card__subtext">
-              {{ item.subtext }}
             </text>
           </view>
         </view>
@@ -525,6 +539,10 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
   padding: 24rpx 20rpx 18rpx;
 }
 
+.wallet-card--hover {
+  opacity: 0.84;
+}
+
 .wallet-card__header {
   display: flex;
   align-items: center;
@@ -569,11 +587,6 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
   font-size: 58rpx;
   font-weight: 700;
   line-height: 1;
-}
-
-.wallet-card__subtext {
-  color: #acb1bb;
-  font-size: 22rpx;
 }
 
 .menu-card {
