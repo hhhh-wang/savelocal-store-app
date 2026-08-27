@@ -205,18 +205,15 @@ onLoad((options) => {
           </view>
           <view class="discount-setting-row__value discount-setting-row__value--discount">
             <view class="discount-setting-row__amount-input-wrap">
-              <view class="discount-setting-row__amount-input-line">
-                <input
-                  :value="discountAmount"
-                  class="discount-setting-row__amount-input"
-                  type="digit"
-                  placeholder="0.00"
-                  placeholder-class="discount-setting-row__placeholder"
-                  @input="handleDiscountInput"
-                >
-                <text class="discount-setting-row__unit">元</text>
-              </view>
-              <text class="discount-setting-row__range">{{ discountRangeText }}</text>
+              <input
+                :value="discountAmount"
+                class="discount-setting-row__amount-input"
+                type="digit"
+                :placeholder="discountRangeText"
+                placeholder-class="discount-setting-row__range"
+                @input="handleDiscountInput"
+              >
+              <text class="discount-setting-row__unit">元</text>
             </view>
             <text class="discount-setting-row__preview">
               最终售价=当前价-我要减<br>
@@ -345,14 +342,14 @@ onLoad((options) => {
   display: flex;
   gap: 16rpx;
   margin-top: 22rpx;
-  padding: 16rpx;
+  padding: 20rpx;
   border-radius: 14rpx;
   background: #fff;
 }
 
 .activity-product-card__image {
-  width: 112rpx;
-  height: 112rpx;
+  width: 150rpx;
+  height: 150rpx;
   flex-shrink: 0;
   border-radius: 12rpx;
   background: #f2f2f2;
@@ -441,7 +438,9 @@ onLoad((options) => {
 }
 
 .discount-setting-row--discount {
-  min-height: 126rpx;
+  min-height: 174rpx;
+  padding-top: 24rpx;
+  padding-bottom: 24rpx;
 }
 
 .discount-setting-row__label {
@@ -449,7 +448,7 @@ onLoad((options) => {
   flex-shrink: 0;
   align-items: center;
   color: #303238;
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 500;
 }
 
@@ -467,30 +466,25 @@ onLoad((options) => {
 
 .discount-setting-row__value--discount {
   position: relative;
-  min-height: 86rpx;
+  min-height: 126rpx;
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
-  gap: 14rpx;
+  gap: 16rpx;
 }
 
 .discount-setting-row__amount-input-wrap {
   display: flex;
-  align-items: flex-end;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.discount-setting-row__amount-input-line {
-  display: flex;
+  min-width: 244rpx;
   align-items: center;
   gap: 8rpx;
 }
 
 .discount-setting-row__amount-input {
-  width: 120rpx;
+  width: 220rpx;
+  height: 34rpx;
   color: #202226;
-  font-size: 34rpx;
+  font-size: 28rpx;
   font-weight: 600;
   text-align: right;
 }
@@ -501,20 +495,18 @@ onLoad((options) => {
   font-size: 24rpx;
 }
 
-.discount-setting-row__placeholder,
 .discount-setting-row__range {
   color: #c3c4c8;
-}
-
-.discount-setting-row__range {
-  display: block;
-  font-size: 20rpx;
+  font-size: 22rpx;
 }
 
 .discount-setting-row__preview {
+  display: block;
+  min-width: 244rpx;
+  margin-top: 0;
   color: #9fa1a7;
-  font-size: 19rpx;
-  line-height: 1.45;
+  font-size: 21rpx;
+  line-height: 2;
   text-align: right;
 }
 
