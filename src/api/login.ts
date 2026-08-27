@@ -28,6 +28,8 @@ export interface IMerchantRegisterForm {
   password: string
   mobile: string
   smsCode: string
+  /** 推广人手机号（选填） */
+  promoterMobile?: string
 }
 
 export interface IMerchantResetPasswordForm {

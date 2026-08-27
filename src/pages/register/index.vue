@@ -37,6 +37,7 @@ const form = reactive<RegisterFormState>({
   smsCode: '',
   captchaCode: '',
   captchaUuid: '',
+  promoterMobile: '',
 })
 
 onLoad(() => {
@@ -146,9 +147,15 @@ function validateRegisterForm() {
   const confirmPassword = form.confirmPassword.trim()
   const mobile = form.mobile.trim()
   const smsCode = form.smsCode.trim()
+  const promoterMobile = form.promoterMobile.trim()
 
   if (!/^1\d{10}$/.test(mobile)) {
     showPendingToast('请输入正确的手机号')
+    return false
+  }
+
+  if (promoterMobile && !/^1\d{10}$/.test(promoterMobile)) {
+    showPendingToast('请输入正确的推广人手机号')
     return false
   }
 
@@ -198,10 +205,12 @@ async function handleRegister() {
 
   try {
     isSubmitting.value = true
+    const promoterMobile = form.promoterMobile.trim()
     await register({
       password: form.password,
       mobile: form.mobile.trim(),
       smsCode: form.smsCode.trim(),
+      ...(promoterMobile ? { promoterMobile } : {}),
     })
 
     uni.showToast({
@@ -337,6 +346,17 @@ async function handleRegister() {
           >
             {{ isSendingSms ? '发送中...' : smsCountdown > 0 ? `${smsCountdown}秒后重发` : '获取验证码' }}
           </text>
+        </view>
+
+        <view class="register-field register-field--spaced">
+          <input
+            v-model="form.promoterMobile"
+            class="register-input"
+            type="number"
+            :maxlength="11"
+            placeholder="推广人手机号（选填）"
+            placeholder-class="register-input__placeholder"
+          >
         </view>
 
         <view class="register-login-link" @tap="goToLogin">
