@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { MerchantFoodProduct } from '@/api/types/merchant-food'
-import { getMerchantFoodProductsPage } from '@/api/merchant-food'
+import type { MerchantFoodNewCustomerProduct } from '@/api/merchant-marketing'
+import { getMerchantFoodNewCustomerProducts, updateMerchantFoodNewCustomerStatus } from '@/api/merchant-marketing'
 import productImage from '@/static/images/item-image.png'
 import { useMerchantFoodStore } from '@/store'
 
@@ -26,6 +26,14 @@ interface DiscountProduct {
   stock: number
   productType: ProductType
   isSelling: boolean
+  specId: number
+  activityId?: number
+  activityStatus?: string
+  activityStartTime?: string
+  activityEndTime?: string
+  reduceAmount?: number
+  inventoryLimit?: number
+  inventoryUsed?: number
 }
 
 const fallbackUrl = '/pages/dashboard/marketing-activity/index'
@@ -66,16 +74,23 @@ const visibleProducts = computed(() => {
   })
 })
 
-function mapProduct(product: MerchantFoodProduct): DiscountProduct {
-  const displaySpec = product.specs?.find(spec => spec.isDisplay === '1') ?? product.specs?.[0]
+function mapProduct(product: MerchantFoodNewCustomerProduct): DiscountProduct {
   return {
     id: product.productId,
     name: product.productName,
     image: product.coverImageUrl || productImage,
-    price: Number(displaySpec?.salePrice || 0),
-    stock: Number(displaySpec?.stockQuantity || 0),
+    price: Number(product.salePrice || 0),
+    stock: Number(product.stockQuantity || 0),
     productType: product.productType === 'DEAL' ? 'DEAL' : 'TAKEOUT',
     isSelling: product.auditStatus === '1' && product.saleStatus === 'ON_SALE',
+    specId: product.specId,
+    activityId: product.activityId,
+    activityStatus: product.activityStatus,
+    activityStartTime: product.activityStartTime,
+    activityEndTime: product.activityEndTime,
+    reduceAmount: product.reduceAmount,
+    inventoryLimit: product.inventoryLimit,
+    inventoryUsed: product.inventoryUsed,
   }
 }
 
@@ -83,8 +98,11 @@ async function loadProducts() {
   loading.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    const result = await getMerchantFoodProductsPage(storeId, { pageNum: 1, pageSize: 100 })
+    const result = await getMerchantFoodNewCustomerProducts(storeId)
     products.value = (result.rows || []).map(mapProduct)
+    activeProductIds.value = products.value
+      .filter(product => product.activityId)
+      .map(product => product.id)
   }
   catch (error) {
     console.error('加载立减项目失败:', error)
@@ -110,22 +128,20 @@ function statusLabel(product: DiscountProduct) {
   return product.isSelling ? '在售中' : '已下架'
 }
 
-function toggleDiscount(product: DiscountProduct) {
-  const isActive = activeProductIds.value.includes(product.id)
-  activeProductIds.value = isActive
-    ? activeProductIds.value.filter(id => id !== product.id)
-    : [...activeProductIds.value, product.id]
-  uni.showToast({ title: isActive ? '已取消立减活动' : '已设置立减活动', icon: 'success' })
-}
-
 function openDiscountSetting(product: DiscountProduct) {
   const query = [
     `id=${product.id}`,
+    `specId=${product.specId}`,
     `name=${encodeURIComponent(product.name)}`,
     `image=${encodeURIComponent(product.image)}`,
     `price=${product.price}`,
     `stock=${product.stock}`,
     `status=${product.isSelling ? 'selling' : 'off-shelf'}`,
+    `activityId=${product.activityId || ''}`,
+    `reduceAmount=${product.reduceAmount || ''}`,
+    `inventoryLimit=${product.inventoryLimit || 0}`,
+    `activityStartDate=${encodeURIComponent(product.activityStartTime || '')}`,
+    `activityEndDate=${encodeURIComponent(product.activityEndTime || '')}`,
   ].join('&')
 
   uni.navigateTo({
@@ -139,9 +155,21 @@ function openDiscountSetting(product: DiscountProduct) {
   })
 }
 
-function handleDiscountAction(product: DiscountProduct) {
+async function handleDiscountAction(product: DiscountProduct) {
   if (activeProductIds.value.includes(product.id)) {
-    toggleDiscount(product)
+    if (!product.activityId)
+      return
+    try {
+      const storeId = await merchantFoodStore.ensureCurrentStoreId()
+      await updateMerchantFoodNewCustomerStatus(storeId, product.activityId, 'ENDED')
+      activeProductIds.value = activeProductIds.value.filter(id => id !== product.id)
+      product.activityId = undefined
+      product.activityStatus = 'ENDED'
+      uni.showToast({ title: '已取消立减活动', icon: 'success' })
+    }
+    catch (error) {
+      console.error('取消立减活动失败:', error)
+    }
     return
   }
   openDiscountSetting(product)

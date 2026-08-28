@@ -1,5 +1,7 @@
 <script lang="ts" setup>
+import { saveMerchantFoodNewCustomerDiscount } from '@/api/merchant-marketing'
 import productImage from '@/static/images/item-image.png'
+import { useMerchantFoodStore } from '@/store'
 
 declare const getOpenerEventChannel: () => {
   emit: (event: string, ...args: unknown[]) => void
@@ -20,6 +22,8 @@ type InventoryLimit = 'unlimited' | 'limited'
 
 interface ActivityProduct {
   id: number
+  specId: number
+  activityId?: number
   name: string
   image: string
   price: number
@@ -28,6 +32,7 @@ interface ActivityProduct {
 }
 
 const fallbackUrl = '/pages/dashboard/marketing-activity/new-customer/index'
+const merchantFoodStore = useMerchantFoodStore()
 const today = new Date().toISOString().slice(0, 10)
 const submitting = ref(false)
 const agreed = ref(false)
@@ -38,6 +43,7 @@ const inventoryLimit = ref<InventoryLimit>('limited')
 const limitedStock = ref('500')
 const product = reactive<ActivityProduct>({
   id: 0,
+  specId: 0,
   name: '商品项目',
   image: productImage,
   price: 0,
@@ -51,11 +57,7 @@ const discountRangeText = computed(() => {
   const maximum = Math.max(0.1, product.price - 0.1)
   return `0.1-${maximum.toFixed(2)} 元`
 })
-const validPeriodText = computed(() => {
-  if (!validEndDate.value)
-    return '请选择'
-  return `${validStartDate.value} 至 ${validEndDate.value}`
-})
+const endDatePickerValue = computed(() => validEndDate.value || validStartDate.value)
 
 function decodeText(value?: string) {
   if (!value)
@@ -123,7 +125,7 @@ function validateForm() {
   return ''
 }
 
-function publishActivity() {
+async function publishActivity() {
   const errorMessage = validateForm()
   if (errorMessage) {
     uni.showToast({ title: errorMessage, icon: 'none' })
@@ -133,24 +135,56 @@ function publishActivity() {
     return
 
   submitting.value = true
-  const eventChannel = getOpenerEventChannel()
-  eventChannel.emit('discountPublished', product.id)
-  uni.showToast({ title: '立减活动已发布', icon: 'success' })
-  setTimeout(() => {
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const result = await saveMerchantFoodNewCustomerDiscount({
+      activityId: product.activityId,
+      storeId,
+      productId: product.id,
+      specId: product.specId,
+      reduceAmount: discountValue.value,
+      startDate: validStartDate.value,
+      endDate: validEndDate.value,
+      inventoryLimit: inventoryLimit.value === 'limited' ? Number(limitedStock.value) : 0,
+    })
+    const eventChannel = typeof getOpenerEventChannel === 'function' ? getOpenerEventChannel() : undefined
+    eventChannel?.emit('discountPublished', product.id, result)
+    uni.showToast({ title: '立减活动已发布', icon: 'success' })
+    setTimeout(() => uni.navigateBack(), 360)
+  }
+  catch (error) {
+    console.error('发布立减活动失败:', error)
+  }
+  finally {
     submitting.value = false
-    uni.navigateBack()
-  }, 360)
+  }
 }
 
 onLoad((options) => {
   product.id = Number(options?.id || 0)
+  product.specId = Number(options?.specId || 0)
+  product.activityId = Number(options?.activityId || 0) || undefined
   product.name = decodeText(options?.name) || product.name
   product.image = decodeText(options?.image) || productImage
   product.price = parseNonNegativeNumber(options?.price)
   product.stock = Math.floor(parseNonNegativeNumber(options?.stock))
   product.isSelling = options?.status === 'selling'
-  if (product.stock > 0)
-    limitedStock.value = String(Math.min(product.stock, 500))
+  discountAmount.value = options?.reduceAmount || ''
+  const activityStartDate = decodeText(options?.activityStartDate).slice(0, 10)
+  const activityEndDate = decodeText(options?.activityEndDate).slice(0, 10)
+  if (activityStartDate)
+    validStartDate.value = activityStartDate
+  if (activityEndDate)
+    validEndDate.value = activityEndDate
+  if (options?.inventoryLimit && Number(options.inventoryLimit) > 0) {
+    inventoryLimit.value = 'limited'
+    limitedStock.value = String(Number(options.inventoryLimit))
+  }
+  if (product.stock > 0) {
+    limitedStock.value = options?.inventoryLimit && Number(options.inventoryLimit) > 0
+      ? String(Number(options.inventoryLimit))
+      : String(Math.min(product.stock, 500))
+  }
 })
 </script>
 
@@ -230,11 +264,11 @@ onLoad((options) => {
           </view>
           <view class="discount-setting-row__value discount-setting-row__value--date">
             <picker mode="date" :start="today" :value="validStartDate" @change="handleStartDateChange">
-              <text class="discount-setting-row__date-value">{{ validPeriodText }}</text>
+              <text class="discount-setting-row__date-value">{{ validStartDate }}</text>
             </picker>
-            <picker mode="date" :start="validStartDate" :value="validEndDate" @change="handleEndDateChange">
+            <picker mode="date" :start="validStartDate" :value="endDatePickerValue" @change="handleEndDateChange">
               <view class="discount-setting-row__date-picker">
-                <text>选择结束日期</text>
+                <text>{{ validEndDate || '结束日期' }}</text>
                 <view class="i-carbon-chevron-right" />
               </view>
             </picker>
@@ -332,8 +366,6 @@ onLoad((options) => {
 .discount-setting-nav__rules--hover {
   opacity: 0.7;
 }
-
-
 
 .activity-product-card {
   display: flex;
