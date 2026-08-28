@@ -64,5 +64,5 @@ export function saveMerchantFoodNewCustomerDiscount(payload: MerchantFoodNewCust
 }
 
 export function updateMerchantFoodNewCustomerStatus(storeId: number, activityId: number, status: 'PAUSED' | 'ENDED') {
-  return http.put<void>(`/merchant/food/marketing/new-customer/${activityId}/status`, { storeId, status })
+  return http.put<void>(`/merchant/food/marketing/new-customer/${activityId}/status`, { status }, { storeId })
 }
