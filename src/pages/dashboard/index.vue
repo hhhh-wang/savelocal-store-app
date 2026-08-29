@@ -9,6 +9,7 @@ import groupBuyRedemptionIcon from '@/static/icons/dashboard/group-buy-redemptio
 import merchantReconciliationIcon from '@/static/icons/dashboard/merchant-reconciliation.png'
 import orderManagementIcon from '@/static/icons/dashboard/order-management.png'
 import productManagementIcon from '@/static/icons/dashboard/product-management.png'
+import templateDetailIcon from '@/static/icons/dashboard/template-detail.png'
 import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
 import { useMerchantFoodStore } from '@/store'
 import { GROUP_BUY_REDEMPTION_PATH } from './group-buy-redemption/redemption'
@@ -79,7 +80,21 @@ const menuList: DashboardMenuItem[] = [
     icon: activityIcon,
     path: '/pages/dashboard/marketing-activity/index',
   },
+  {
+    title: '详情模板',
+    icon: templateDetailIcon,
+  },
 ]
+
+const MENU_PAGE_SIZE = 5
+
+const menuGroups = computed(() => {
+  const groups: DashboardMenuItem[][] = []
+  for (let i = 0; i < menuList.length; i += MENU_PAGE_SIZE) {
+    groups.push(menuList.slice(i, i + MENU_PAGE_SIZE))
+  }
+  return groups
+})
 
 const assistantTabs = [
   { key: 'orders', label: '待处理订单', emptyText: '无订单' },
@@ -220,20 +235,29 @@ function handleMenuTap(item: DashboardMenuItem) {
       </view>
 
       <view class="section-card">
-        <view class="menu-grid">
-          <view
-            v-for="item in menuList"
-            :key="item.title"
-            class="menu-grid__item"
-            hover-class="menu-grid__item--hover"
-            @tap="handleMenuTap(item)"
-          >
-            <image class="menu-grid__icon" :src="item.icon" mode="aspectFit" />
-            <text class="menu-grid__title">
-              {{ item.title }}
-            </text>
-          </view>
-        </view>
+        <swiper
+          class="menu-swiper"
+          :indicator-dots="menuGroups.length > 1"
+          indicator-color="rgba(102, 106, 116, 0.25)"
+          indicator-active-color="#666a74"
+        >
+          <swiper-item v-for="(group, groupIndex) in menuGroups" :key="groupIndex">
+            <view class="menu-swiper__page">
+              <view
+                v-for="item in group"
+                :key="item.title"
+                class="menu-swiper__item"
+                hover-class="menu-swiper__item--hover"
+                @tap="handleMenuTap(item)"
+              >
+                <image class="menu-swiper__icon" :src="item.icon" mode="aspectFit" />
+                <text class="menu-swiper__title">
+                  {{ item.title }}
+                </text>
+              </view>
+            </view>
+          </swiper-item>
+        </swiper>
       </view>
 
       <view class="section-card section-card--assistant">
@@ -461,29 +485,34 @@ function handleMenuTap(item: DashboardMenuItem) {
   padding: 30rpx 18rpx;
 }
 
-.menu-grid {
+.menu-swiper {
+  height: 160rpx;
+}
+
+.menu-swiper__page {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8rpx;
+  align-items: start;
 }
 
-.menu-grid__item {
+.menu-swiper__item {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14rpx;
 }
 
-.menu-grid__item--hover {
+.menu-swiper__item--hover {
   opacity: 0.84;
 }
 
-.menu-grid__icon {
+.menu-swiper__icon {
   width: 72rpx;
   height: 72rpx;
 }
 
-.menu-grid__title {
+.menu-swiper__title {
   color: #666a74;
   font-size: 24rpx;
   line-height: 1.3;
