@@ -83,6 +83,7 @@ const menuList: DashboardMenuItem[] = [
   {
     title: '详情模板',
     icon: templateDetailIcon,
+    path: '/pages/dashboard/template-detail/index',
   },
 ]
 

@@ -1,5 +1,8 @@
 <script lang="ts" setup>
+import type { PurchaseNoticeProduct } from '@/api/merchant-purchase-notice'
+import { bindPurchaseNoticeTemplate, getPurchaseNoticeProducts, savePurchaseNoticeTemplate } from '@/api/merchant-purchase-notice'
 import productImage from '@/static/images/item-image.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'TemplateApplyPage',
@@ -15,34 +18,20 @@ definePage({
 type ProductType = 'DEAL' | 'TAKEOUT'
 type StatusFilter = 'all' | 'configured' | 'unconfigured' | 'off-shelf'
 
-interface TemplateProduct {
-  id: number
-  name: string
-  image: string
-  price: number
-  stock: number
-  productType: ProductType
-  onShelf: boolean
-  templateApplied: boolean
-}
-
 interface OpenerEventChannel {
   emit: (eventName: string, ...args: any[]) => void
 }
 
 const fallbackUrl = '/pages/dashboard/template-detail/index'
+const merchantFoodStore = useMerchantFoodStore()
 
+const templateId = ref(0)
 const templateName = ref('购买须知1')
 const activeProductType = ref<ProductType>('DEAL')
 const activeStatus = ref<StatusFilter>('all')
 const keyword = ref('')
-const products = ref<TemplateProduct[]>([
-  { id: 1354137879, name: '饱藏食坊代金券', image: productImage, price: 98, stock: 29, productType: 'DEAL', onShelf: true, templateApplied: true },
-  { id: 1359213174, name: '【店招】青椒肉丝盖饭单人餐', image: productImage, price: 14, stock: 29, productType: 'DEAL', onShelf: false, templateApplied: false },
-  { id: 1361540877, name: '【现炒】万坪豆腐丝炒肉盖码饭', image: productImage, price: 14, stock: 29, productType: 'DEAL', onShelf: true, templateApplied: false },
-  { id: 1362245101, name: '【外卖】农家小炒肉双人套餐', image: productImage, price: 32, stock: 50, productType: 'TAKEOUT', onShelf: true, templateApplied: false },
-  { id: 1363346202, name: '【外卖】香干回锅肉盖码饭', image: productImage, price: 18, stock: 50, productType: 'TAKEOUT', onShelf: true, templateApplied: true },
-])
+const products = ref<PurchaseNoticeProduct[]>([])
+const productsLoading = ref(false)
 
 let openerEventChannel: OpenerEventChannel | null = null
 
@@ -53,23 +42,31 @@ const statusFilters: Array<{ key: StatusFilter, label: string }> = [
   { key: 'off-shelf', label: '已下架' },
 ]
 
+function isBound(product: PurchaseNoticeProduct) {
+  return product.noticeTemplateId != null
+}
+
+function isOnShelf(product: PurchaseNoticeProduct) {
+  return product.saleStatus === 'ON_SALE'
+}
+
 const visibleProducts = computed(() => {
   const normalizedKeyword = keyword.value.trim().toLowerCase()
   return products.value.filter((product) => {
     if (product.productType !== activeProductType.value)
       return false
 
-    if (normalizedKeyword && !product.name.toLowerCase().includes(normalizedKeyword)
-      && !String(product.id).includes(normalizedKeyword)) {
+    if (normalizedKeyword && !product.productName.toLowerCase().includes(normalizedKeyword)
+      && !String(product.productId).includes(normalizedKeyword)) {
       return false
     }
 
     if (activeStatus.value === 'configured')
-      return product.templateApplied
+      return isBound(product)
     if (activeStatus.value === 'unconfigured')
-      return !product.templateApplied
+      return !isBound(product)
     if (activeStatus.value === 'off-shelf')
-      return !product.onShelf
+      return !isOnShelf(product)
     return true
   })
 })
@@ -80,34 +77,59 @@ function confirmModal(options: { title: string, content: string, confirmColor?: 
   })
 }
 
-function statusLabel(product: TemplateProduct) {
-  if (product.templateApplied)
-    return '已设置'
-  return product.onShelf ? '未配置' : '已下架'
+async function loadProducts() {
+  productsLoading.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    products.value = await getPurchaseNoticeProducts(storeId)
+  }
+  catch (error) {
+    console.error('加载购买须知商品失败:', error)
+    uni.showToast({ title: '商品加载失败，请重试', icon: 'none' })
+  }
+  finally {
+    productsLoading.value = false
+  }
 }
 
-function statusClass(product: TemplateProduct) {
-  if (product.templateApplied)
+function statusLabel(product: PurchaseNoticeProduct) {
+  if (isBound(product))
+    return '已设置'
+  return isOnShelf(product) ? '未配置' : '已下架'
+}
+
+function statusClass(product: PurchaseNoticeProduct) {
+  if (isBound(product))
     return 'template-product-card__status--configured'
-  return product.onShelf ? 'template-product-card__status--unconfigured' : 'template-product-card__status--off-shelf'
+  return isOnShelf(product) ? 'template-product-card__status--unconfigured' : 'template-product-card__status--off-shelf'
 }
 
 function formatPrice(price: number) {
-  return Number.isInteger(price) ? String(price) : price.toFixed(2)
+  const value = Number(price || 0)
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
 }
 
-function handleEditName() {
+async function handleEditName() {
   uni.showModal({
     title: '编辑模板名称',
     editable: true,
     placeholderText: '请输入模板名称',
     content: templateName.value,
-    success: (result) => {
+    success: async (result) => {
       if (!result.confirm)
         return
       const name = result.content?.trim()
       if (!name || name === templateName.value)
         return
+      try {
+        const storeId = await merchantFoodStore.ensureCurrentStoreId()
+        await savePurchaseNoticeTemplate(storeId, templateId.value, { templateName: name })
+      }
+      catch (error) {
+        console.error('修改模板名称失败:', error)
+        uni.showToast({ title: '保存失败，请重试', icon: 'none' })
+        return
+      }
       templateName.value = name
       openerEventChannel?.emit('templateRenamed', name)
       uni.showToast({ title: '已保存', icon: 'success' })
@@ -115,25 +137,45 @@ function handleEditName() {
   })
 }
 
-async function handleTemplateAction(product: TemplateProduct) {
-  if (product.templateApplied) {
+async function handleTemplateAction(product: PurchaseNoticeProduct) {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  if (isBound(product)) {
     const result = await confirmModal({
       title: '取消配置',
-      content: `确认取消「${product.name}」的模板配置吗？`,
+      content: `确认取消「${product.productName}」的模板配置吗？`,
       confirmColor: '#d94141',
     })
     if (!result.confirm)
       return
-    product.templateApplied = false
+    try {
+      await bindPurchaseNoticeTemplate(storeId, product.productId, null)
+    }
+    catch (error) {
+      console.error('取消配置失败:', error)
+      uni.showToast({ title: '操作失败，请重试', icon: 'none' })
+      return
+    }
+    product.noticeTemplateId = undefined
+    product.noticeTemplateName = undefined
     uni.showToast({ title: '已取消配置', icon: 'success' })
     return
   }
 
-  product.templateApplied = true
+  try {
+    await bindPurchaseNoticeTemplate(storeId, product.productId, templateId.value)
+  }
+  catch (error) {
+    console.error('配置模板失败:', error)
+    uni.showToast({ title: '操作失败，请重试', icon: 'none' })
+    return
+  }
+  product.noticeTemplateId = templateId.value
+  product.noticeTemplateName = templateName.value
   uni.showToast({ title: '已配置模板', icon: 'success' })
 }
 
 onLoad((options) => {
+  templateId.value = Number(options?.templateId) || 0
   const name = options?.name ? decodeURIComponent(options.name) : ''
   if (name)
     templateName.value = name
@@ -143,6 +185,7 @@ onLoad((options) => {
   } | undefined
 
   openerEventChannel = currentPage?.getOpenerEventChannel?.() || null
+  loadProducts()
 })
 </script>
 
@@ -216,37 +259,41 @@ onLoad((options) => {
         </view>
       </view>
 
-      <view v-if="!visibleProducts.length" class="product-list-state">
+      <view v-if="productsLoading && !products.length" class="product-list-state">
+        正在加载项目
+      </view>
+
+      <view v-else-if="!visibleProducts.length" class="product-list-state">
         暂无符合条件的项目
       </view>
 
       <view v-else class="template-product-list">
         <view
           v-for="product in visibleProducts"
-          :key="product.id"
+          :key="product.productId"
           class="template-product-card"
         >
-          <image class="template-product-card__image" :src="product.image" mode="aspectFill" />
+          <image class="template-product-card__image" :src="product.coverImageUrl || productImage" mode="aspectFill" />
 
           <view class="template-product-card__body">
             <view class="template-product-card__header">
               <text class="template-product-card__name">
-                {{ product.name }}
+                {{ product.productName }}
               </text>
               <text class="template-product-card__stock">
-                库存:{{ product.stock }}
+                库存:{{ product.stockQuantity }}
               </text>
             </view>
 
             <text class="template-product-card__id">
-              ID:{{ product.id }}
+              ID:{{ product.productId }}
             </text>
 
             <view class="template-product-card__footer">
               <view class="template-product-card__status-wrap">
                 <view class="template-product-card__status-line">
                   <text class="template-product-card__label">当前价:</text>
-                  <text class="template-product-card__price">¥ {{ formatPrice(product.price) }}</text>
+                  <text class="template-product-card__price">¥ {{ formatPrice(product.salePrice) }}</text>
                 </view>
                 <view class="template-product-card__status-line">
                   <text class="template-product-card__label">状态:</text>
@@ -261,14 +308,14 @@ onLoad((options) => {
                 hover-class="template-product-card__action--hover"
                 @tap="handleTemplateAction(product)"
               >
-                {{ product.templateApplied ? '取消配置' : '配置模板' }}
+                {{ isBound(product) ? '取消配置' : '配置模板' }}
               </view>
             </view>
           </view>
         </view>
       </view>
 
-      <text v-if="visibleProducts.length" class="product-list-end">
+      <text v-if="!productsLoading && visibleProducts.length" class="product-list-end">
         没有更多了
       </text>
     </view>

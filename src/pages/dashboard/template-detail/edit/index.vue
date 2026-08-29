@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+import { savePurchaseNoticeTemplate } from '@/api/merchant-purchase-notice'
+import { useMerchantFoodStore } from '@/store'
+
 defineOptions({
   name: 'TemplateEditPage',
 })
@@ -20,10 +23,13 @@ interface OpenerEventChannel {
 }
 
 const fallbackUrl = '/pages/dashboard/template-detail/index'
+const merchantFoodStore = useMerchantFoodStore()
 
+const templateId = ref(0)
 const templateName = ref('购买须知1')
 const paragraphs = ref<RuleParagraph[]>([])
 const focusIndex = ref(-1)
+const saving = ref(false)
 let paragraphSeed = 0
 
 let openerEventChannel: OpenerEventChannel | null = null
@@ -36,18 +42,33 @@ function confirmModal(options: { title: string, content: string, confirmColor?: 
   })
 }
 
+function collectRules() {
+  return paragraphs.value
+    .map(paragraph => paragraph.text.trim())
+    .filter(text => text.length > 0)
+}
+
 function handleEditName() {
   uni.showModal({
     title: '编辑模板名称',
     editable: true,
     placeholderText: '请输入模板名称',
     content: templateName.value,
-    success: (result) => {
+    success: async (result) => {
       if (!result.confirm)
         return
       const name = result.content?.trim()
       if (!name || name === templateName.value)
         return
+      try {
+        const storeId = await merchantFoodStore.ensureCurrentStoreId()
+        await savePurchaseNoticeTemplate(storeId, templateId.value, { templateName: name })
+      }
+      catch (error) {
+        console.error('修改模板名称失败:', error)
+        uni.showToast({ title: '保存失败，请重试', icon: 'none' })
+        return
+      }
       templateName.value = name
       openerEventChannel?.emit('templateRenamed', name)
       uni.showToast({ title: '已保存', icon: 'success' })
@@ -64,27 +85,42 @@ function removeParagraph(index: number) {
   paragraphs.value.splice(index, 1)
 }
 
-function collectRules() {
-  return paragraphs.value
-    .map(paragraph => paragraph.text.trim())
-    .filter(text => text.length > 0)
-}
-
-function saveChanges() {
-  openerEventChannel?.emit('templateRulesUpdated', collectRules())
+async function saveTemplate(submit: boolean) {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  await savePurchaseNoticeTemplate(storeId, templateId.value, {
+    templateName: templateName.value,
+    rules: collectRules(),
+    submit,
+  })
 }
 
 function saveAndBack(toastTitle: string) {
-  saveChanges()
+  openerEventChannel?.emit('templateRenamed', templateName.value)
+  openerEventChannel?.emit('templateRulesUpdated', collectRules())
   uni.showToast({ title: toastTitle, icon: 'success' })
   setTimeout(() => uni.navigateBack(), 600)
 }
 
-function handleConfirm() {
-  saveAndBack('已保存')
+async function handleConfirm() {
+  if (saving.value)
+    return
+  saving.value = true
+  try {
+    await saveTemplate(false)
+    saveAndBack('已保存')
+  }
+  catch (error) {
+    console.error('保存模板失败:', error)
+    uni.showToast({ title: '保存失败，请重试', icon: 'none' })
+  }
+  finally {
+    saving.value = false
+  }
 }
 
 async function handleSubmit() {
+  if (saving.value)
+    return
   if (!collectRules().length) {
     uni.showToast({ title: '请至少添加一个段落', icon: 'none' })
     return
@@ -92,12 +128,23 @@ async function handleSubmit() {
 
   const result = await confirmModal({
     title: '提交模板',
-    content: '确认提交当前模板内容吗？',
+    content: '确认提交当前模板内容吗？提交后进入审核。',
   })
   if (!result.confirm)
     return
 
-  saveAndBack('已提交')
+  saving.value = true
+  try {
+    await saveTemplate(true)
+    saveAndBack('已提交')
+  }
+  catch (error) {
+    console.error('提交模板失败:', error)
+    uni.showToast({ title: '提交失败，请重试', icon: 'none' })
+  }
+  finally {
+    saving.value = false
+  }
 }
 
 function handlePreview() {
@@ -123,6 +170,7 @@ function handleViewCase() {
 }
 
 onLoad((options) => {
+  templateId.value = Number(options?.templateId) || 0
   const name = options?.name ? decodeURIComponent(options.name) : ''
   if (name)
     templateName.value = name
@@ -222,10 +270,20 @@ onLoad((options) => {
     </view>
 
     <view class="template-edit-actions">
-      <view class="template-edit-actions__button" hover-class="template-edit-actions__button--hover" @tap="handleConfirm">
+      <view
+        class="template-edit-actions__button"
+        :class="{ 'template-edit-actions__button--disabled': saving }"
+        hover-class="template-edit-actions__button--hover"
+        @tap="handleConfirm"
+      >
         确认修改
       </view>
-      <view class="template-edit-actions__button" hover-class="template-edit-actions__button--hover" @tap="handleSubmit">
+      <view
+        class="template-edit-actions__button"
+        :class="{ 'template-edit-actions__button--disabled': saving }"
+        hover-class="template-edit-actions__button--hover"
+        @tap="handleSubmit"
+      >
         提交模板
       </view>
     </view>
@@ -439,6 +497,10 @@ onLoad((options) => {
   color: #28220c;
   font-size: 34rpx;
   font-weight: 600;
+}
+
+.template-edit-actions__button--disabled {
+  opacity: 0.6;
 }
 
 .template-edit-actions__button--hover {

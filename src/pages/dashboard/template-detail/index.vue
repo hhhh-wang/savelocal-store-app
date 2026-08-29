@@ -1,5 +1,8 @@
 <script lang="ts" setup>
+import type { PurchaseNoticeTemplate } from '@/api/merchant-purchase-notice'
+import { applyPurchaseNoticeTemplate, createPurchaseNoticeTemplate, deletePurchaseNoticeTemplate, getPurchaseNoticeTemplates } from '@/api/merchant-purchase-notice'
 import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
+import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
   name: 'TemplateDetail',
@@ -12,38 +15,11 @@ definePage({
   },
 })
 
-interface DetailTemplate {
-  id: number
-  name: string
-  inUse: boolean
-  rules: string[]
-}
-
 const fallbackUrl = '/pages/dashboard/index'
+const merchantFoodStore = useMerchantFoodStore()
 
-const templates = ref<DetailTemplate[]>([
-  {
-    id: 1,
-    name: '购买须知1',
-    inUse: true,
-    rules: [
-      '最长可用餐2小时',
-      '1.4米以上儿童按成人价收取，1.1米-1.4米之间按半价收取',
-      '押金:20元/位(每桌食材浪费超过100克，扣除押金20元)',
-      '本单发票由商家提供，详情请咨询商家',
-    ],
-  },
-  {
-    id: 2,
-    name: '购买须知2',
-    inUse: false,
-    rules: [
-      '本券每人限用一张',
-      '图片仅供参考，请以实物为准',
-    ],
-  },
-])
-
+const templates = ref<PurchaseNoticeTemplate[]>([])
+const templatesLoading = ref(false)
 const selectedId = ref<number | null>(null)
 
 function confirmModal(options: { title: string, content: string, confirmColor?: string }) {
@@ -52,21 +28,40 @@ function confirmModal(options: { title: string, content: string, confirmColor?: 
   })
 }
 
-function handleSelect(item: DetailTemplate) {
-  selectedId.value = selectedId.value === item.id ? null : item.id
+async function loadTemplates() {
+  templatesLoading.value = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    templates.value = await getPurchaseNoticeTemplates(storeId)
+  }
+  catch (error) {
+    console.error('加载购买须知模板失败:', error)
+    uni.showToast({ title: '模板加载失败，请重试', icon: 'none' })
+  }
+  finally {
+    templatesLoading.value = false
+  }
 }
 
-function handleEdit(item: DetailTemplate) {
+onShow(() => {
+  loadTemplates()
+})
+
+function handleSelect(item: PurchaseNoticeTemplate) {
+  selectedId.value = selectedId.value === item.templateId ? null : item.templateId
+}
+
+function handleEdit(item: PurchaseNoticeTemplate) {
   uni.navigateTo({
-    url: `/pages/dashboard/template-detail/edit/index?templateId=${item.id}&name=${encodeURIComponent(item.name)}&rules=${encodeURIComponent(JSON.stringify(item.rules))}`,
+    url: `/pages/dashboard/template-detail/edit/index?templateId=${item.templateId}&name=${encodeURIComponent(item.templateName)}&rules=${encodeURIComponent(JSON.stringify(item.rules))}`,
     events: {
       templateRenamed: (newName: string) => {
-        const target = templates.value.find(template => template.id === item.id)
+        const target = templates.value.find(template => template.templateId === item.templateId)
         if (target)
-          target.name = newName
+          target.templateName = newName
       },
       templateRulesUpdated: (rules: string[]) => {
-        const target = templates.value.find(template => template.id === item.id)
+        const target = templates.value.find(template => template.templateId === item.templateId)
         if (target)
           target.rules = rules
       },
@@ -79,37 +74,42 @@ function navigateToApply(templateId: number, name: string) {
     url: `/pages/dashboard/template-detail/apply/index?templateId=${templateId}&name=${encodeURIComponent(name)}`,
     events: {
       templateRenamed: (newName: string) => {
-        const target = templates.value.find(template => template.id === templateId)
+        const target = templates.value.find(template => template.templateId === templateId)
         if (target)
-          target.name = newName
+          target.templateName = newName
       },
     },
   })
 }
 
-async function handleApply(item: DetailTemplate) {
-  if (item.inUse) {
-    navigateToApply(item.id, item.name)
-    return
-  }
-
+async function handleApply(item: PurchaseNoticeTemplate) {
   const result = await confirmModal({
     title: '应用模板',
-    content: `确认将「${item.name}」设为使用中吗？`,
+    content: `确认将「${item.templateName}」设为使用中吗？`,
   })
   if (!result.confirm)
     return
 
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await applyPurchaseNoticeTemplate(storeId, item.templateId)
+  }
+  catch (error) {
+    console.error('应用模板失败:', error)
+    uni.showToast({ title: '应用失败，请重试', icon: 'none' })
+    return
+  }
+
   templates.value = templates.value.map(template => ({
     ...template,
-    inUse: template.id === item.id,
+    inUse: template.templateId === item.templateId,
   }))
-  navigateToApply(item.id, item.name)
+  navigateToApply(item.templateId, item.templateName)
 }
 
-function handleAdd() {
+async function handleAdd() {
   const usedNumbers = templates.value
-    .map(template => Number.parseInt(template.name.replace(/^购买须知/, ''), 10))
+    .map(template => Number.parseInt(template.templateName.replace(/^购买须知/, ''), 10))
     .filter(number => !Number.isNaN(number))
 
   let nextNumber = templates.value.length + 1
@@ -117,17 +117,20 @@ function handleAdd() {
     nextNumber++
   }
 
-  templates.value.push({
-    id: Date.now(),
-    name: `购买须知${nextNumber}`,
-    inUse: false,
-    rules: [],
-  })
-  uni.showToast({ title: '已添加', icon: 'success' })
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await createPurchaseNoticeTemplate(storeId, { templateName: `购买须知${nextNumber}` })
+    await loadTemplates()
+    uni.showToast({ title: '已添加', icon: 'success' })
+  }
+  catch (error) {
+    console.error('添加模板失败:', error)
+    uni.showToast({ title: '添加失败，请重试', icon: 'none' })
+  }
 }
 
 async function handleDelete() {
-  const selected = templates.value.find(template => template.id === selectedId.value)
+  const selected = templates.value.find(template => template.templateId === selectedId.value)
   if (!selected) {
     uni.showToast({ title: '请先选择要删除的模板', icon: 'none' })
     return
@@ -139,15 +142,23 @@ async function handleDelete() {
 
   const result = await confirmModal({
     title: '删除模板',
-    content: `确认删除「${selected.name}」吗？`,
+    content: `确认删除「${selected.templateName}」吗？`,
     confirmColor: '#d94141',
   })
   if (!result.confirm)
     return
 
-  templates.value = templates.value.filter(template => template.id !== selected.id)
-  selectedId.value = null
-  uni.showToast({ title: '已删除', icon: 'success' })
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    await deletePurchaseNoticeTemplate(storeId, selected.templateId)
+    selectedId.value = null
+    await loadTemplates()
+    uni.showToast({ title: '已删除', icon: 'success' })
+  }
+  catch (error) {
+    console.error('删除模板失败:', error)
+    uni.showToast({ title: '删除失败，请重试', icon: 'none' })
+  }
 }
 </script>
 
@@ -168,10 +179,23 @@ async function handleDelete() {
         </text>
       </view>
 
-      <view v-if="templates.length" class="template-list">
+      <view v-if="templatesLoading && !templates.length" class="template-empty">
+        <text class="template-empty__text">
+          正在加载模板
+        </text>
+      </view>
+
+      <view v-else-if="!templates.length" class="template-empty">
+        <image class="template-empty__image" :src="emptyNoDataIcon" mode="aspectFit" />
+        <text class="template-empty__text">
+          暂无模板
+        </text>
+      </view>
+
+      <view v-else class="template-list">
         <view
           v-for="item in templates"
-          :key="item.id"
+          :key="item.templateId"
           class="template-card"
           hover-class="template-card--hover"
           @tap="handleSelect(item)"
@@ -186,10 +210,10 @@ async function handleDelete() {
           <view class="template-card__row">
             <view
               class="template-card__radio"
-              :class="{ 'template-card__radio--checked': selectedId === item.id }"
+              :class="{ 'template-card__radio--checked': selectedId === item.templateId }"
             />
             <text class="template-card__name">
-              {{ item.name }}
+              {{ item.templateName }}
             </text>
             <view class="template-card__actions">
               <view
@@ -208,14 +232,11 @@ async function handleDelete() {
               </view>
             </view>
           </view>
-        </view>
-      </view>
 
-      <view v-else class="template-empty">
-        <image class="template-empty__image" :src="emptyNoDataIcon" mode="aspectFit" />
-        <text class="template-empty__text">
-          暂无模板
-        </text>
+          <text v-if="item.auditStatus === '2'" class="template-card__reject">
+            审核未通过：{{ item.rejectReason || '内容不符合规范' }}
+          </text>
+        </view>
       </view>
     </view>
 
@@ -355,6 +376,14 @@ async function handleDelete() {
 
 .template-card__action--hover {
   opacity: 0.85;
+}
+
+.template-card__reject {
+  display: block;
+  margin-top: 14rpx;
+  color: #d94141;
+  font-size: 22rpx;
+  line-height: 1.4;
 }
 
 .template-empty {
