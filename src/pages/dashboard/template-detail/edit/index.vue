@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { savePurchaseNoticeTemplate } from '@/api/merchant-purchase-notice'
+import usageRulesImage from '@/static/images/usage-rules.png'
 import { useMerchantFoodStore } from '@/store'
 
 defineOptions({
@@ -30,11 +31,10 @@ const templateName = ref('购买须知1')
 const paragraphs = ref<RuleParagraph[]>([])
 const focusIndex = ref(-1)
 const saving = ref(false)
+const casePopupVisible = ref(false)
 let paragraphSeed = 0
 
 let openerEventChannel: OpenerEventChannel | null = null
-
-const caseContent = '案例：\n1、最长可用餐2小时；\n2、1.4米以上儿童按成人价收取，1.1米-1.4米之间按半价收取；\n3、押金:20元/位（每桌食材浪费超过100克，扣除押金20元）；\n4、本单发票由商家提供，详情请咨询商家。'
 
 function confirmModal(options: { title: string, content: string, confirmColor?: string }) {
   return new Promise<UniApp.ShowModalRes>((resolve) => {
@@ -161,12 +161,15 @@ function handlePreview() {
 }
 
 function handleViewCase() {
-  uni.showModal({
-    title: '使用规则案例',
-    content: caseContent,
-    showCancel: false,
-    confirmText: '知道了',
-  })
+  casePopupVisible.value = true
+}
+
+function closeCasePopup() {
+  casePopupVisible.value = false
+}
+
+function handlePreviewCaseImage() {
+  uni.previewImage({ urls: [usageRulesImage] })
 }
 
 onLoad((options) => {
@@ -285,6 +288,43 @@ onLoad((options) => {
         @tap="handleSubmit"
       >
         提交模板
+      </view>
+    </view>
+
+    <view v-if="casePopupVisible" class="case-popup">
+      <view class="case-popup__mask" @tap="closeCasePopup" />
+
+      <view class="case-popup__panel" @tap.stop>
+        <view class="case-popup__header">
+          <text class="case-popup__title">
+            使用规则案例
+          </text>
+          <view class="case-popup__close" hover-class="case-popup__close--hover" @tap="closeCasePopup">
+            ✕
+          </view>
+        </view>
+
+        <scroll-view class="case-popup__body" scroll-y>
+          <image
+            class="case-popup__image"
+            :src="usageRulesImage"
+            mode="widthFix"
+            @tap="handlePreviewCaseImage"
+          />
+        </scroll-view>
+
+        <view class="case-popup__footer">
+          <text class="case-popup__tip">
+            点击图片可放大查看
+          </text>
+          <view
+            class="case-popup__confirm"
+            hover-class="case-popup__confirm--hover"
+            @tap="closeCasePopup"
+          >
+            知道了
+          </view>
+        </view>
       </view>
     </view>
   </view>
@@ -504,6 +544,108 @@ onLoad((options) => {
 }
 
 .template-edit-actions__button--hover {
+  opacity: 0.85;
+}
+
+.case-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.case-popup__mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 22, 29, 0.45);
+}
+
+.case-popup__panel {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  width: 600rpx;
+  max-height: 80vh;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: 26rpx;
+  background: #fff;
+  box-shadow: 0 16rpx 48rpx rgba(17, 22, 29, 0.18);
+}
+
+.case-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 28rpx 24rpx 0;
+}
+
+.case-popup__title {
+  min-width: 0;
+  flex: 1;
+  color: #1f2126;
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.case-popup__close {
+  display: flex;
+  width: 48rpx;
+  height: 48rpx;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #97999e;
+  font-size: 28rpx;
+}
+
+.case-popup__close--hover {
+  background: #f0f1f3;
+}
+
+.case-popup__body {
+  flex: 1;
+  min-height: 0;
+  margin-top: 20rpx;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+}
+
+.case-popup__image {
+  display: block;
+  width: 100%;
+  border-radius: 16rpx;
+}
+
+.case-popup__footer {
+  padding: 24rpx;
+}
+
+.case-popup__tip {
+  display: block;
+  margin-bottom: 18rpx;
+  color: #97999e;
+  font-size: 24rpx;
+  text-align: center;
+}
+
+.case-popup__confirm {
+  display: flex;
+  height: 88rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20rpx;
+  background: #ffca05;
+  color: #28220c;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.case-popup__confirm--hover {
   opacity: 0.85;
 }
 
