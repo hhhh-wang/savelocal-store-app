@@ -49,6 +49,7 @@ const auditStatus = ref('0')
 const auditVersion = ref(0)
 const auditSummary = ref('')
 const auditIssues = ref<{ field: string, message: string }[]>([])
+const submitError = ref('')
 const loading = ref(true)
 const submitting = ref(false)
 const addressSuggestions = ref<MerchantFoodAddressSuggestion[]>([])
@@ -150,6 +151,21 @@ function clearFieldIssue(key: string) {
   if (!paths.length)
     return
   auditIssues.value = auditIssues.value.filter(item => !paths.includes(item.field))
+}
+
+function showSubmitError(message: unknown) {
+  const errorMessage = String(message || '').trim() || '提交失败，请稍后重试'
+  submitError.value = errorMessage
+  uni.showToast({ title: errorMessage, icon: 'none', duration: 3500 })
+}
+
+function normalizeText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+}
+
+function getSubmitErrorMessage(error: unknown) {
+  const value = error as any
+  return value?.message || value?.msg || value?.data?.message || value?.data?.msg || '提交失败，请稍后重试'
 }
 
 function clearAddressSuggestions() {
@@ -259,6 +275,7 @@ function selectAddressSuggestion(item: AuditMaterialsAddressSuggestion) {
   form.storeAddress = address
   addressLocation.latitude = latitude
   addressLocation.longitude = longitude
+  submitError.value = ''
   clearFieldIssue('storeAddress')
   clearAddressSuggestions()
 }
@@ -323,6 +340,7 @@ function applyDraft(draft: MerchantStoreAuditDraft) {
 }
 
 function handleFormUpdate(value: AuditMaterialsFormValue) {
+  submitError.value = ''
   if (value.storeAddress !== form.storeAddress) {
     addressLocation.latitude = 0
     addressLocation.longitude = 0
@@ -335,7 +353,7 @@ onLoad(async (options) => {
   const parsedStoreId = Number(options?.storeId)
   if (!Number.isFinite(parsedStoreId) || parsedStoreId <= 0) {
     loading.value = false
-    uni.showToast({ title: '缺少门店ID，请从开新店入口进入', icon: 'none' })
+    showSubmitError('缺少门店ID，请从开新店入口进入')
     return
   }
   storeId.value = parsedStoreId
@@ -354,7 +372,7 @@ onLoad(async (options) => {
   }
   catch (error) {
     console.error('加载门店审核资料失败:', error)
-    uni.showToast({ title: '审核资料加载失败', icon: 'none' })
+    showSubmitError(getSubmitErrorMessage(error))
   }
   finally {
     loading.value = false
@@ -385,6 +403,7 @@ const { run: selectAndUpload } = useUpload<'file'>({
     document.fileUrl = fileUrl
     document.imageUrl = fileUrl
     document.fileName = '已上传文件'
+    submitError.value = ''
     const fieldKey = ({
       'business-license': 'businessLicenseUrl',
       'food-permit': 'foodPermitUrl',
@@ -409,13 +428,20 @@ function handleDocumentUpload(document: AuditMaterialsDocumentItem) {
 }
 
 async function handleSubmit(value: AuditMaterialsFormValue) {
+  submitError.value = ''
+
   if (primaryAction.value === 'workbench') {
     uni.switchTab({ url: '/pages/dashboard/index' })
     return
   }
 
+  if (loading.value) {
+    showSubmitError('审核资料正在加载，请稍后再试')
+    return
+  }
+
   if (auditStatus.value === '1' || submitting.value) {
-    uni.showToast({ title: '审核中，资料暂不可修改', icon: 'none' })
+    showSubmitError(submitting.value ? '正在提交，请勿重复操作' : '审核中，资料暂不可修改')
     return
   }
   const result = validateAuditMaterials(
@@ -430,10 +456,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
   if (!result.valid) {
     const field = [...selectFields, ...textFields].find(item => item.key === result.missingKey)
     const document = documents.value.find(item => item.key === result.missingKey)
-    uni.showToast({
-      title: field ? `请填写${field.label}` : `请上传${document?.title || '必填资料'}`,
-      icon: 'none',
-    })
+    showSubmitError(field ? `请填写${field.label}` : `请上传${document?.title || '必填资料'}`)
     return
   }
 
@@ -444,7 +467,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
     || longitude === undefined
     || (latitude === 0 && longitude === 0)
   ) {
-    uni.showToast({ title: '请通过地址定位选择完整的门店地址', icon: 'none' })
+    showSubmitError('请通过地址定位选择完整的门店地址')
     return
   }
 
@@ -452,15 +475,15 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
   try {
     const payload: MerchantStoreAuditMaterials = {
       auditVersion: auditVersion.value,
-      mainIndustryCode: value.mainIndustryCode,
-      storeCategoryCode: value.storeCategoryCode,
-      storeName: value.storeName.trim(),
-      legalPersonName: value.legalPersonName.trim(),
-      legalPersonPhone: value.legalPersonPhone.trim(),
-      storeAddress: value.storeAddress.trim(),
+      mainIndustryCode: normalizeText(value.mainIndustryCode),
+      storeCategoryCode: normalizeText(value.storeCategoryCode),
+      storeName: normalizeText(value.storeName),
+      legalPersonName: normalizeText(value.legalPersonName),
+      legalPersonPhone: normalizeText(value.legalPersonPhone),
+      storeAddress: normalizeText(value.storeAddress),
       longitude,
       latitude,
-      businessLicenseCode: value.businessLicenseCode.trim().toUpperCase(),
+      businessLicenseCode: normalizeText(value.businessLicenseCode).toUpperCase(),
       businessLicenseUrl: form.businessLicenseUrl || documents.value.find(item => item.key === 'business-license')?.fileUrl || '',
       foodPermitUrl: form.foodPermitUrl || documents.value.find(item => item.key === 'food-permit')?.fileUrl || '',
       legalPersonIdFrontUrl: form.legalPersonIdFrontUrl || documents.value.find(item => item.key === 'id-front')?.fileUrl || '',
@@ -472,6 +495,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
   }
   catch (error) {
     console.error('提交门店审核资料失败:', error)
+    showSubmitError(getSubmitErrorMessage(error))
     if (String((error as any)?.message || '').includes('版本') || String((error as any)?.message || '').includes('审核中')) {
       try {
         applyDraft(await getMerchantStoreAuditDraft(storeId.value))
@@ -507,6 +531,11 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
       <view v-if="auditStatus === '3' && auditSummary" class="store-audit-summary">
         <text class="store-audit-summary__label">整单驳回说明</text>
         <text class="store-audit-summary__content">{{ auditSummary }}</text>
+      </view>
+
+      <view v-if="submitError" class="store-audit-submit-error">
+        <text class="store-audit-submit-error__label">提交失败</text>
+        <text class="store-audit-submit-error__content">{{ submitError }}</text>
       </view>
 
       <audit-materials-form
@@ -607,6 +636,30 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
   font-size: 26rpx;
   line-height: 1.5;
   white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.store-audit-submit-error {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  margin: 0 0 18rpx;
+  padding: 18rpx 22rpx;
+  border: 1rpx solid #efb6b2;
+  border-radius: 18rpx;
+  background: #fff5f4;
+}
+
+.store-audit-submit-error__label {
+  color: #b42318;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.store-audit-submit-error__content {
+  color: #8f2d25;
+  font-size: 26rpx;
+  line-height: 1.5;
   word-break: break-word;
 }
 </style>

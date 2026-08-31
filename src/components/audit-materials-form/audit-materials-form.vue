@@ -109,8 +109,6 @@ function handleAddressSuggestionTap(item: AuditMaterialsAddressSuggestion) {
 }
 
 function handleSubmit() {
-  if (props.readonly)
-    return
   emit('submit', { ...props.modelValue })
 }
 </script>
