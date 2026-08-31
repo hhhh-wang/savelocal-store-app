@@ -61,7 +61,7 @@ const defaultCreateForm: ProductEditorForm = {
   imageText: '',
   imageUrl: '',
   coverImageId: 0,
-  kind: 'takeout' as ProductKind,
+  kind: 'deal' as ProductKind,
   tag: '无',
   packingFee: '0.00',
   singleNoDelivery: false,
@@ -72,7 +72,7 @@ const defaultEditForm: ProductEditorForm = {
   imageText: '',
   imageUrl: '',
   coverImageId: 0,
-  kind: 'takeout' as ProductKind,
+  kind: 'deal' as ProductKind,
   tag: '无',
   packingFee: '0.00',
   singleNoDelivery: false,
@@ -183,6 +183,10 @@ function handleSelectImage() {
 }
 
 function handleSelectKind(kind: ProductKind) {
+  if (kind === 'takeout') {
+    uni.showToast({ title: '外卖功能后续会上线，请期待', icon: 'none' })
+    return
+  }
   form.kind = kind
   if (kind === 'deal') {
     form.packingFee = '0.00'
@@ -393,7 +397,7 @@ onLoad(async (options) => {
             </view>
           </view>
 
-          <view class="product-editor-row product-editor-row--clickable" @tap="handleSelectKind('takeout')">
+          <view class="product-editor-row product-editor-row--clickable product-editor-row--disabled" @tap="handleSelectKind('takeout')">
             <text class="product-editor-row__label-text">
               外卖
             </text>
@@ -713,6 +717,14 @@ onLoad(async (options) => {
 
 .product-editor-row--clickable:active {
   opacity: 0.92;
+}
+
+.product-editor-row--disabled {
+  color: #aeb3ba;
+}
+
+.product-editor-row--disabled .product-editor-row__label-text {
+  color: #aeb3ba;
 }
 
 .product-editor-row__label {
