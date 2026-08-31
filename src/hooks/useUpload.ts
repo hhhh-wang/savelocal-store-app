@@ -1,9 +1,8 @@
 import { ref } from 'vue'
 import { useTokenStore } from '@/store/token'
-import { getEnvBaseUrl } from '@/utils/index'
 import { getSelectedUploadFiles } from './upload-utils'
 
-const VITE_UPLOAD_BASEURL = `${getEnvBaseUrl()}/common/upload`
+const UPLOAD_URL = '/common/upload'
 
 type TfileType = 'image' | 'file'
 type TImage = 'png' | 'jpg' | 'jpeg' | 'webp' | '*'
@@ -183,7 +182,7 @@ async function uploadFile({
     }
 
     uni.uploadFile({
-      url: VITE_UPLOAD_BASEURL,
+      url: UPLOAD_URL,
       filePath: tempFilePath,
       name: 'file',
       formData,
