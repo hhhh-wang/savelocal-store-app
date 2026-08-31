@@ -83,6 +83,7 @@ const editorMode = ref<EditorMode>('edit')
 const pageTitle = computed(() => editorMode.value === 'create' ? '新增商品' : '编辑菜品')
 const showSpecPicker = ref(false)
 const selectingUnitSpecKey = ref<number>()
+const unitInput = ref('')
 
 const form = reactive<ProductEditorForm>({ ...defaultEditForm, specs: [...defaultEditForm.specs] })
 
@@ -217,6 +218,7 @@ function handleSelectDisplaySpec(specKey: number) {
 
 function handleOpenUnitPicker(specKey: number) {
   selectingUnitSpecKey.value = specKey
+  unitInput.value = form.specs.find(spec => spec.key === specKey)?.unit || ''
   showSpecPicker.value = true
 }
 
@@ -235,14 +237,26 @@ function handleRemoveDetail(spec: ProductEditorSpecForm, detailIndex: number) {
 function handleCloseSpecPicker() {
   showSpecPicker.value = false
   selectingUnitSpecKey.value = undefined
+  unitInput.value = ''
 }
 
 function handleSelectSpec(option: string) {
   const spec = form.specs.find(item => item.key === selectingUnitSpecKey.value)
   if (spec)
     spec.unit = option
-  showSpecPicker.value = false
-  selectingUnitSpecKey.value = undefined
+  handleCloseSpecPicker()
+}
+
+function handleConfirmUnitInput() {
+  const unit = unitInput.value.trim()
+  if (!unit) {
+    uni.showToast({ title: '请输入单位', icon: 'none' })
+    return
+  }
+  const spec = form.specs.find(item => item.key === selectingUnitSpecKey.value)
+  if (spec)
+    spec.unit = unit
+  handleCloseSpecPicker()
 }
 
 function handlePriceInput(spec: ProductEditorSpecForm, event: { detail?: { value?: string } }) {
@@ -581,6 +595,25 @@ onLoad(async (options) => {
           <text class="product-editor-picker__close" @tap="handleCloseSpecPicker">
             ×
           </text>
+        </view>
+
+        <view class="product-editor-picker__custom">
+          <input
+            v-model="unitInput"
+            class="product-editor-picker__input"
+            :maxlength="20"
+            placeholder="也可以直接输入单位"
+            placeholder-class="product-editor-picker__placeholder"
+            confirm-type="done"
+            @confirm="handleConfirmUnitInput"
+          >
+          <view
+            class="product-editor-picker__confirm"
+            hover-class="product-editor-picker__confirm--hover"
+            @tap="handleConfirmUnitInput"
+          >
+            确定
+          </view>
         </view>
 
         <view class="product-editor-picker__list">
@@ -1053,6 +1086,51 @@ onLoad(async (options) => {
   font-size: 40rpx;
   line-height: 1;
   transform: translateY(-50%);
+}
+
+.product-editor-picker__custom {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 18rpx 28rpx;
+  border-bottom: 2rpx solid #f0f0f0;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.product-editor-picker__input {
+  min-width: 0;
+  flex: 1;
+  height: 72rpx;
+  padding: 0 18rpx;
+  border-radius: 12rpx;
+  color: #35383f;
+  font-size: 30rpx;
+  background: #f5f5f5;
+  box-sizing: border-box;
+}
+
+.product-editor-picker__placeholder {
+  color: #aeb3ba;
+  font-size: 30rpx;
+}
+
+.product-editor-picker__confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 112rpx;
+  height: 72rpx;
+  border-radius: 12rpx;
+  color: #2c2510;
+  font-size: 29rpx;
+  font-weight: 600;
+  background: #ffd21a;
+  flex-shrink: 0;
+}
+
+.product-editor-picker__confirm--hover {
+  opacity: 0.88;
 }
 
 .product-editor-picker__list {
