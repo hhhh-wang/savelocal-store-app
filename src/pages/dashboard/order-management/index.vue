@@ -5,7 +5,7 @@ import type {
   MerchantFoodOrderStatus,
   MerchantFoodScene,
 } from '@/api/types/merchant-food'
-import { confirmMerchantFoodRefund, getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage } from '@/api/merchant-food'
+import { confirmMerchantFoodRefund, getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage, rejectMerchantFoodRefund } from '@/api/merchant-food'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
 import arrowUpIcon from '@/static/icons/arrow-up.png'
 import phoneIcon from '@/static/icons/phone.png'
@@ -72,8 +72,8 @@ const fallbackUrl = '/pages/dashboard/index'
 const merchantFoodStore = useMerchantFoodStore()
 
 const topTabs = [
-  { key: 'all', label: '全部' },
   { key: 'todo', label: '待办' },
+  { key: 'all', label: '全部' },
 ] as const
 
 const timeOptions = [
@@ -184,6 +184,8 @@ const refundDialog = reactive({
   cityCoinReturnAmount: '',
 })
 
+const isGroupBuyRefund = computed(() => refundDialog.order?.scene === 'GROUP_BUY')
+
 function openRefundDialog(order: OrderItem) {
   if (!order.refundId) {
     uni.showToast({ title: '退款申请不存在，请刷新后重试', icon: 'none' })
@@ -215,8 +217,12 @@ async function submitRefundDialog() {
   const order = refundDialog.order
   if (!order?.refundId)
     return
-  const refundAmount = parseRefundInput(refundDialog.refundAmount, order.amount)
-  const cityCoinReturnAmount = parseRefundInput(refundDialog.cityCoinReturnAmount, order.cityCoinDeductAmount)
+  const refundAmount = isGroupBuyRefund.value
+    ? Number(formatAmount(order.amount))
+    : parseRefundInput(refundDialog.refundAmount, order.amount)
+  const cityCoinReturnAmount = isGroupBuyRefund.value
+    ? Number(formatAmount(order.cityCoinDeductAmount))
+    : parseRefundInput(refundDialog.cityCoinReturnAmount, order.cityCoinDeductAmount)
   if (refundAmount === undefined || cityCoinReturnAmount === undefined) {
     uni.showToast({ title: '退款金额不能超过订单已支付金额', icon: 'none' })
     return
@@ -239,6 +245,30 @@ async function submitRefundDialog() {
   finally {
     refundDialog.submitting = false
   }
+}
+
+function rejectRefund(order: OrderItem) {
+  if (!order.refundId) {
+    uni.showToast({ title: '退款申请不存在，请刷新后重试', icon: 'none' })
+    return
+  }
+  uni.showModal({
+    title: '拒绝退款',
+    content: '确认拒绝该退款申请吗？',
+    success: async ({ confirm }) => {
+      if (!confirm) {
+        return
+      }
+      try {
+        await rejectMerchantFoodRefund(order.refundId, '商家拒绝退款')
+        await loadOrders()
+        uni.showToast({ title: '已拒绝退款', icon: 'success' })
+      }
+      catch {
+        uni.showToast({ title: '拒绝退款失败，请重试', icon: 'none' })
+      }
+    },
+  })
 }
 
 async function loadOrders() {
@@ -479,7 +509,7 @@ function handleTakeoutAction(action: TakeoutAction, order: OrderItem) {
     return
   }
   if (action === '驳回退款') {
-    uni.navigateTo({ url: `/pages/dashboard/after-sales/index?keyword=${encodeURIComponent(order.orderNo)}` })
+    rejectRefund(order)
     return
   }
 
@@ -571,7 +601,9 @@ async function handleOrderAction(action: TodoAction | NormalAction, order: Order
     openRefundDialog(order)
     return
   }
-  uni.navigateTo({ url: `/pages/dashboard/after-sales/index?keyword=${encodeURIComponent(order.orderNo)}` })
+  if (action === '拒绝退款') {
+    rejectRefund(order)
+  }
 }
 
 onShow(() => {
@@ -926,13 +958,17 @@ onUnmounted(stopClock)
             <text>现金实付</text>
             <text>¥{{ formatAmount(refundDialog.order?.amount || '0') }}</text>
           </view>
-          <view class="refund-dialog__summary-row">
-            <text>同城币抵扣</text>
-            <text>{{ formatAmount(refundDialog.order?.cityCoinDeductAmount || '0') }}</text>
-          </view>
+        <view class="refund-dialog__summary-row">
+          <text>同城币抵扣</text>
+          <text>{{ formatAmount(refundDialog.order?.cityCoinDeductAmount || '0') }}</text>
         </view>
+      </view>
 
-        <view class="refund-dialog__field">
+      <view v-if="isGroupBuyRefund" class="refund-dialog__full-refund-tip">
+        团购订单仅支持整单退款，将退回全部现金实付和同城币抵扣。
+      </view>
+
+        <view v-if="!isGroupBuyRefund" class="refund-dialog__field">
           <text class="refund-dialog__label">退款实付金额</text>
           <view class="refund-dialog__input-wrap">
             <text class="refund-dialog__prefix">¥</text>
@@ -941,7 +977,7 @@ onUnmounted(stopClock)
           <text class="refund-dialog__limit">最多 ¥{{ formatAmount(refundDialog.order?.amount || '0') }}</text>
         </view>
 
-        <view class="refund-dialog__field">
+        <view v-if="!isGroupBuyRefund" class="refund-dialog__field">
           <text class="refund-dialog__label">退回同城币</text>
           <view class="refund-dialog__input-wrap">
             <input v-model="refundDialog.cityCoinReturnAmount" class="refund-dialog__input" type="digit" />
@@ -1655,6 +1691,16 @@ onUnmounted(stopClock)
 .refund-dialog__summary-row text:last-child {
   color: #25282e;
   font-weight: 600;
+}
+
+.refund-dialog__full-refund-tip {
+  margin-top: 22rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #fff7e7;
+  color: #a26708;
+  font-size: 25rpx;
+  line-height: 38rpx;
 }
 
 .refund-dialog__field {

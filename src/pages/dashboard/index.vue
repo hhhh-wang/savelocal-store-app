@@ -2,6 +2,8 @@
 import type { AssistantTabKey } from './message-shared'
 import type { MerchantMessage, MerchantMessageSummary } from '@/api/types/merchant-message'
 import { getMerchantMessages, getMerchantMessageSummary } from '@/api/merchant-message'
+import { getMerchantFoodOrdersPage } from '@/api/merchant-food'
+import type { MerchantFoodOrder } from '@/api/types/merchant-food'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import activityIcon from '@/static/icons/dashboard/activity-icon.png'
 import afterSalesIcon from '@/static/icons/dashboard/after-sales.png'
@@ -34,11 +36,11 @@ const merchantFoodStore = useMerchantFoodStore()
 
 onShow(() => {
   merchantFoodStore.loadProfile(true).catch(() => {})
-  loadMessageSummary()
+  loadAssistantSummary()
 })
 
 onPullDownRefresh(async () => {
-  await Promise.allSettled([merchantFoodStore.loadProfile(true), loadMessageSummary()])
+  await Promise.allSettled([merchantFoodStore.loadProfile(true), loadAssistantSummary()])
   uni.stopPullDownRefresh()
 })
 
@@ -112,6 +114,8 @@ const assistantData = reactive<Record<AssistantTabKey, MerchantMessage[]>>({
 })
 
 const assistantCounts = reactive<Record<AssistantTabKey, number>>({ orders: 0, reviews: 0, todos: 0, messages: 0 })
+const refundTodoOrders = ref<MerchantFoodOrder[]>([])
+const refundTodoCount = ref(0)
 const assistantLoading = ref(false)
 const assistantError = ref(false)
 
@@ -129,16 +133,31 @@ const activeTabConfig = computed(() => {
 })
 
 const activeMessages = computed(() => assistantData[activeTab.value])
+const hasActiveAssistantItems = computed(() => activeMessages.value.length > 0
+  || (activeTab.value === 'todos' && refundTodoOrders.value.length > 0))
 
-async function loadMessageSummary() {
+async function loadAssistantSummary() {
   assistantLoading.value = true
   assistantError.value = false
   try {
-    const summary: MerchantMessageSummary = await getMerchantMessageSummary()
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const [summary, refundTodoPage] = await Promise.all([
+      getMerchantMessageSummary(storeId),
+      getMerchantFoodOrdersPage({
+        storeId,
+        pageNum: 1,
+        pageSize: 20,
+        scene: 'ALL',
+        todoOnly: true,
+      }),
+    ]) as [MerchantMessageSummary, { rows: MerchantFoodOrder[], total: number }]
     for (const tab of assistantTabs) {
       assistantCounts[tab.key] = summary[tab.key]?.count || 0
       assistantData[tab.key] = summary[tab.key]?.items || []
     }
+    refundTodoOrders.value = refundTodoPage.rows || []
+    refundTodoCount.value = refundTodoPage.total || 0
+    assistantCounts.todos += refundTodoCount.value
   }
   catch {
     assistantError.value = true
@@ -150,6 +169,8 @@ async function loadMessageSummary() {
 
 async function switchTab(tabKey: AssistantTabKey) {
   activeTab.value = tabKey
+  if (tabKey === 'todos')
+    return
   if (assistantData[tabKey].length || assistantCounts[tabKey] === 0)
     return
   try {
@@ -159,6 +180,14 @@ async function switchTab(tabKey: AssistantTabKey) {
   catch {
     assistantError.value = true
   }
+}
+
+function foodOrderSceneLabel(scene: MerchantFoodOrder['scene']) {
+  return scene === 'TAKEOUT' ? '外卖订单' : scene === 'GROUP_BUY' ? '团购订单' : '到店买单'
+}
+
+function openRefundTodo(order: MerchantFoodOrder) {
+  uni.navigateTo({ url: '/pages/dashboard/order-management/index' })
 }
 
 function openMessage(message: MerchantMessage) {
@@ -294,12 +323,26 @@ function handleMenuTap(item: DashboardMenuItem) {
 
         <view v-else-if="assistantError" class="assistant-state">
           <text class="assistant-state__text">消息暂时无法加载</text>
-          <view class="assistant-state__retry" hover-class="assistant-state__retry--hover" @tap="loadMessageSummary">
+          <view class="assistant-state__retry" hover-class="assistant-state__retry--hover" @tap="loadAssistantSummary">
             重新加载
           </view>
         </view>
 
-        <view v-else-if="activeMessages.length" class="assistant-list">
+        <view v-else-if="hasActiveAssistantItems" class="assistant-list">
+          <view
+            v-for="order in activeTab === 'todos' ? refundTodoOrders : []"
+            :key="`food-refund-${order.orderId}`"
+            class="assistant-message"
+            hover-class="assistant-message--hover"
+            @tap="openRefundTodo(order)"
+          >
+            <view class="assistant-message__indicator" />
+            <view class="assistant-message__content">
+              <text class="assistant-message__title">退款待办 · {{ foodOrderSceneLabel(order.scene) }}</text>
+              <text class="assistant-message__summary">订单号 {{ order.orderNo }}，请处理退款申请</text>
+            </view>
+            <text class="assistant-message__arrow">›</text>
+          </view>
           <view
             v-for="message in activeMessages"
             :key="message.messageId"
