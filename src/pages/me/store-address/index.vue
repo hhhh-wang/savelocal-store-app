@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import type { RegionCodes } from './store-address'
 import type { MerchantFoodAddressSuggestion } from '@/api/types/merchant-food'
-import { getMerchantFoodAddressSuggestions } from '@/api/merchant-food'
+import { getMerchantFoodAddressSuggestions, getMerchantFoodKeywordAddressSuggestions } from '@/api/merchant-food'
 import locationIcon from '@/static/icons/location-icon.png'
 import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
+import { debounce } from '@/utils/debounce'
 import { normalizeCoordinate, resolveRegionCodesFromAdcode } from './store-address'
 
 defineOptions({
@@ -37,6 +38,7 @@ const mapLocation = reactive({
 
 const mapScale = ref(14)
 const ADDRESS_SUGGESTION_LIMIT = 10
+const ADDRESS_SUGGESTION_DEBOUNCE_MS = 300
 let addressSuggestionRequestSeq = 0
 
 interface MapChangePayload {
@@ -86,6 +88,7 @@ function clearAddressSuggestions() {
   addressSuggestionRequestSeq += 1
   addressSuggestions.value = []
   addressSuggestionVisible.value = false
+  loadingAddressSuggestions.value = false
 }
 
 function formatAddressSuggestionMeta(item: MerchantFoodAddressSuggestion) {
@@ -165,6 +168,84 @@ async function loadAddressSuggestions() {
   }
 }
 
+async function requestKeywordSearchLocation() {
+  const currentLatitude = normalizeCoordinate(mapLocation.latitude)
+  const currentLongitude = normalizeCoordinate(mapLocation.longitude)
+  if (currentLatitude !== undefined && currentLongitude !== undefined && (currentLatitude !== 0 || currentLongitude !== 0)) {
+    return {
+      latitude: currentLatitude,
+      longitude: currentLongitude,
+    }
+  }
+
+  try {
+    const location = await uni.getLocation({
+      type: 'gcj02',
+      isHighAccuracy: true,
+      highAccuracyExpireTime: 3000,
+    })
+    const latitude = normalizeCoordinate(location.latitude)
+    const longitude = normalizeCoordinate(location.longitude)
+    if (latitude === undefined || longitude === undefined) {
+      return undefined
+    }
+
+    return { latitude, longitude }
+  }
+  catch {
+    // 关键词搜索不依赖定位；定位不可用时由腾讯地图在全国范围内匹配。
+    return undefined
+  }
+}
+
+async function loadKeywordAddressSuggestions(keyword: string) {
+  const normalizedKeyword = keyword.trim()
+  if (normalizedKeyword.length < 2 || normalizedKeyword !== form.address.trim()) {
+    return
+  }
+
+  const requestSeq = ++addressSuggestionRequestSeq
+  loadingAddressSuggestions.value = true
+  addressSuggestionVisible.value = false
+
+  try {
+    const location = await requestKeywordSearchLocation()
+    if (requestSeq !== addressSuggestionRequestSeq || normalizedKeyword !== form.address.trim()) {
+      return
+    }
+
+    const suggestions = await getMerchantFoodKeywordAddressSuggestions({
+      keyword: normalizedKeyword,
+      ...location,
+      limit: ADDRESS_SUGGESTION_LIMIT,
+    })
+    if (requestSeq !== addressSuggestionRequestSeq || normalizedKeyword !== form.address.trim()) {
+      return
+    }
+
+    addressSuggestions.value = (suggestions || []).filter(item =>
+      !!(item.detailAddress || item.title || item.address),
+    )
+    addressSuggestionVisible.value = addressSuggestions.value.length > 0
+  }
+  catch (error) {
+    if (requestSeq !== addressSuggestionRequestSeq) {
+      return
+    }
+
+    console.error('搜索门店地址候选失败:', error)
+  }
+  finally {
+    if (requestSeq === addressSuggestionRequestSeq) {
+      loadingAddressSuggestions.value = false
+    }
+  }
+}
+
+const debouncedLoadKeywordAddressSuggestions = debounce((keyword: string) => {
+  void loadKeywordAddressSuggestions(keyword)
+}, ADDRESS_SUGGESTION_DEBOUNCE_MS)
+
 function handleAddressIconTap() {
   if (loadingAddressSuggestions.value) {
     return
@@ -199,9 +280,15 @@ function selectAddressSuggestion(item: MerchantFoodAddressSuggestion) {
   clearAddressSuggestions()
 }
 
-function handleAddressInput() {
+function handleAddressInput(event: { detail?: { value?: string } }) {
+  debouncedLoadKeywordAddressSuggestions.cancel()
   resetRegionCodes()
   clearAddressSuggestions()
+
+  const keyword = (event.detail?.value || form.address).trim()
+  if (keyword.length >= 2) {
+    debouncedLoadKeywordAddressSuggestions(keyword)
+  }
 }
 
 async function handleSubmit() {
@@ -273,6 +360,11 @@ onMounted(async () => {
     console.error('门店地址资料加载失败:', error)
   }
 })
+
+onUnmounted(() => {
+  debouncedLoadKeywordAddressSuggestions.cancel()
+  clearAddressSuggestions()
+})
 </script>
 
 <template>
@@ -318,7 +410,6 @@ onMounted(async () => {
           </view>
 
           <view class="store-address-field__input-wrap">
-
             <input
               v-model="form.address"
               class="store-address-field__input"
@@ -326,7 +417,6 @@ onMounted(async () => {
               placeholder-class="store-address-field__placeholder"
               @input="handleAddressInput"
             >
-
             <view
               class="store-address-field__location"
               :class="{ 'store-address-field__location--loading': loadingAddressSuggestions }"
@@ -338,11 +428,10 @@ onMounted(async () => {
                 mode="aspectFit"
               />
             </view>
-
           </view>
 
           <view v-if="loadingAddressSuggestions" class="store-address-field__suggestion-state">
-            正在获取附近地址...
+            正在搜索地址...
           </view>
 
           <scroll-view

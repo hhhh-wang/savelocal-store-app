@@ -46,6 +46,15 @@ export function getMerchantFoodAddressSuggestions(params: {
   return http.get<MerchantFoodAddressSuggestion[]>('/common/map/reverse-geocode', params)
 }
 
+export function getMerchantFoodKeywordAddressSuggestions(params: {
+  keyword: string
+  latitude?: number
+  longitude?: number
+  limit?: number
+}) {
+  return http.get<MerchantFoodAddressSuggestion[]>('/common/map/suggestion', params)
+}
+
 export function updateMerchantFoodStoreBusinessStatus(storeId: number, payload: MerchantFoodBusinessStatusPayload) {
   return http.put<void>(`${storeBase}/${storeId}/business-status`, payload)
 }
