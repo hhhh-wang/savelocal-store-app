@@ -44,6 +44,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: AuditMaterialsFormValue]
   'upload-document': [item: AuditMaterialsDocumentItem]
   'clear-field-issue': [key: string]
+  'address-input': [value: string]
   'address-icon-tap': []
   'select-address-suggestion': [item: AuditMaterialsAddressSuggestion]
   'submit': [value: AuditMaterialsFormValue]
@@ -65,6 +66,9 @@ function handleInput(key: string, event: { detail: { value: string } }) {
     return
   updateField(key, event.detail.value)
   emit('clear-field-issue', key)
+  if (key === props.addressFieldKey) {
+    emit('address-input', event.detail.value)
+  }
 }
 
 function optionLabels(field: AuditMaterialsSelectField) {

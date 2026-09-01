@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { RegionCodes } from '../store-address/store-address'
 import type { MerchantFoodAddressSuggestion } from '@/api/types/merchant-food'
 import type { MerchantStoreAuditDraft, MerchantStoreAuditMaterials, MerchantStoreAuditOptions } from '@/api/types/merchant-store'
 import type {
@@ -8,15 +9,16 @@ import type {
   AuditMaterialsSelectField,
   AuditMaterialsTextField,
 } from '@/components/audit-materials-form/shared'
-import { getMerchantFoodAddressSuggestions } from '@/api/merchant-food'
+import { getMerchantFoodAddressSuggestions, getMerchantFoodKeywordAddressSuggestions } from '@/api/merchant-food'
 import { getMerchantStoreAuditDraft, getMerchantStoreAuditOptions, submitMerchantStoreAudit } from '@/api/merchant-store'
 import { resolveAddressSuggestionText } from '@/components/audit-materials-form/address-suggestion'
 import AuditMaterialsForm from '@/components/audit-materials-form/audit-materials-form.vue'
 import { validateAuditMaterials } from '@/components/audit-materials-form/shared'
 import useUpload from '@/hooks/useUpload'
-import { normalizeCoordinate } from '@/pages/me/store-address/store-address'
+import { normalizeCoordinate, resolveRegionCodesFromAdcode } from '@/pages/me/store-address/store-address'
 import documentIcon from '@/static/icons/document.png'
 import locationIcon from '@/static/icons/location-icon.png'
+import { debounce } from '@/utils/debounce'
 import { resolveStoreAuditPrimaryAction } from './store-audit'
 
 defineOptions({
@@ -56,7 +58,9 @@ const addressSuggestions = ref<MerchantFoodAddressSuggestion[]>([])
 const loadingAddressSuggestions = ref(false)
 const addressSuggestionVisible = ref(false)
 const addressLocation = reactive({ latitude: 0, longitude: 0 })
+const regionCodes = reactive<RegionCodes>({ provinceCode: '', cityCode: '', districtCode: '' })
 const ADDRESS_SUGGESTION_LIMIT = 10
+const ADDRESS_SUGGESTION_DEBOUNCE_MS = 300
 let addressSuggestionRequestSeq = 0
 
 const auditIssueAliases: Record<string, string[]> = {
@@ -175,6 +179,12 @@ function clearAddressSuggestions() {
   addressSuggestionVisible.value = false
 }
 
+function resetRegionCodes() {
+  regionCodes.provinceCode = ''
+  regionCodes.cityCode = ''
+  regionCodes.districtCode = ''
+}
+
 async function requestAddressLocation() {
   const currentLatitude = normalizeCoordinate(addressLocation.latitude)
   const currentLongitude = normalizeCoordinate(addressLocation.longitude)
@@ -245,6 +255,73 @@ async function loadAddressSuggestions() {
   }
 }
 
+async function requestKeywordSearchLocation() {
+  const currentLatitude = normalizeCoordinate(addressLocation.latitude)
+  const currentLongitude = normalizeCoordinate(addressLocation.longitude)
+  if (currentLatitude !== undefined && currentLongitude !== undefined && (currentLatitude !== 0 || currentLongitude !== 0)) {
+    return {
+      latitude: currentLatitude,
+      longitude: currentLongitude,
+    }
+  }
+
+  try {
+    return await requestAddressLocation()
+  }
+  catch {
+    // 关键词检索可在未授予定位权限时由腾讯地图完成全国范围匹配。
+    return undefined
+  }
+}
+
+async function loadKeywordAddressSuggestions(keyword: string) {
+  const normalizedKeyword = keyword.trim()
+  if (normalizedKeyword.length < 2 || normalizedKeyword !== form.storeAddress.trim()) {
+    return
+  }
+
+  const requestSeq = ++addressSuggestionRequestSeq
+  loadingAddressSuggestions.value = true
+  addressSuggestionVisible.value = false
+
+  try {
+    const location = await requestKeywordSearchLocation()
+    if (requestSeq !== addressSuggestionRequestSeq || normalizedKeyword !== form.storeAddress.trim()) {
+      return
+    }
+
+    const suggestions = await getMerchantFoodKeywordAddressSuggestions({
+      keyword: normalizedKeyword,
+      ...location,
+      limit: ADDRESS_SUGGESTION_LIMIT,
+    })
+    if (requestSeq !== addressSuggestionRequestSeq || normalizedKeyword !== form.storeAddress.trim()) {
+      return
+    }
+
+    addressSuggestions.value = (suggestions || []).filter(item =>
+      !!(item.detailAddress || item.title || item.address),
+    )
+    addressSuggestionVisible.value = addressSuggestions.value.length > 0
+  }
+  catch (error) {
+    if (requestSeq !== addressSuggestionRequestSeq) {
+      return
+    }
+
+    console.error('搜索审核地址候选失败:', error)
+  }
+  finally {
+    if (requestSeq === addressSuggestionRequestSeq) {
+      loadingAddressSuggestions.value = false
+    }
+  }
+}
+
+const debouncedLoadKeywordAddressSuggestions = debounce((keyword: string) => {
+  void loadKeywordAddressSuggestions(keyword)
+}, ADDRESS_SUGGESTION_DEBOUNCE_MS)
+
 function handleAddressIconTap() {
   if (isReadonly.value || loadingAddressSuggestions.value)
     return
@@ -267,12 +344,16 @@ function selectAddressSuggestion(item: AuditMaterialsAddressSuggestion) {
   const address = resolveAddressSuggestionText(item)
   const latitude = normalizeCoordinate(item.latitude)
   const longitude = normalizeCoordinate(item.longitude)
-  if (!address || latitude === undefined || longitude === undefined) {
+  const codes = resolveRegionCodesFromAdcode(item.adcode)
+  if (!address || latitude === undefined || longitude === undefined || !codes.districtCode) {
     uni.showToast({ title: '该地址缺少完整定位信息，请重新选择', icon: 'none' })
     return
   }
 
   form.storeAddress = address
+  regionCodes.provinceCode = codes.provinceCode
+  regionCodes.cityCode = codes.cityCode
+  regionCodes.districtCode = codes.districtCode
   addressLocation.latitude = latitude
   addressLocation.longitude = longitude
   submitError.value = ''
@@ -290,6 +371,9 @@ function applyDraft(draft: MerchantStoreAuditDraft) {
   const {
     longitude: materialLongitude,
     latitude: materialLatitude,
+    provinceCode: materialProvinceCode,
+    cityCode: materialCityCode,
+    districtCode: materialDistrictCode,
     ...formMaterials
   } = materials
   Object.assign(form, {
@@ -299,6 +383,9 @@ function applyDraft(draft: MerchantStoreAuditDraft) {
   const pending = draft.pendingSnapshot ?? draft.activeSnapshot
   const latitude = normalizeCoordinate(materialLatitude ?? pending?.store.latitude)
   const longitude = normalizeCoordinate(materialLongitude ?? pending?.store.longitude)
+  regionCodes.provinceCode = materialProvinceCode || pending?.store.provinceCode || ''
+  regionCodes.cityCode = materialCityCode || pending?.store.cityCode || ''
+  regionCodes.districtCode = materialDistrictCode || pending?.store.districtCode || ''
   addressLocation.latitude = latitude ?? 0
   addressLocation.longitude = longitude ?? 0
   const qualifications = pending?.qualifications ?? []
@@ -342,11 +429,20 @@ function applyDraft(draft: MerchantStoreAuditDraft) {
 function handleFormUpdate(value: AuditMaterialsFormValue) {
   submitError.value = ''
   if (value.storeAddress !== form.storeAddress) {
+    resetRegionCodes()
     addressLocation.latitude = 0
     addressLocation.longitude = 0
     clearAddressSuggestions()
   }
   Object.assign(form, value)
+}
+
+function handleAddressInput(value: string) {
+  debouncedLoadKeywordAddressSuggestions.cancel()
+  const keyword = value.trim()
+  if (keyword.length >= 2) {
+    debouncedLoadKeywordAddressSuggestions(keyword)
+  }
 }
 
 onLoad(async (options) => {
@@ -377,6 +473,11 @@ onLoad(async (options) => {
   finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  debouncedLoadKeywordAddressSuggestions.cancel()
+  clearAddressSuggestions()
 })
 
 function uploadedUrl(result: any) {
@@ -470,6 +571,10 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
     showSubmitError('请通过地址定位选择完整的门店地址')
     return
   }
+  if (!regionCodes.provinceCode || !regionCodes.cityCode || !regionCodes.districtCode) {
+    showSubmitError('请从地址候选中选择门店地址')
+    return
+  }
 
   submitting.value = true
   try {
@@ -481,6 +586,9 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
       legalPersonName: normalizeText(value.legalPersonName),
       legalPersonPhone: normalizeText(value.legalPersonPhone),
       storeAddress: normalizeText(value.storeAddress),
+      provinceCode: regionCodes.provinceCode,
+      cityCode: regionCodes.cityCode,
+      districtCode: regionCodes.districtCode,
       longitude,
       latitude,
       businessLicenseCode: normalizeText(value.businessLicenseCode).toUpperCase(),
@@ -554,6 +662,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         :loading-address-suggestions="loadingAddressSuggestions"
         @update:model-value="handleFormUpdate"
         @clear-field-issue="clearFieldIssue"
+        @address-input="handleAddressInput"
         @address-icon-tap="handleAddressIconTap"
         @select-address-suggestion="selectAddressSuggestion"
         @upload-document="handleDocumentUpload"
