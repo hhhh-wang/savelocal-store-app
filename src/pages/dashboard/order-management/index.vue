@@ -477,10 +477,10 @@ async function handleOrderAction(action: TodoAction | NormalAction, order: Order
     const items = detail.items?.map(item => `${item.productNameSnapshot} x${item.quantity}`).join('\n')
     const formatAmount = (value?: number) => `¥${Number(value || 0).toFixed(2)}`
     const financials = [
-      `商家让利：${formatAmount(detail.benefitAmount)}`,
+      `商家让利（含技术服务费）：${formatAmount(detail.benefitAmount)}`,
       detail.orderStatus === 'REFUNDED'
-        ? '技术服务费：¥0.00（整单退款免收）'
-        : `技术服务费：${formatAmount(detail.platformTechFeeAmount)}`,
+        ? '其中技术服务费：¥0.00（整单退款免收）'
+        : `其中技术服务费：${formatAmount(detail.platformTechFeeAmount)}`,
       `商家结算：${formatAmount(detail.settlementAmount)}`,
     ]
     uni.showModal({

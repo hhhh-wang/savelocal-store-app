@@ -552,7 +552,7 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
 
 .wallet-card__title {
   color: #1f2328;
-  font-size: 28px;
+  font-size: 30rpx;
   font-weight: 700;
 }
 
@@ -583,10 +583,15 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
 }
 
 .wallet-card__value {
+  display: block;
+  width: 100%;
+  overflow: hidden;
   color: #171a1f;
-  font-size: 58rpx;
+  font-size: 38rpx;
   font-weight: 700;
   line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .menu-card {

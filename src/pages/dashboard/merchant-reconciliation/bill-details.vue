@@ -53,14 +53,14 @@ function buildBillGroups(bills: MerchantFoodCommissionBill[]) {
     const timeValue = resolveBillTime(bill)
     const date = formatGroupDate(timeValue)
     const group = groups.get(date) || { timeValue, expense: 0, income: 0, items: [] }
-    // 商家账单的技术服务费按商家让利比例的实际扣减金额展示。
+    // 商家让利是总扣减，技术服务费只是其中的组成部分。
     const fee = Number(bill.benefitAmount || 0)
     const settlement = Number(bill.settlementAmount || 0)
     group.expense += fee
     group.items.push({
       id: `${bill.foodOrderId}-fee`,
       kind: 'fee',
-      description: `技术服务费-订单${bill.orderNo}`,
+      description: `商家让利（含技术服务费）-订单${bill.orderNo}`,
       time: formatTime(timeValue),
       amount: `-${toAmount(fee)}`,
     })
