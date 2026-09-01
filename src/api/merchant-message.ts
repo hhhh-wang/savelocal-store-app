@@ -18,3 +18,7 @@ export function getMerchantMessage(messageId: string) {
 export function markMerchantMessageRead(messageId: string) {
   return http.put<void>(`${baseUrl}/${messageId}/read`)
 }
+
+export function completeMerchantMessage(messageId: string) {
+  return http.put<void>(`${baseUrl}/${messageId}/complete`)
+}

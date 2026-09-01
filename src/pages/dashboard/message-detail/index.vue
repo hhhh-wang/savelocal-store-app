@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { MerchantMessage } from '@/api/types/merchant-message'
-import { getMerchantMessage, markMerchantMessageRead } from '@/api/merchant-message'
+import { completeMerchantMessage, getMerchantMessage, markMerchantMessageRead } from '@/api/merchant-message'
 import { resolveMessageAction } from '../message-shared'
 
 definePage({
@@ -15,6 +15,7 @@ const loading = ref(true)
 const loadError = ref(false)
 const messageId = ref('')
 const actionRoute = computed(() => resolveMessageAction(message.value?.actionCode))
+const actionSubmitting = ref(false)
 
 async function loadMessage() {
   if (!messageId.value)
@@ -41,9 +42,20 @@ async function loadMessage() {
   }
 }
 
-function executeAction() {
-  if (!actionRoute.value)
+async function executeAction() {
+  if (!actionRoute.value || !messageId.value || actionSubmitting.value)
     return
+  actionSubmitting.value = true
+  try {
+    await completeMerchantMessage(messageId.value)
+  }
+  catch {
+    uni.showToast({ icon: 'none', title: '待办处理状态更新失败，请重试' })
+    return
+  }
+  finally {
+    actionSubmitting.value = false
+  }
   if (actionRoute.value === '/pages/me/me')
     uni.switchTab({ url: actionRoute.value })
   else
@@ -77,8 +89,8 @@ onLoad((options) => {
       <text class="message-detail-content__title">{{ message.title }}</text>
       <text v-if="message.publishedAt" class="message-detail-content__time">{{ formatTime(message.publishedAt) }}</text>
       <text class="message-detail-content__body">{{ message.content || message.summary || '暂无详细内容' }}</text>
-      <view v-if="actionRoute" class="message-detail-content__action" hover-class="message-detail-content__action--hover" @tap="executeAction">
-        前往处理
+      <view v-if="actionRoute" class="message-detail-content__action" :class="{ 'message-detail-content__action--disabled': actionSubmitting }" hover-class="message-detail-content__action--hover" @tap="executeAction">
+        {{ actionSubmitting ? '处理中...' : '前往处理' }}
       </view>
     </view>
   </view>
@@ -177,5 +189,9 @@ onLoad((options) => {
 
 .message-detail-content__action--hover {
   opacity: 0.82;
+}
+
+.message-detail-content__action--disabled {
+  opacity: 0.62;
 }
 </style>
