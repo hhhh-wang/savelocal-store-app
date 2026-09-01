@@ -263,6 +263,8 @@ export interface MerchantFoodOrder {
   productName?: string
   imageUrl?: string
   amount: number
+  originalAmount?: number
+  cityCoinDeductAmount?: number
   quantity: number
   orderStatus: MerchantFoodOrderStatus
   statusText: string

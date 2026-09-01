@@ -5,7 +5,7 @@ import type {
   MerchantFoodOrderStatus,
   MerchantFoodScene,
 } from '@/api/types/merchant-food'
-import { getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage } from '@/api/merchant-food'
+import { confirmMerchantFoodRefund, getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage } from '@/api/merchant-food'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
 import arrowUpIcon from '@/static/icons/arrow-up.png'
 import phoneIcon from '@/static/icons/phone.png'
@@ -43,10 +43,13 @@ interface OrderItem {
   productName: string
   orderTime: string
   amount: string
+  originalAmount: string
+  cityCoinDeductAmount: string
   quantity: number
   status: Exclude<OrderStatus, 'all'>
   statusText: string
   isTodo: boolean
+  refundId?: number
   image: string
   actions: Array<TodoAction | NormalAction>
   payTime: string
@@ -105,10 +108,13 @@ function mapOrder(order: MerchantFoodOrder): OrderItem {
     productName,
     orderTime: order.scene === 'TAKEOUT' ? order.orderTime || '--' : '--',
     amount: String(order.amount ?? 0),
+    originalAmount: String(order.originalAmount ?? order.amount ?? 0),
+    cityCoinDeductAmount: String(order.cityCoinDeductAmount ?? 0),
     quantity: order.quantity || 1,
     status,
     statusText: order.statusText,
     isTodo: order.todo,
+    refundId: order.refundId,
     image: order.imageUrl || productImage,
     actions: order.todo ? ['联系客户', '拒绝退款', '确认退款'] : ['联系客户', '订单详情'],
     payTime: order.payTime || order.orderTime || '',
@@ -145,6 +151,8 @@ function mergeTakeoutDetail(order: OrderItem, detail: MerchantFoodOrderDetail): 
     orderTime: detail.orderTime || order.orderTime,
     payTime: detail.payTime || detail.orderTime || order.payTime,
     amount: String(detail.amount ?? order.amount),
+    originalAmount: String(detail.originalAmount ?? order.originalAmount),
+    cityCoinDeductAmount: String(detail.cityCoinDeductAmount ?? order.cityCoinDeductAmount),
     quantity: detail.quantity || order.quantity,
     status: detail.orderStatus.toLowerCase() as Exclude<OrderStatus, 'all'>,
     statusText: detail.statusText || order.statusText,
@@ -165,6 +173,71 @@ function mergeTakeoutDetail(order: OrderItem, detail: MerchantFoodOrderDetail): 
     products,
     productKinds: products.length,
     detailLoaded: true,
+  }
+}
+
+const refundDialog = reactive({
+  visible: false,
+  submitting: false,
+  order: undefined as OrderItem | undefined,
+  refundAmount: '',
+  cityCoinReturnAmount: '',
+})
+
+function openRefundDialog(order: OrderItem) {
+  if (!order.refundId) {
+    uni.showToast({ title: '退款申请不存在，请刷新后重试', icon: 'none' })
+    return
+  }
+  refundDialog.order = order
+  refundDialog.refundAmount = formatAmount(order.amount)
+  refundDialog.cityCoinReturnAmount = formatAmount(order.cityCoinDeductAmount)
+  refundDialog.visible = true
+}
+
+function closeRefundDialog() {
+  if (refundDialog.submitting)
+    return
+  refundDialog.visible = false
+  refundDialog.order = undefined
+}
+
+function parseRefundInput(value: string, maxAmount: string) {
+  const amount = Number(value)
+  const max = Number(maxAmount)
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(max) || amount > max) {
+    return undefined
+  }
+  return Number(amount.toFixed(2))
+}
+
+async function submitRefundDialog() {
+  const order = refundDialog.order
+  if (!order?.refundId)
+    return
+  const refundAmount = parseRefundInput(refundDialog.refundAmount, order.amount)
+  const cityCoinReturnAmount = parseRefundInput(refundDialog.cityCoinReturnAmount, order.cityCoinDeductAmount)
+  if (refundAmount === undefined || cityCoinReturnAmount === undefined) {
+    uni.showToast({ title: '退款金额不能超过订单已支付金额', icon: 'none' })
+    return
+  }
+  if (refundAmount === 0 && cityCoinReturnAmount === 0) {
+    uni.showToast({ title: '两项退款金额不能同时为0', icon: 'none' })
+    return
+  }
+  refundDialog.submitting = true
+  try {
+    await confirmMerchantFoodRefund(order.refundId, { refundAmount, cityCoinReturnAmount })
+    refundDialog.visible = false
+    refundDialog.order = undefined
+    await loadOrders()
+    uni.showToast({ title: '退款已提交', icon: 'success' })
+  }
+  catch {
+    uni.showToast({ title: '退款提交失败，请重试', icon: 'none' })
+  }
+  finally {
+    refundDialog.submitting = false
   }
 }
 
@@ -401,7 +474,11 @@ function contactCourier(order: OrderItem) {
 }
 
 function handleTakeoutAction(action: TakeoutAction, order: OrderItem) {
-  if (action === '驳回退款' || action === '确认退款') {
+  if (action === '确认退款') {
+    openRefundDialog(order)
+    return
+  }
+  if (action === '驳回退款') {
     uni.navigateTo({ url: `/pages/dashboard/after-sales/index?keyword=${encodeURIComponent(order.orderNo)}` })
     return
   }
@@ -488,6 +565,10 @@ async function handleOrderAction(action: TodoAction | NormalAction, order: Order
       content: [items || `${detail.productName} x${detail.quantity}`, ...financials].join('\n'),
       showCancel: false,
     })
+    return
+  }
+  if (action === '确认退款') {
+    openRefundDialog(order)
     return
   }
   uni.navigateTo({ url: `/pages/dashboard/after-sales/index?keyword=${encodeURIComponent(order.orderNo)}` })
@@ -780,7 +861,7 @@ onUnmounted(stopClock)
                       ¥
                     </text>
                     <text class="order-card__amount">
-                      {{ order.amount }}
+                      {{ formatAmount(order.originalAmount) }}
                     </text>
                     <text class="order-card__unit">
                       元
@@ -795,6 +876,11 @@ onUnmounted(stopClock)
                   <text class="order-card__count">
                     （共{{ order.quantity }}件）
                   </text>
+                </view>
+
+                <view class="order-card__payment">
+                  <text>现金实付 ¥{{ formatAmount(order.amount) }}</text>
+                  <text>同城币抵扣 {{ formatAmount(order.cityCoinDeductAmount) }}</text>
                 </view>
               </view>
             </view>
@@ -820,6 +906,55 @@ onUnmounted(stopClock)
           <text class="order-empty__desc">
             请尝试切换 tab 或筛选条件
           </text>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="refundDialog.visible" class="refund-dialog-mask" @tap="closeRefundDialog">
+      <view class="refund-dialog" @tap.stop>
+        <view class="refund-dialog__header">
+          <text class="refund-dialog__title">确认退款</text>
+          <text class="refund-dialog__close" @tap="closeRefundDialog">×</text>
+        </view>
+
+        <view class="refund-dialog__summary">
+          <view class="refund-dialog__summary-row">
+            <text>订单原价</text>
+            <text>¥{{ formatAmount(refundDialog.order?.originalAmount || '0') }}</text>
+          </view>
+          <view class="refund-dialog__summary-row">
+            <text>现金实付</text>
+            <text>¥{{ formatAmount(refundDialog.order?.amount || '0') }}</text>
+          </view>
+          <view class="refund-dialog__summary-row">
+            <text>同城币抵扣</text>
+            <text>{{ formatAmount(refundDialog.order?.cityCoinDeductAmount || '0') }}</text>
+          </view>
+        </view>
+
+        <view class="refund-dialog__field">
+          <text class="refund-dialog__label">退款实付金额</text>
+          <view class="refund-dialog__input-wrap">
+            <text class="refund-dialog__prefix">¥</text>
+            <input v-model="refundDialog.refundAmount" class="refund-dialog__input" type="digit" />
+          </view>
+          <text class="refund-dialog__limit">最多 ¥{{ formatAmount(refundDialog.order?.amount || '0') }}</text>
+        </view>
+
+        <view class="refund-dialog__field">
+          <text class="refund-dialog__label">退回同城币</text>
+          <view class="refund-dialog__input-wrap">
+            <input v-model="refundDialog.cityCoinReturnAmount" class="refund-dialog__input" type="digit" />
+            <text class="refund-dialog__suffix">同城币</text>
+          </view>
+          <text class="refund-dialog__limit">最多 {{ formatAmount(refundDialog.order?.cityCoinDeductAmount || '0') }}</text>
+        </view>
+
+        <view class="refund-dialog__actions">
+          <view class="refund-dialog__button refund-dialog__button--secondary" @tap="closeRefundDialog">取消</view>
+          <view class="refund-dialog__button refund-dialog__button--primary" @tap="submitRefundDialog">
+            {{ refundDialog.submitting ? '提交中' : '确认退款' }}
+          </view>
         </view>
       </view>
     </view>
@@ -1445,6 +1580,153 @@ onUnmounted(stopClock)
 
 .order-card__action--hover {
   opacity: 0.9;
+}
+
+.order-card__payment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx 20rpx;
+  margin-top: 10rpx;
+  color: #92969e;
+  font-size: 23rpx;
+}
+
+.refund-dialog-mask {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 32rpx 24rpx calc(env(safe-area-inset-bottom) + 24rpx);
+  background: rgba(20, 22, 27, 0.46);
+  box-sizing: border-box;
+}
+
+.refund-dialog {
+  width: 100%;
+  max-width: 680rpx;
+  padding: 30rpx 28rpx 26rpx;
+  border-radius: 24rpx;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.refund-dialog__header,
+.refund-dialog__summary-row,
+.refund-dialog__input-wrap,
+.refund-dialog__actions {
+  display: flex;
+  align-items: center;
+}
+
+.refund-dialog__header {
+  justify-content: space-between;
+}
+
+.refund-dialog__title {
+  color: #25282e;
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.refund-dialog__close {
+  width: 48rpx;
+  color: #92969e;
+  font-size: 42rpx;
+  line-height: 42rpx;
+  text-align: center;
+}
+
+.refund-dialog__summary {
+  margin-top: 24rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #f7f8fa;
+}
+
+.refund-dialog__summary-row {
+  justify-content: space-between;
+  min-height: 44rpx;
+  color: #5f646d;
+  font-size: 26rpx;
+}
+
+.refund-dialog__summary-row text:last-child {
+  color: #25282e;
+  font-weight: 600;
+}
+
+.refund-dialog__field {
+  margin-top: 26rpx;
+}
+
+.refund-dialog__label {
+  display: block;
+  color: #30343a;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.refund-dialog__input-wrap {
+  height: 76rpx;
+  margin-top: 14rpx;
+  padding: 0 20rpx;
+  border: 2rpx solid #d9dce2;
+  border-radius: 12rpx;
+  box-sizing: border-box;
+}
+
+.refund-dialog__prefix,
+.refund-dialog__suffix {
+  flex-shrink: 0;
+  color: #5e626a;
+  font-size: 28rpx;
+}
+
+.refund-dialog__input {
+  flex: 1;
+  min-width: 0;
+  height: 72rpx;
+  margin: 0 12rpx;
+  color: #24272c;
+  font-size: 30rpx;
+}
+
+.refund-dialog__limit {
+  display: block;
+  margin-top: 10rpx;
+  color: #92969e;
+  font-size: 23rpx;
+}
+
+.refund-dialog__actions {
+  justify-content: flex-end;
+  gap: 18rpx;
+  margin-top: 32rpx;
+}
+
+.refund-dialog__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 150rpx;
+  height: 66rpx;
+  padding: 0 26rpx;
+  border-radius: 10rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.refund-dialog__button--secondary {
+  background: #f1f2f4;
+  color: #61656d;
+}
+
+.refund-dialog__button--primary {
+  background: #ff8a00;
+  color: #fff;
 }
 
 .order-empty {

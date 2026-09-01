@@ -147,6 +147,14 @@ export function approveMerchantFoodRefund(refundId: number, remark?: string) {
   return http.post<void>(`/merchant/food/refunds/${refundId}/approve`, remark ? { remark } : undefined)
 }
 
+export function confirmMerchantFoodRefund(refundId: number, payload: {
+  refundAmount: number
+  cityCoinReturnAmount: number
+  remark?: string
+}) {
+  return http.post<void>(`/merchant/food/refunds/${refundId}/confirm`, payload)
+}
+
 export function rejectMerchantFoodRefund(refundId: number, remark?: string) {
   return http.post<void>(`/merchant/food/refunds/${refundId}/reject`, remark ? { remark } : undefined)
 }
