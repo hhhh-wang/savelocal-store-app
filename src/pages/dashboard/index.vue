@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import type { AssistantTabKey } from './message-shared'
-import type { MerchantFoodOrder } from '@/api/types/merchant-food'
+import type { MerchantFoodDashboardStats, MerchantFoodOrder } from '@/api/types/merchant-food'
 import type { MerchantMessage, MerchantMessageSummary } from '@/api/types/merchant-message'
-import { getMerchantFoodOrdersPage } from '@/api/merchant-food'
+import { getMerchantFoodDashboardStats, getMerchantFoodOrdersPage } from '@/api/merchant-food'
 import { getMerchantMessages, getMerchantMessageSummary } from '@/api/merchant-message'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import activityIcon from '@/static/icons/dashboard/activity-icon.png'
@@ -54,11 +54,17 @@ onPullDownRefresh(async () => {
 onHide(stopOnsiteOrderCheck)
 onUnmounted(stopOnsiteOrderCheck)
 
-const stats = [
+interface DashboardStat {
+  label: string
+  value: string
+  subtext: string
+}
+
+const stats = reactive<DashboardStat[]>([
   { label: '实收金额', value: '¥0', subtext: '昨日 ¥--' },
   { label: '订单笔数', value: '0笔', subtext: '昨日 --' },
   { label: '原价金额', value: '¥0', subtext: '昨日 ¥--' },
-]
+])
 
 interface DashboardMenuItem {
   title: string
@@ -180,8 +186,32 @@ async function loadAssistantSummary() {
   }
 }
 
+function formatStatAmount(value: number | string | undefined) {
+  const amount = Number(value || 0)
+  return `¥${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'}`
+}
+
+function formatStatCount(value: number | undefined) {
+  return `${Number.isFinite(value) ? value : 0}笔`
+}
+
+function applyDashboardStats(data: MerchantFoodDashboardStats) {
+  stats[0].value = formatStatAmount(data.todayReceivedAmount)
+  stats[0].subtext = `昨日 ${formatStatAmount(data.yesterdayReceivedAmount)}`
+  stats[1].value = formatStatCount(data.todayOrderCount)
+  stats[1].subtext = `昨日 ${formatStatCount(data.yesterdayOrderCount)}`
+  stats[2].value = formatStatAmount(data.todayOriginalAmount)
+  stats[2].subtext = `昨日 ${formatStatAmount(data.yesterdayOriginalAmount)}`
+}
+
+async function loadDashboardStats() {
+  const storeId = await merchantFoodStore.ensureCurrentStoreId()
+  const result = await getMerchantFoodDashboardStats(storeId)
+  applyDashboardStats(result)
+}
+
 async function refreshDashboardOrderState() {
-  await Promise.allSettled([loadAssistantSummary(), checkOrderNotifications()])
+  await Promise.allSettled([loadAssistantSummary(), checkOrderNotifications(), loadDashboardStats()])
 }
 
 async function switchTab(tabKey: AssistantTabKey) {

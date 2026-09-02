@@ -5,6 +5,7 @@ import type {
   MerchantFoodBill,
   MerchantFoodBusinessStatusPayload,
   MerchantFoodCommissionBill,
+  MerchantFoodDashboardStats,
   MerchantFoodOrder,
   MerchantFoodOrderContactResult,
   MerchantFoodOrderDetail,
@@ -161,6 +162,10 @@ export function rejectMerchantFoodRefund(refundId: number, remark?: string) {
 
 export function getMerchantFoodReconciliationOverview(params: MerchantFoodReconciliationQuery) {
   return http.get<MerchantFoodReconciliationOverview>('/merchant/food/reconciliation/overview', params)
+}
+
+export function getMerchantFoodDashboardStats(storeId: number) {
+  return http.get<MerchantFoodDashboardStats>('/merchant/food/dashboard/stats', { storeId })
 }
 
 export function getMerchantFoodWalletSummary(storeId: number) {

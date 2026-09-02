@@ -396,6 +396,15 @@ export interface MerchantFoodReconciliationOverview {
   groupBuy: MerchantFoodReconciliationStat
 }
 
+export interface MerchantFoodDashboardStats {
+  todayReceivedAmount: number | string
+  todayOrderCount: number
+  todayOriginalAmount: number | string
+  yesterdayReceivedAmount: number | string
+  yesterdayOrderCount: number
+  yesterdayOriginalAmount: number | string
+}
+
 export interface MerchantFoodWalletSummary {
   availableAmount: number
   frozenAmount: number
