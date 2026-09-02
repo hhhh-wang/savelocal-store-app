@@ -27,7 +27,7 @@ type OrderTab = 'all' | 'todo'
 type TimeFilter = 'all' | 'quarter'
 type OrderStatus = 'all' | Lowercase<MerchantFoodOrderStatus>
 type TodoAction = '联系客户' | '拒绝退款' | '确认退款'
-type NormalAction = '联系客户' | '订单详情'
+type NormalAction = '联系客户'
 type TakeoutAction = '取消订单' | '确认出餐' | '驳回退款' | '确认退款'
 
 interface TakeoutOrderProduct {
@@ -106,7 +106,7 @@ function mapOrder(order: MerchantFoodOrder): OrderItem {
     scene: order.scene,
     orderNo: order.orderNo,
     productName,
-    orderTime: order.scene === 'TAKEOUT' ? order.orderTime || '--' : '--',
+    orderTime: order.orderTime || '--',
     amount: String(order.amount ?? 0),
     originalAmount: String(order.originalAmount ?? order.amount ?? 0),
     cityCoinDeductAmount: String(order.cityCoinDeductAmount ?? 0),
@@ -116,7 +116,7 @@ function mapOrder(order: MerchantFoodOrder): OrderItem {
     isTodo: order.todo,
     refundId: order.refundId,
     image: order.imageUrl || productImage,
-    actions: order.todo ? ['联系客户', '拒绝退款', '确认退款'] : ['联系客户', '订单详情'],
+    actions: order.todo ? ['联系客户', '拒绝退款', '确认退款'] : ['联系客户'],
     payTime: order.payTime || order.orderTime || '',
     customerName: order.customerName || '顾客',
     customerMobileMask: order.customerMobileMask || '',
@@ -579,24 +579,6 @@ async function handleOrderAction(action: TodoAction | NormalAction, order: Order
     uni.showModal({ title: '客户联系方式', content: result.contact, showCancel: false })
     return
   }
-  if (action === '订单详情') {
-    const detail = await getMerchantFoodOrderDetail(order.scene, order.id)
-    const items = detail.items?.map(item => `${item.productNameSnapshot} x${item.quantity}`).join('\n')
-    const formatAmount = (value?: number) => `¥${Number(value || 0).toFixed(2)}`
-    const financials = [
-      `商家让利（含技术服务费）：${formatAmount(detail.benefitAmount)}`,
-      detail.orderStatus === 'REFUNDED'
-        ? '其中技术服务费：¥0.00（整单退款免收）'
-        : `其中技术服务费：${formatAmount(detail.platformTechFeeAmount)}`,
-      `商家结算：${formatAmount(detail.settlementAmount)}`,
-    ]
-    uni.showModal({
-      title: `订单 ${detail.orderNo}`,
-      content: [items || `${detail.productName} x${detail.quantity}`, ...financials].join('\n'),
-      showCancel: false,
-    })
-    return
-  }
   if (action === '确认退款') {
     openRefundDialog(order)
     return
@@ -906,13 +888,18 @@ onUnmounted(stopClock)
                     下单时间：{{ order.orderTime }}
                   </text>
                   <text class="order-card__count">
-                    （共{{ order.quantity }}件）
+                  {{ order.quantity }}件
                   </text>
                 </view>
 
                 <view class="order-card__payment">
                   <text>现金实付 ¥{{ formatAmount(order.amount) }}</text>
                   <text>同城币抵扣 {{ formatAmount(order.cityCoinDeductAmount) }}</text>
+                </view>
+
+                <view class="order-card__remark">
+                  <text class="order-card__remark-label">订单备注：</text>
+                  <text class="order-card__remark-text">{{ order.buyerRemark || '无' }}</text>
                 </view>
               </view>
             </view>
@@ -1576,6 +1563,7 @@ onUnmounted(stopClock)
 
 .order-card__meta {
   display: flex;
+  flex-wrap: nowrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 20rpx;
@@ -1584,10 +1572,16 @@ onUnmounted(stopClock)
 }
 
 .order-card__time {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
   font-size: 25rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .order-card__count {
+  flex-shrink: 0;
   font-size: 28rpx;
   color: #b3b5ba;
   white-space: nowrap;
@@ -1625,6 +1619,25 @@ onUnmounted(stopClock)
   margin-top: 10rpx;
   color: #92969e;
   font-size: 23rpx;
+}
+
+.order-card__remark {
+  display: flex;
+  align-items: baseline;
+  margin-top: 10rpx;
+  color: #73767d;
+  font-size: 23rpx;
+  line-height: 1.4;
+}
+
+.order-card__remark-label {
+  flex-shrink: 0;
+}
+
+.order-card__remark-text {
+  min-width: 0;
+  color: #5d6067;
+  word-break: break-all;
 }
 
 .refund-dialog-mask {
