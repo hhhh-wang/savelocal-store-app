@@ -5,12 +5,13 @@ import type {
   MerchantFoodOrderStatus,
   MerchantFoodScene,
 } from '@/api/types/merchant-food'
-import { confirmMerchantFoodRefund, getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage, rejectMerchantFoodRefund } from '@/api/merchant-food'
+import { confirmMerchantFoodRefund, getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage, getMerchantFoodRefundsPage, rejectMerchantFoodRefund } from '@/api/merchant-food'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
 import arrowUpIcon from '@/static/icons/arrow-up.png'
 import phoneIcon from '@/static/icons/phone.png'
 import productImage from '@/static/images/item-image.png'
 import { useMerchantFoodStore } from '@/store'
+import { notifyNewCompletedRefunds, notifyNewPaidOnsiteOrders } from '@/utils/onsite-order-notification'
 
 defineOptions({
   name: 'OrderManagementPage',
@@ -70,6 +71,7 @@ interface OrderItem {
 
 const fallbackUrl = '/pages/dashboard/index'
 const merchantFoodStore = useMerchantFoodStore()
+const ONSITE_ORDER_CHECK_INTERVAL = 20 * 1000
 
 const topTabs = [
   { key: 'todo', label: '待办' },
@@ -96,7 +98,10 @@ const expandedOrderIds = ref<number[]>([])
 const loadingOrderIds = ref<number[]>([])
 const currentTimestamp = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | undefined
+let onsiteOrderCheckTimer: ReturnType<typeof setInterval> | undefined
 let loadSequence = 0
+let isOrderPageVisible = false
+let isCheckingOnsiteOrders = false
 
 function mapOrder(order: MerchantFoodOrder): OrderItem {
   const status = order.orderStatus.toLowerCase() as Exclude<OrderStatus, 'all'>
@@ -535,6 +540,54 @@ function stopClock() {
   }
 }
 
+async function checkOrderNotifications() {
+  if (!isOrderPageVisible || isCheckingOnsiteOrders)
+    return
+
+  isCheckingOnsiteOrders = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const [orderResult, refundResult] = await Promise.all([
+      getMerchantFoodOrdersPage({
+        storeId,
+        pageNum: 1,
+        pageSize: 20,
+        scene: 'ONSITE',
+      }),
+      getMerchantFoodRefundsPage({
+        storeId,
+        pageNum: 1,
+        pageSize: 20,
+        refundStatus: '3',
+      }),
+    ])
+    if (isOrderPageVisible) {
+      notifyNewPaidOnsiteOrders(storeId, orderResult.rows)
+      notifyNewCompletedRefunds(storeId, refundResult.rows)
+    }
+  }
+  finally {
+    isCheckingOnsiteOrders = false
+  }
+}
+
+function startOnsiteOrderCheck() {
+  if (onsiteOrderCheckTimer !== undefined)
+    clearInterval(onsiteOrderCheckTimer)
+  isOrderPageVisible = true
+  onsiteOrderCheckTimer = setInterval(() => {
+    checkOrderNotifications().catch(() => {})
+  }, ONSITE_ORDER_CHECK_INTERVAL)
+}
+
+function stopOnsiteOrderCheck() {
+  isOrderPageVisible = false
+  if (onsiteOrderCheckTimer !== undefined) {
+    clearInterval(onsiteOrderCheckTimer)
+    onsiteOrderCheckTimer = undefined
+  }
+}
+
 function handleClose() {
   const pages = getCurrentPages()
 
@@ -576,7 +629,17 @@ function closeDropdown() {
 async function handleOrderAction(action: TodoAction | NormalAction, order: OrderItem) {
   if (action === '联系客户') {
     const result = await getMerchantFoodOrderContact(order.scene, order.id)
-    uni.showModal({ title: '客户联系方式', content: result.contact, showCancel: false })
+    uni.showModal({
+      title: '客户联系方式',
+      content: result.contact,
+      showCancel: false,
+      confirmText: '复制',
+      success: ({ confirm }) => {
+        if (confirm) {
+          uni.setClipboardData({ data: result.contact })
+        }
+      },
+    })
     return
   }
   if (action === '确认退款') {
@@ -591,10 +654,18 @@ async function handleOrderAction(action: TodoAction | NormalAction, order: Order
 onShow(() => {
   startClock()
   loadOrders().catch(() => {})
+  startOnsiteOrderCheck()
+  checkOrderNotifications().catch(() => {})
 })
 
-onHide(stopClock)
-onUnmounted(stopClock)
+onHide(() => {
+  stopClock()
+  stopOnsiteOrderCheck()
+})
+onUnmounted(() => {
+  stopClock()
+  stopOnsiteOrderCheck()
+})
 </script>
 
 <template>

@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { AssistantTabKey } from './message-shared'
-import type { MerchantMessage, MerchantMessageSummary } from '@/api/types/merchant-message'
-import { getMerchantMessages, getMerchantMessageSummary } from '@/api/merchant-message'
-import { getMerchantFoodOrdersPage } from '@/api/merchant-food'
 import type { MerchantFoodOrder } from '@/api/types/merchant-food'
+import type { MerchantMessage, MerchantMessageSummary } from '@/api/types/merchant-message'
+import { getMerchantFoodOrdersPage, getMerchantFoodRefundsPage } from '@/api/merchant-food'
+import { getMerchantMessages, getMerchantMessageSummary } from '@/api/merchant-message'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import activityIcon from '@/static/icons/dashboard/activity-icon.png'
 import afterSalesIcon from '@/static/icons/dashboard/after-sales.png'
@@ -14,6 +14,7 @@ import productManagementIcon from '@/static/icons/dashboard/product-management.p
 import templateDetailIcon from '@/static/icons/dashboard/template-detail.png'
 import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
 import { useMerchantFoodStore } from '@/store'
+import { notifyNewCompletedRefunds, notifyNewPaidOnsiteOrders } from '@/utils/onsite-order-notification'
 import { GROUP_BUY_REDEMPTION_PATH } from './group-buy-redemption/redemption'
 import { categoryForTab } from './message-shared'
 
@@ -34,15 +35,25 @@ definePage({
 
 const merchantFoodStore = useMerchantFoodStore()
 
+const ONSITE_ORDER_CHECK_INTERVAL = 20 * 1000
+let onsiteOrderCheckTimer: ReturnType<typeof setInterval> | undefined
+let isDashboardVisible = false
+let isCheckingOnsiteOrders = false
+
 onShow(() => {
   merchantFoodStore.loadProfile(true).catch(() => {})
   loadAssistantSummary()
+  startOnsiteOrderCheck()
+  checkOrderNotifications().catch(() => {})
 })
 
 onPullDownRefresh(async () => {
-  await Promise.allSettled([merchantFoodStore.loadProfile(true), loadAssistantSummary()])
+  await Promise.allSettled([merchantFoodStore.loadProfile(true), loadAssistantSummary(), checkOrderNotifications()])
   uni.stopPullDownRefresh()
 })
+
+onHide(stopOnsiteOrderCheck)
+onUnmounted(stopOnsiteOrderCheck)
 
 const stats = [
   { label: '实收金额', value: '¥0', subtext: '昨日 ¥--' },
@@ -179,6 +190,54 @@ async function switchTab(tabKey: AssistantTabKey) {
   }
   catch {
     assistantError.value = true
+  }
+}
+
+async function checkOrderNotifications() {
+  if (!isDashboardVisible || isCheckingOnsiteOrders)
+    return
+
+  isCheckingOnsiteOrders = true
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    const [orderResult, refundResult] = await Promise.all([
+      getMerchantFoodOrdersPage({
+        storeId,
+        pageNum: 1,
+        pageSize: 20,
+        scene: 'ONSITE',
+      }),
+      getMerchantFoodRefundsPage({
+        storeId,
+        pageNum: 1,
+        pageSize: 20,
+        refundStatus: '3',
+      }),
+    ])
+    if (isDashboardVisible) {
+      notifyNewPaidOnsiteOrders(storeId, orderResult.rows)
+      notifyNewCompletedRefunds(storeId, refundResult.rows)
+    }
+  }
+  finally {
+    isCheckingOnsiteOrders = false
+  }
+}
+
+function startOnsiteOrderCheck() {
+  if (onsiteOrderCheckTimer !== undefined)
+    clearInterval(onsiteOrderCheckTimer)
+  isDashboardVisible = true
+  onsiteOrderCheckTimer = setInterval(() => {
+    checkOrderNotifications().catch(() => {})
+  }, ONSITE_ORDER_CHECK_INTERVAL)
+}
+
+function stopOnsiteOrderCheck() {
+  isDashboardVisible = false
+  if (onsiteOrderCheckTimer !== undefined) {
+    clearInterval(onsiteOrderCheckTimer)
+    onsiteOrderCheckTimer = undefined
   }
 }
 
