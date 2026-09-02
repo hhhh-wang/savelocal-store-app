@@ -5,13 +5,13 @@ import type {
   MerchantFoodOrderStatus,
   MerchantFoodScene,
 } from '@/api/types/merchant-food'
-import { confirmMerchantFoodRefund, getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage, getMerchantFoodRefundsPage, rejectMerchantFoodRefund } from '@/api/merchant-food'
+import { confirmMerchantFoodRefund, getMerchantFoodOrderContact, getMerchantFoodOrderDetail, getMerchantFoodOrdersPage, rejectMerchantFoodRefund } from '@/api/merchant-food'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
 import arrowUpIcon from '@/static/icons/arrow-up.png'
 import phoneIcon from '@/static/icons/phone.png'
 import productImage from '@/static/images/item-image.png'
 import { useMerchantFoodStore } from '@/store'
-import { notifyNewCompletedRefunds, notifyNewPaidOnsiteOrders } from '@/utils/onsite-order-notification'
+import { notifyNewPaidOnsiteOrders, notifyNewRefundingOnsiteOrders } from '@/utils/onsite-order-notification'
 
 defineOptions({
   name: 'OrderManagementPage',
@@ -547,23 +547,15 @@ async function checkOrderNotifications() {
   isCheckingOnsiteOrders = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    const [orderResult, refundResult] = await Promise.all([
-      getMerchantFoodOrdersPage({
-        storeId,
-        pageNum: 1,
-        pageSize: 20,
-        scene: 'ONSITE',
-      }),
-      getMerchantFoodRefundsPage({
-        storeId,
-        pageNum: 1,
-        pageSize: 20,
-        refundStatus: '3',
-      }),
-    ])
+    const orderResult = await getMerchantFoodOrdersPage({
+      storeId,
+      pageNum: 1,
+      pageSize: 20,
+      scene: 'ONSITE',
+    })
     if (isOrderPageVisible) {
       notifyNewPaidOnsiteOrders(storeId, orderResult.rows)
-      notifyNewCompletedRefunds(storeId, refundResult.rows)
+      notifyNewRefundingOnsiteOrders(storeId, orderResult.rows)
     }
   }
   finally {

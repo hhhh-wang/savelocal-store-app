@@ -1,4 +1,4 @@
-import type { MerchantFoodOrder, MerchantFoodRefund } from '@/api/types/merchant-food'
+import type { MerchantFoodOrder } from '@/api/types/merchant-food'
 import orderRefundedAudio from '@/static/mp3/order-refunded.mp3'
 import paymentReceivedAudio from '@/static/mp3/payment-received.mp3'
 
@@ -10,7 +10,6 @@ let audioContext: ReturnType<typeof uni.createInnerAudioContext> | undefined
 let isPlaying = false
 const announcedOrderKeys = new Set<string>()
 const initializedStoreIds = new Set<number>()
-const initializedRefundStoreIds = new Set<number>()
 const playbackQueue: string[] = []
 
 function restoreAnnouncedOrderKeys() {
@@ -76,8 +75,12 @@ function playNext() {
   const context = getAudioContext()
   context.stop()
   context.src = audioSource
-  context.seek(0)
-  context.play()
+  try {
+    context.play()
+  }
+  catch {
+    finishPlayback()
+  }
 }
 
 /**
@@ -121,24 +124,15 @@ export function notifyNewPaidOnsiteOrders(storeId: number, orders: MerchantFoodO
 }
 
 /**
- * 首次查询仅建立退款基线；其后检测到新完成的退款时播放一次退款语音。
+ * 检测到未播报过的退款中订单时播放一次退款语音。使用独立版本键，
+ * 避免旧版按退款表状态筛选遗漏的订单无法在升级后提示。
  */
-export function notifyNewCompletedRefunds(storeId: number, refunds: MerchantFoodRefund[]) {
+export function notifyNewRefundingOnsiteOrders(storeId: number, orders: MerchantFoodOrder[]) {
   restoreAnnouncedOrderKeys()
 
-  const completedRefunds = refunds.filter(refund => refund.refundStatus === '3')
-  if (!initializedRefundStoreIds.has(storeId)) {
-    initializedRefundStoreIds.add(storeId)
-    for (const refund of completedRefunds) {
-      announcedOrderKeys.add(`refund:${storeId}:${refund.refundId}`)
-    }
-    trimAnnouncedOrderKeys()
-    persistAnnouncedOrderKeys()
-    return
-  }
-
-  const unannouncedRefunds = completedRefunds.filter((refund) => {
-    const refundKey = `refund:${storeId}:${refund.refundId}`
+  const refundingOrders = orders.filter(order => order.scene === 'ONSITE' && order.orderStatus === 'REFUNDING')
+  const unannouncedRefunds = refundingOrders.filter((order) => {
+    const refundKey = `refunding-order-v2:${storeId}:${order.orderId}`
     if (announcedOrderKeys.has(refundKey))
       return false
 

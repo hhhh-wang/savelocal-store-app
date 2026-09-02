@@ -2,7 +2,7 @@
 import type { AssistantTabKey } from './message-shared'
 import type { MerchantFoodOrder } from '@/api/types/merchant-food'
 import type { MerchantMessage, MerchantMessageSummary } from '@/api/types/merchant-message'
-import { getMerchantFoodOrdersPage, getMerchantFoodRefundsPage } from '@/api/merchant-food'
+import { getMerchantFoodOrdersPage } from '@/api/merchant-food'
 import { getMerchantMessages, getMerchantMessageSummary } from '@/api/merchant-message'
 import customerServiceIcon from '@/static/icons/customer-service.png'
 import activityIcon from '@/static/icons/dashboard/activity-icon.png'
@@ -14,7 +14,7 @@ import productManagementIcon from '@/static/icons/dashboard/product-management.p
 import templateDetailIcon from '@/static/icons/dashboard/template-detail.png'
 import emptyNoDataIcon from '@/static/icons/empty-no-data.png'
 import { useMerchantFoodStore } from '@/store'
-import { notifyNewCompletedRefunds, notifyNewPaidOnsiteOrders } from '@/utils/onsite-order-notification'
+import { notifyNewPaidOnsiteOrders, notifyNewRefundingOnsiteOrders } from '@/utils/onsite-order-notification'
 import { GROUP_BUY_REDEMPTION_PATH } from './group-buy-redemption/redemption'
 import { categoryForTab } from './message-shared'
 
@@ -200,23 +200,15 @@ async function checkOrderNotifications() {
   isCheckingOnsiteOrders = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    const [orderResult, refundResult] = await Promise.all([
-      getMerchantFoodOrdersPage({
-        storeId,
-        pageNum: 1,
-        pageSize: 20,
-        scene: 'ONSITE',
-      }),
-      getMerchantFoodRefundsPage({
-        storeId,
-        pageNum: 1,
-        pageSize: 20,
-        refundStatus: '3',
-      }),
-    ])
+    const orderResult = await getMerchantFoodOrdersPage({
+      storeId,
+      pageNum: 1,
+      pageSize: 20,
+      scene: 'ONSITE',
+    })
     if (isDashboardVisible) {
       notifyNewPaidOnsiteOrders(storeId, orderResult.rows)
-      notifyNewCompletedRefunds(storeId, refundResult.rows)
+      notifyNewRefundingOnsiteOrders(storeId, orderResult.rows)
     }
   }
   finally {
