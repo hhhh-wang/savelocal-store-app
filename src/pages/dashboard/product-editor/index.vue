@@ -313,7 +313,7 @@ async function handleSubmit() {
     else if (productId.value) {
       await updateMerchantFoodProduct(storeId, productId.value, payload)
     }
-    uni.showToast({ title: editorMode.value === 'create' ? '商品创建成功' : '商品保存成功', icon: 'success' })
+    uni.showToast({ title: editorMode.value === 'create' ? '商品已提交审核' : '商品修改已提交审核', icon: 'none' })
     setTimeout(handleClose, 320)
   }
   finally {

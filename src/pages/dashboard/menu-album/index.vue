@@ -198,6 +198,9 @@ onLoad((options) => {
           <text v-if="selectMode" class="album-card__tip">
             点击一张已审核通过的图片后将返回编辑页
           </text>
+          <text v-else class="album-card__tip">
+            上传的图片需审核通过后，才可用于商品。
+          </text>
         </view>
 
         <view class="album-grid">

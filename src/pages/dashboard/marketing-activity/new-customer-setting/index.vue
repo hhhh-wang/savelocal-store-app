@@ -149,7 +149,7 @@ async function publishActivity() {
     })
     const eventChannel = typeof getOpenerEventChannel === 'function' ? getOpenerEventChannel() : undefined
     eventChannel?.emit('discountPublished', product.id, result)
-    uni.showToast({ title: '立减活动已发布', icon: 'success' })
+    uni.showToast({ title: '活动已发布，等待平台审核', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 360)
   }
   catch (error) {
