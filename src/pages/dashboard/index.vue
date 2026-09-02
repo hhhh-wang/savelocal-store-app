@@ -42,13 +42,12 @@ let isCheckingOnsiteOrders = false
 
 onShow(() => {
   merchantFoodStore.loadProfile(true).catch(() => {})
-  loadAssistantSummary()
   startOnsiteOrderCheck()
-  checkOrderNotifications().catch(() => {})
+  refreshDashboardOrderState()
 })
 
 onPullDownRefresh(async () => {
-  await Promise.allSettled([merchantFoodStore.loadProfile(true), loadAssistantSummary(), checkOrderNotifications()])
+  await Promise.allSettled([merchantFoodStore.loadProfile(true), refreshDashboardOrderState()])
   uni.stopPullDownRefresh()
 })
 
@@ -148,6 +147,9 @@ const hasActiveAssistantItems = computed(() => activeMessages.value.length > 0
   || (activeTab.value === 'todos' && refundTodoOrders.value.length > 0))
 
 async function loadAssistantSummary() {
+  if (assistantLoading.value)
+    return
+
   assistantLoading.value = true
   assistantError.value = false
   try {
@@ -176,6 +178,10 @@ async function loadAssistantSummary() {
   finally {
     assistantLoading.value = false
   }
+}
+
+async function refreshDashboardOrderState() {
+  await Promise.allSettled([loadAssistantSummary(), checkOrderNotifications()])
 }
 
 async function switchTab(tabKey: AssistantTabKey) {
@@ -221,7 +227,7 @@ function startOnsiteOrderCheck() {
     clearInterval(onsiteOrderCheckTimer)
   isDashboardVisible = true
   onsiteOrderCheckTimer = setInterval(() => {
-    checkOrderNotifications().catch(() => {})
+    refreshDashboardOrderState().catch(() => {})
   }, ONSITE_ORDER_CHECK_INTERVAL)
 }
 
