@@ -60,7 +60,7 @@ function buildBillGroups(bills: MerchantFoodCommissionBill[]) {
     group.items.push({
       id: `${bill.foodOrderId}-fee`,
       kind: 'fee',
-      description: `商家让利（含技术服务费）-订单${bill.orderNo}`,
+      description: `商家让利（返给消费者）-订单${bill.orderNo}`,
       time: formatTime(timeValue),
       amount: `-${toAmount(fee)}`,
     })
