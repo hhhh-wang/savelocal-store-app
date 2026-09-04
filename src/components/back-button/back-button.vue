@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+
 interface Props {
   fallbackUrl?: string
   fallbackMode?: 'switchTab' | 'navigateTo' | 'reLaunch'
@@ -15,24 +17,53 @@ const props = withDefaults(defineProps<Props>(), {
   size: '64rpx',
 })
 
-function handleBack() {
-  const pages = getCurrentPages()
-  if (pages.length > 1) {
-    uni.navigateBack()
-    return
+const isNavigating = ref(false)
+
+function navigateToFallback() {
+  const complete = () => {
+    isNavigating.value = false
   }
 
   if (props.fallbackMode === 'reLaunch') {
-    uni.reLaunch({ url: props.fallbackUrl })
+    uni.reLaunch({ url: props.fallbackUrl, complete })
     return
   }
 
   if (props.fallbackMode === 'navigateTo') {
-    uni.navigateTo({ url: props.fallbackUrl })
+    // The current page has no usable history entry. Replacing it prevents
+    // the fallback page and current page from forming a two-page loop.
+    uni.redirectTo({ url: props.fallbackUrl, complete })
     return
   }
 
-  uni.switchTab({ url: props.fallbackUrl })
+  uni.switchTab({ url: props.fallbackUrl, complete })
+}
+
+function handleBack() {
+  if (isNavigating.value) {
+    return
+  }
+
+  isNavigating.value = true
+  const pages = getCurrentPages()
+  if (pages.length > 1) {
+    let fallbackStarted = false
+    uni.navigateBack({
+      fail: () => {
+        // getCurrentPages may retain stale entries after an app resumes.
+        fallbackStarted = true
+        navigateToFallback()
+      },
+      complete: () => {
+        if (!fallbackStarted) {
+          isNavigating.value = false
+        }
+      },
+    })
+    return
+  }
+
+  navigateToFallback()
 }
 </script>
 
