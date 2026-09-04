@@ -130,6 +130,11 @@ const walletItems = computed(() => [
   { label: '余额(元)', value: formatWalletAmount(walletSummary.value?.totalAmount) },
 ])
 
+const cityCoinItems = [
+  { label: '我的同城币', value: '0', unit: '枚' },
+  { label: '今日收益', value: '0', unit: '枚' },
+]
+
 interface MenuItem {
   title: string
   icon?: string
@@ -324,6 +329,23 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
             <image class="me-header__icon" :src="settingIcon" mode="aspectFit" />
           </view>
         </view>
+      </view>
+
+      <view class="city-coin-card">
+        <view class="city-coin-card__stats">
+          <view v-for="item in cityCoinItems" :key="item.label" class="city-coin-card__item">
+            <text class="city-coin-card__label">{{ item.label }}</text>
+            <view class="city-coin-card__amount-row">
+              <text class="city-coin-card__value">
+                {{ item.value }}
+              </text>
+              <text class="city-coin-card__unit">
+                {{ item.unit }}
+              </text>
+            </view>
+          </view>
+        </view>
+        <view class="city-coin-card__artwork-placeholder" aria-hidden="true" />
       </view>
 
       <view class="wallet-card" hover-class="wallet-card--hover" @tap="openWallet">
@@ -528,10 +550,76 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
 }
 
 .wallet-card,
+.city-coin-card,
 .menu-card {
   border-radius: 28rpx;
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 16rpx 42rpx rgba(56, 61, 86, 0.08);
+}
+
+.city-coin-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 174rpx;
+  margin-top: 28rpx;
+  padding: 28rpx 30rpx;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(255, 241, 240, 0.98) 0%, rgba(255, 255, 255, 0.98) 68%);
+}
+
+.city-coin-card__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: calc(100% - 170rpx);
+  gap: 20rpx;
+}
+
+.city-coin-card__item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.city-coin-card__label {
+  color: #34383f;
+  font-size: 28rpx;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.city-coin-card__amount-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6rpx;
+}
+
+.city-coin-card__value {
+  color: #171a1f;
+  font-size: 56rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.city-coin-card__unit {
+  color: #ef5d22;
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.city-coin-card__artwork-placeholder {
+  position: absolute;
+  top: 50%;
+  right: 24rpx;
+  width: 150rpx;
+  height: 150rpx;
+  border: 2rpx dashed rgba(239, 93, 34, 0.28);
+  border-radius: 50%;
+  background: rgba(255, 243, 231, 0.72);
+  box-sizing: border-box;
+  transform: translateY(-50%);
 }
 
 .wallet-card {
