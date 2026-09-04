@@ -70,10 +70,6 @@ async function loadWithdrawContext() {
   }
 }
 
-function showPrototypeNotice(title: string) {
-  uni.showToast({ title, icon: 'none' })
-}
-
 function openPage(url: string) {
   uni.navigateTo({ url })
 }
@@ -129,13 +125,8 @@ async function showTransferConfirmQr() {
 
     <view class="account-withdrawal-hero">
       <view class="agreement-banner">
-        <view class="agreement-banner__copy">
-          <view class="i-carbon-warning-filled agreement-banner__icon" />
-          <text class="agreement-banner__text">请遵守省哒平台商家服务协议</text>
-        </view>
-        <view class="agreement-banner__action" @tap="showPrototypeNotice('协议详情暂未开放')">
-          查看详情
-        </view>
+        <view class="i-carbon-warning-filled agreement-banner__icon" />
+        <text class="agreement-banner__text">单笔提现额度200元，单日提现额度为2000元</text>
       </view>
 
       <view class="balance-panel">
@@ -211,7 +202,6 @@ async function showTransferConfirmQr() {
 }
 
 .agreement-banner,
-.agreement-banner__copy,
 .balance-panel,
 .account-links__row {
   display: flex;
@@ -219,42 +209,22 @@ async function showTransferConfirmQr() {
 }
 
 .agreement-banner {
-  justify-content: space-between;
-  gap: 18rpx;
+  gap: 12rpx;
   min-height: 80rpx;
-  padding: 0 30rpx;
+  padding: 0 28rpx;
   border-radius: 20rpx;
   background: #fffde6;
   color: #f6a000;
 }
 
-.agreement-banner__copy {
-  min-width: 0;
-  flex: 1;
-  gap: 12rpx;
-}
-
 .agreement-banner__icon {
-  width: 32rpx;
-  height: 32rpx;
+  width: 28rpx;
+  height: 28rpx;
   flex-shrink: 0;
 }
 
 .agreement-banner__text {
-  overflow: hidden;
   font-size: 29rpx;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agreement-banner__action {
-  flex-shrink: 0;
-  padding: 10rpx 18rpx;
-  border: 2rpx solid #f6a000;
-  border-radius: 10rpx;
-  font-size: 28rpx;
-  font-weight: 600;
   line-height: 1.4;
 }
 
