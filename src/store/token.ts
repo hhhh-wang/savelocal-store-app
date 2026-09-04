@@ -1,5 +1,6 @@
 import type {
   IAccountLoginForm,
+  IMobileLoginForm,
 } from '@/api/login'
 import type { IAuthLoginRes } from '@/api/types/login'
 import { defineStore } from 'pinia'
@@ -7,6 +8,7 @@ import { computed, ref } from 'vue'
 import {
   accountLogin as _accountLogin,
   logout as _logout,
+  mobileLogin as _mobileLogin,
   wxLogin as _wxLogin,
   getWxCode,
 } from '@/api/login'
@@ -106,6 +108,30 @@ export const useTokenStore = defineStore(
       }
       catch (error) {
         console.error('登录失败:', error)
+        uni.showToast({
+          title: error instanceof Error ? error.message : '登录失败，请重试',
+          icon: 'none',
+        })
+        throw error
+      }
+      finally {
+        updateNowTime()
+      }
+    }
+
+    const mobileLogin = async (loginForm: IMobileLoginForm) => {
+      try {
+        const res = await _mobileLogin(loginForm)
+        console.log('手机号登录-res: ', res)
+        _postLogin(res)
+        uni.showToast({
+          title: '登录成功',
+          icon: 'success',
+        })
+        return res
+      }
+      catch (error) {
+        console.error('手机号登录失败:', error)
         uni.showToast({
           title: error instanceof Error ? error.message : '登录失败，请重试',
           icon: 'none',
@@ -222,6 +248,7 @@ export const useTokenStore = defineStore(
 
     return {
       login,
+      mobileLogin,
       wxLogin,
       logout,
       hasLogin: hasValidLogin,

@@ -24,6 +24,11 @@ export interface IAccountLoginForm {
 
 export type ILoginForm = IAccountLoginForm
 
+export interface IMobileLoginForm {
+  mobile: string
+  smsCode: string
+}
+
 export interface IMerchantRegisterForm {
   password: string
   mobile: string
@@ -37,6 +42,8 @@ export interface IMerchantResetPasswordForm {
   smsCode: string
   password: string
 }
+
+export type SmsVerificationScene = 'MERCHANT_LOGIN'
 
 /**
  * 获取验证码
@@ -55,12 +62,14 @@ export const getCode = getCaptcha
  * @param phoneNumber 手机号
  * @param code 图形验证码
  * @param uuid 图形验证码 UUID
+ * @param scene 短信验证码使用场景
  */
-export function sendVerificationCodeSms(phoneNumber: string, code?: string, uuid?: string) {
+export function sendVerificationCodeSms(phoneNumber: string, code?: string, uuid?: string, scene?: SmsVerificationScene) {
   return http.post<void>('/common/sms/verification-code/send', undefined, {
     phoneNumber,
     code,
     uuid,
+    scene,
   }, undefined, {
     withAuth: false,
   })
@@ -82,6 +91,29 @@ export function accountLogin(loginForm: IAccountLoginForm) {
 }
 
 export const login = accountLogin
+
+/**
+ * 商家手机号登录
+ */
+export function mobileLogin(loginForm: IMobileLoginForm) {
+  return http.post<{ token: string }>('/merchant/auth/mobile-login', loginForm, undefined, undefined, {
+    withAuth: false,
+  }).then((res) => {
+    return {
+      token: res.token || '',
+      expiresIn: MERCHANT_TOKEN_EXPIRES_IN_SECONDS,
+    } satisfies IAuthLoginRes
+  })
+}
+
+/**
+ * 校验手机号是否已注册商家账号。
+ */
+export function checkMerchantMobileExists(mobile: string) {
+  return http.get<boolean>('/merchant/auth/mobile-exists', { mobile }, undefined, {
+    withAuth: false,
+  })
+}
 
 /**
  * 商家注册

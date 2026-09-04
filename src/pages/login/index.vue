@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { IAccountLoginForm } from '@/api/login'
-import { getCaptcha } from '@/api/login'
+import type { IAccountLoginForm, IMobileLoginForm } from '@/api/login'
+import { checkMerchantMobileExists, getCaptcha, sendVerificationCodeSms } from '@/api/login'
 import { createMerchantStoreDraft } from '@/api/merchant-store'
 import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-create-lock'
 import loginImage from '@/static/images/login.png'
@@ -44,6 +44,10 @@ const captchaEnabled = ref(true)
 const captchaImageUrl = ref('')
 const redirectUrl = ref('')
 const isTestMode = import.meta.env.MODE === 'test'
+const SMS_COUNTDOWN_SECONDS = 60
+const smsCountdown = ref(0)
+const isSendingSms = ref(false)
+let smsCountdownTimer: ReturnType<typeof setInterval> | null = null
 
 const form = reactive<IAccountLoginForm>({
   username: '',
@@ -55,12 +59,18 @@ const form = reactive<IAccountLoginForm>({
 const phoneForm = reactive({
   mobile: '',
   smsCode: '',
+  captchaCode: '',
+  captchaUuid: '',
 })
 
 onLoad((options) => {
   redirectUrl.value = typeof options?.redirect === 'string' ? options.redirect : ''
   restoreRememberedAccount()
   void fetchCaptcha()
+})
+
+onUnload(() => {
+  clearSmsCountdown()
 })
 
 function restoreRememberedAccount() {
@@ -92,12 +102,17 @@ async function fetchCaptcha() {
       captchaImageUrl.value = ''
       form.code = ''
       form.uuid = ''
+      phoneForm.captchaCode = ''
+      phoneForm.captchaUuid = ''
       return
     }
 
     const base64Image = captcha.image || captcha.img || ''
     captchaImageUrl.value = base64Image ? `data:image/gif;base64,${base64Image}` : ''
+    form.code = ''
     form.uuid = captcha.uuid || ''
+    phoneForm.captchaCode = ''
+    phoneForm.captchaUuid = captcha.uuid || ''
   }
   catch (error) {
     console.error('获取验证码失败:', error)
@@ -105,6 +120,8 @@ async function fetchCaptcha() {
     captchaImageUrl.value = ''
     form.code = ''
     form.uuid = ''
+    phoneForm.captchaCode = ''
+    phoneForm.captchaUuid = ''
   }
 }
 
@@ -174,17 +191,76 @@ function validateForm() {
   return true
 }
 
-function handlePhoneCodeTap() {
-  if (!/^1\d{10}$/.test(phoneForm.mobile.trim())) {
+function clearSmsCountdown() {
+  if (smsCountdownTimer) {
+    clearInterval(smsCountdownTimer)
+    smsCountdownTimer = null
+  }
+  smsCountdown.value = 0
+}
+
+function startSmsCountdown() {
+  clearSmsCountdown()
+  smsCountdown.value = SMS_COUNTDOWN_SECONDS
+  smsCountdownTimer = setInterval(() => {
+    if (smsCountdown.value <= 1) {
+      clearSmsCountdown()
+      return
+    }
+    smsCountdown.value -= 1
+  }, 1000)
+}
+
+async function handlePhoneCodeTap() {
+  if (isSendingSms.value || smsCountdown.value > 0) {
+    return
+  }
+
+  const mobile = phoneForm.mobile.trim()
+  const captchaCode = phoneForm.captchaCode.trim()
+  if (!/^1\d{10}$/.test(mobile)) {
     showPendingToast('请先输入正确的手机号')
     return
   }
 
-  showPendingToast('短信验证码发送待接入')
+  if (captchaEnabled.value && !captchaCode) {
+    showPendingToast('请输入图形验证码')
+    return
+  }
+
+  try {
+    isSendingSms.value = true
+    const mobileExists = await checkMerchantMobileExists(mobile)
+    if (!mobileExists) {
+      showPendingToast('手机号不存在，请先注册商家账号')
+      return
+    }
+
+    await sendVerificationCodeSms(
+      mobile,
+      captchaEnabled.value ? captchaCode : undefined,
+      captchaEnabled.value ? phoneForm.captchaUuid : undefined,
+      'MERCHANT_LOGIN',
+    )
+    startSmsCountdown()
+    uni.showToast({
+      title: '验证码已发送',
+      icon: 'success',
+    })
+  }
+  catch (error) {
+    console.error('发送登录短信验证码失败:', error)
+    if (captchaEnabled.value && error instanceof Error && /验证码.*(?:失效|错误|过期)/.test(error.message)) {
+      await fetchCaptcha()
+    }
+  }
+  finally {
+    isSendingSms.value = false
+  }
 }
 
 function handlePhoneHelpTap() {
-  showPendingToast('短信帮助待接入')
+  showPendingToast('请检查手机信号和短信拦截设置后重试')
 }
 
 function goToRegister() {
@@ -298,7 +374,12 @@ async function handleLogin() {
     isSubmitting.value = true
 
     if (activeTab.value === 'phone') {
-      showPendingToast('手机号登录待接入')
+      const loginForm: IMobileLoginForm = {
+        mobile: phoneForm.mobile.trim(),
+        smsCode: phoneForm.smsCode.trim(),
+      }
+      await tokenStore.mobileLogin(loginForm)
+      await continueAfterLogin()
       return
     }
 
@@ -315,6 +396,11 @@ async function handleLogin() {
   }
   catch (error) {
     console.error('商家登录失败:', error)
+    if (activeTab.value === 'phone') {
+      phoneForm.smsCode = ''
+      return
+    }
+
     form.code = ''
 
     if (captchaEnabled.value) {
@@ -451,6 +537,29 @@ async function handleLogin() {
             placeholder-class="login-input__placeholder"
           />
 
+          <view v-if="captchaEnabled" class="login-captcha">
+            <view class="login-captcha__preview" hover-class="login-captcha__preview--hover" @tap="fetchCaptcha">
+              <image
+                v-if="captchaImageUrl"
+                class="login-captcha__image"
+                :src="captchaImageUrl"
+                mode="aspectFill"
+              />
+              <text v-else class="login-captcha__refresh">
+                换一张
+              </text>
+            </view>
+
+            <input
+              v-model="phoneForm.captchaCode"
+              class="login-captcha__input"
+              type="text"
+              :maxlength="10"
+              placeholder="请输入图形验证码"
+              placeholder-class="login-input__placeholder"
+            />
+          </view>
+
           <view class="login-phone-code">
             <input
               v-model="phoneForm.smsCode"
@@ -460,8 +569,12 @@ async function handleLogin() {
               placeholder="输入短信验证码"
               placeholder-class="login-input__placeholder"
             />
-            <text class="login-phone-code__action" @tap="handlePhoneCodeTap">
-              获取验证码
+            <text
+              class="login-phone-code__action"
+              :class="{ 'login-phone-code__action--disabled': isSendingSms || smsCountdown > 0 }"
+              @tap="handlePhoneCodeTap"
+            >
+              {{ isSendingSms ? '发送中...' : smsCountdown > 0 ? `${smsCountdown}秒后重发` : '获取验证码' }}
             </text>
           </view>
 
@@ -716,6 +829,10 @@ async function handleLogin() {
   color: #ffae12;
   font-size: 28rpx;
   font-weight: 500;
+}
+
+.login-phone-code__action--disabled {
+  color: #c8c8c8;
 }
 
 .login-phone-help {
