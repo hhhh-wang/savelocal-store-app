@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { MerchantFoodQuickStatus, MerchantFoodQuickStatusValue, MerchantFoodWalletSummary } from '@/api/types/merchant-food'
 import { getMerchantFoodStoreQuickStatus, getMerchantFoodWalletSummary, updateMerchantFoodStoreQuickStatus } from '@/api/merchant-food'
+import { getMerchantPromotionAccount, getMerchantPromotionOverview } from '@/api/merchant-promotion'
 import { createMerchantStoreDraft } from '@/api/merchant-store'
 import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-create-lock'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
@@ -39,6 +40,8 @@ const selectedStoreId = ref<number>()
 const creatingStore = ref(false)
 const quickStatus = ref<MerchantFoodQuickStatus>()
 const walletSummary = ref<MerchantFoodWalletSummary>()
+// 推广奖励同城币归属商家主体，所有门店共享，与门店级现金钱包分开维护
+const merchantPromotionSummary = ref<{ balance: number, todayIncome: number }>()
 const updatingQuickStatus = ref(false)
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '餐饮门店')
 
@@ -60,6 +63,7 @@ const storeStatus = computed(() => {
 onShow(() => {
   loadMeStoreStatus().catch(() => {})
   loadWalletSummary().catch(() => {})
+  loadPromotionSummary().catch(() => {})
 })
 
 async function loadMeStoreStatus() {
@@ -70,6 +74,25 @@ async function loadMeStoreStatus() {
 async function loadWalletSummary() {
   const storeId = await merchantFoodStore.ensureCurrentStoreId()
   walletSummary.value = await getMerchantFoodWalletSummary(storeId)
+}
+
+function getTodayTimeRange() {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  return { beginTime: `${date} 00:00:00`, endTime: `${date} 23:59:59` }
+}
+
+async function loadPromotionSummary() {
+  const range = getTodayTimeRange()
+  const [account, overview] = await Promise.all([
+    getMerchantPromotionAccount(),
+    getMerchantPromotionOverview(range.beginTime, range.endTime),
+  ])
+  merchantPromotionSummary.value = {
+    balance: Number(account?.cityCoinBalance || 0),
+    todayIncome: Number(overview?.rewardGrantAmount || 0),
+  }
 }
 
 async function applyQuickStatus(value: MerchantFoodQuickStatusValue) {
@@ -123,17 +146,19 @@ function formatWalletAmount(value?: number) {
   return Number(value || 0).toFixed(2)
 }
 
+const formatCityCoinAmount = (value?: number) => Number(value || 0).toFixed(2)
+
 const walletItems = computed(() => [
-  { label: '今日到账', value: formatWalletAmount(walletSummary.value?.availableAmount) },
+  { label: '可提现余额', value: formatWalletAmount(walletSummary.value?.availableAmount) },
   { label: '待到账', value: formatWalletAmount(walletSummary.value?.frozenAmount) },
   { label: '今日退款金额', value: formatWalletAmount(walletSummary.value?.todayRefundAmount) },
   { label: '余额(元)', value: formatWalletAmount(walletSummary.value?.totalAmount) },
 ])
 
-const cityCoinItems = [
-  { label: '我的同城币', value: '0', unit: '枚' },
-  { label: '今日收益', value: '0', unit: '枚' },
-]
+const cityCoinItems = computed(() => [
+  { label: '推广奖励同城币', value: formatCityCoinAmount(merchantPromotionSummary.value?.balance), unit: '元' },
+  { label: '今日入账', value: formatCityCoinAmount(merchantPromotionSummary.value?.todayIncome), unit: '元' },
+])
 
 interface MenuItem {
   title: string
@@ -224,6 +249,10 @@ async function handleStoreAccessConfirm(storeId: number) {
 
 function openWallet() {
   uni.navigateTo({ url: '/pages/dashboard/merchant-reconciliation/index' })
+}
+
+function openPromotionCenter() {
+  uni.navigateTo({ url: '/pages/dashboard/promotion-center/index' })
 }
 
 async function handleCreateStore() {
@@ -331,7 +360,7 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
         </view>
       </view>
 
-      <view class="city-coin-card">
+      <view class="city-coin-card" hover-class="city-coin-card--hover" @tap="openPromotionCenter">
         <view class="city-coin-card__stats">
           <view v-for="item in cityCoinItems" :key="item.label" class="city-coin-card__item">
             <text class="city-coin-card__label">{{ item.label }}</text>
@@ -339,11 +368,14 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
               <text class="city-coin-card__value">
                 {{ item.value }}
               </text>
-              <text class="city-coin-card__unit">
+              <text v-if="item.unit" class="city-coin-card__unit">
                 {{ item.unit }}
               </text>
             </view>
           </view>
+          <text class="city-coin-card__hint">
+            商家主体账户 · 所有门店共享
+          </text>
         </view>
         <view class="city-coin-card__artwork-placeholder" aria-hidden="true" />
       </view>
@@ -569,11 +601,22 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
   background: linear-gradient(180deg, rgba(255, 241, 240, 0.98) 0%, rgba(255, 255, 255, 0.98) 68%);
 }
 
+.city-coin-card--hover {
+  opacity: 0.92;
+}
+
 .city-coin-card__stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: calc(100% - 170rpx);
   gap: 20rpx;
+}
+
+.city-coin-card__hint {
+  grid-column: 1 / -1;
+  color: #b0b4bc;
+  font-size: 22rpx;
+  line-height: 1.4;
 }
 
 .city-coin-card__item {
