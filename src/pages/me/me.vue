@@ -7,6 +7,7 @@ import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-cr
 import arrowDownIcon from '@/static/icons/arrow-down.png'
 import aboutUsIcon from '@/static/icons/me/about-us.png'
 import customerServiceIcon from '@/static/icons/me/customer-service.png'
+import localCoinIcon from '@/static/icons/me/local-coin.png'
 import myContractsIcon from '@/static/icons/me/my-contracts.png'
 import notificationSettingsIcon from '@/static/icons/me/notification-settings.png'
 import settlementAccountIcon from '@/static/icons/me/rules-center.png'
@@ -377,7 +378,7 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
             商家主体账户 · 所有门店共享
           </text>
         </view>
-        <view class="city-coin-card__artwork-placeholder" aria-hidden="true" />
+        <image class="city-coin-card__artwork" :src="localCoinIcon" mode="aspectFit" aria-hidden="true" />
       </view>
 
       <view class="wallet-card" hover-class="wallet-card--hover" @tap="openWallet">
@@ -652,16 +653,12 @@ function handleMenuItemTap(item: (typeof menuItems)[number]) {
   line-height: 1;
 }
 
-.city-coin-card__artwork-placeholder {
+.city-coin-card__artwork {
   position: absolute;
   top: 50%;
   right: 24rpx;
   width: 150rpx;
   height: 150rpx;
-  border: 2rpx dashed rgba(239, 93, 34, 0.28);
-  border-radius: 50%;
-  background: rgba(255, 243, 231, 0.72);
-  box-sizing: border-box;
   transform: translateY(-50%);
 }
 
