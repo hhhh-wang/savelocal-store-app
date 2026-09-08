@@ -8,6 +8,7 @@ import arrowDownIcon from '@/static/icons/arrow-down.png'
 import aboutUsIcon from '@/static/icons/me/about-us.png'
 import customerServiceIcon from '@/static/icons/me/customer-service.png'
 import localCoinIcon from '@/static/icons/me/local-coin.png'
+import logoutIcon from '@/static/icons/me/logout.png'
 import myContractsIcon from '@/static/icons/me/my-contracts.png'
 import notificationSettingsIcon from '@/static/icons/me/notification-settings.png'
 import settlementAccountIcon from '@/static/icons/me/rules-center.png'
@@ -176,7 +177,7 @@ const menuItems: MenuItem[] = [
   { title: '违规记录', icon: violationRecordsIcon },
   { title: '结算账户', icon: settlementAccountIcon, path: '/pages/me/settlement-account/index' },
   { title: '关于我们', icon: aboutUsIcon },
-  { title: '退出登录', action: 'logout' },
+  { title: '退出登录', icon: logoutIcon, action: 'logout' },
 ]
 
 function openSettings() {
