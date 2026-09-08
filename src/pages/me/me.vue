@@ -157,8 +157,8 @@ const walletItems = computed(() => [
 ])
 
 const cityCoinItems = computed(() => [
-  { label: '推广奖励同城币', value: formatCityCoinAmount(merchantPromotionSummary.value?.balance), unit: '元' },
-  { label: '今日入账', value: formatCityCoinAmount(merchantPromotionSummary.value?.todayIncome), unit: '元' },
+  { label: '推广奖励同城币', value: formatCityCoinAmount(merchantPromotionSummary.value?.balance), unit: '枚' },
+  { label: '今日入账', value: formatCityCoinAmount(merchantPromotionSummary.value?.todayIncome), unit: '枚' },
 ])
 
 interface MenuItem {
