@@ -89,6 +89,7 @@
     "upload:changeset": "pnpm changeset && pnpm changeset version",
     "upload:mp": "node ./scripts/upload-weixin.js",
     "type-check": "vue-tsc --noEmit",
+    "test:promotion": "node --test tests/merchant-promotion.test.mjs",
     "lint": "eslint",
     "lint:fix": "eslint --fix"
   },

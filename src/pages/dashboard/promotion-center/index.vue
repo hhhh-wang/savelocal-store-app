@@ -1,10 +1,11 @@
 <script lang="ts" setup>
-import type { MerchantPromotionAccount, MerchantPromotionOverview, MerchantPromotionRewardItem } from '@/api/merchant-promotion'
+import type { MerchantPromotionRewardItem } from '@/api/merchant-promotion'
 import {
-  getMerchantPromotionAccount,
-  getMerchantPromotionOverview,
-  getMerchantPromotionRewardPage,
-} from '@/api/merchant-promotion'
+  formatPromotionAmount,
+  useMerchantPromotionRewards,
+  useMerchantPromotionSummary,
+} from '@/hooks/useMerchantPromotion'
+import PromotionTransferDialog from './components/promotion-transfer-dialog.vue'
 
 defineOptions({ name: 'PromotionCenter' })
 
@@ -17,7 +18,6 @@ definePage({
   },
 })
 
-const PAGE_SIZE = 20
 const REWARD_TYPE_LABELS: Record<string, string> = {
   REGISTER_REWARD: '注册奖励',
   MERCHANT_PROMOTE_REGISTER_REWARD: '推广注册奖励',
@@ -34,25 +34,17 @@ const REWARD_STATUS_LABELS: Record<string, string> = {
   3: '已冲回',
 }
 
-const account = ref<MerchantPromotionAccount>()
-const overview = ref<MerchantPromotionOverview>()
-const rewardList = ref<MerchantPromotionRewardItem[]>([])
-const rewardTotal = ref(0)
-const nextPage = ref(1)
-const loading = ref(false)
-const loadFailed = ref(false)
-
-const balance = computed(() => formatAmount(account.value?.cityCoinBalance))
-const frozenAmount = computed(() => formatAmount(account.value?.cityCoinFrozen))
-const todayIncome = computed(() => formatAmount(overview.value?.rewardGrantAmount))
-const hasMore = computed(() => rewardList.value.length < rewardTotal.value)
-
-function formatAmount(value?: number) {
-  if (value === undefined || value === null)
-    return '--'
-  const amount = Number(value)
-  return Number.isFinite(amount) ? amount.toFixed(2) : '--'
-}
+const {
+  balance,
+  frozenAmount,
+  todayIncome,
+  loading: summaryLoading,
+  loadFailed: summaryLoadFailed,
+  refresh: loadSummary,
+  refreshAfterChange: reloadSummaryAfterTransfer,
+} = useMerchantPromotionSummary()
+const { rewardList, loading, loadFailed, hasMore, loadRewards } = useMerchantPromotionRewards()
+const transferDialog = ref<InstanceType<typeof PromotionTransferDialog>>()
 
 function getRewardTime(item: MerchantPromotionRewardItem) {
   const time = item.status === '3' && item.cancelTime
@@ -61,44 +53,12 @@ function getRewardTime(item: MerchantPromotionRewardItem) {
   return time ? time.replace('T', ' ').slice(0, 16) : '--'
 }
 
-function getTodayTimeRange() {
-  const now = new Date()
-  const pad = (value: number) => String(value).padStart(2, '0')
-  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-  return { beginTime: `${date} 00:00:00`, endTime: `${date} 23:59:59` }
-}
-
-async function loadRewards(reset = true) {
-  if (loading.value)
-    return
-
-  loading.value = true
-  loadFailed.value = false
-  if (reset)
-    nextPage.value = 1
-  try {
-    const page = nextPage.value
-    const result = await getMerchantPromotionRewardPage({ pageNum: page, pageSize: PAGE_SIZE })
-    const rows = result.rows || []
-    rewardList.value = page === 1 ? rows : [...rewardList.value, ...rows]
-    rewardTotal.value = result.total || 0
-    nextPage.value = page + 1
-  }
-  catch {
-    loadFailed.value = true
-  }
-  finally {
-    loading.value = false
-  }
-}
-
 async function refreshPage() {
-  const { beginTime, endTime } = getTodayTimeRange()
-  await Promise.allSettled([
-    getMerchantPromotionAccount().then(result => account.value = result),
-    getMerchantPromotionOverview(beginTime, endTime).then(result => overview.value = result),
-    loadRewards(),
-  ])
+  await Promise.all([loadSummary(), loadRewards()])
+}
+
+async function handleTransferred() {
+  await Promise.all([reloadSummaryAfterTransfer(), loadRewards()])
 }
 
 function loadMore() {
@@ -107,8 +67,7 @@ function loadMore() {
 }
 
 function handleWithdraw() {
-  // 推广同城币与门店现金结算分属不同账户，不能复用门店提现接口。
-  uni.showToast({ title: '同城币提现暂未开放', icon: 'none' })
+  void transferDialog.value?.open()
 }
 
 onShow(refreshPage)
@@ -139,7 +98,15 @@ onPullDownRefresh(async () => {
 
     <view class="summary-card">
       <text class="summary-card__label">推广奖励同城币</text>
-      <text class="summary-card__hint">商家主体账户 · 所有门店共享</text>
+      <button
+        v-if="summaryLoadFailed"
+        class="summary-card__retry"
+        role="button"
+        @tap="loadSummary"
+      >
+        账户数据加载失败，点击重试
+      </button>
+      <text v-else class="summary-card__hint">{{ summaryLoading ? '账户数据加载中…' : '商家主体账户 · 所有门店共享' }}</text>
 
       <view class="summary-card__amount-row">
         <view class="summary-card__balance">
@@ -186,7 +153,7 @@ onPullDownRefresh(async () => {
           <view v-for="item in rewardList" :key="item.rewardId" class="record-row">
             <view class="record-row__main">
               <text class="record-row__title">{{ REWARD_TYPE_LABELS[item.rewardType] || item.rewardType }}</text>
-              <text class="record-row__amount">{{ formatAmount(item.rewardAmount) }}<text class="record-row__unit">枚</text></text>
+              <text class="record-row__amount">{{ formatPromotionAmount(item.rewardAmount) }}<text class="record-row__unit">枚</text></text>
             </view>
             <text v-if="item.tradeStoreName" class="record-row__store">{{ item.tradeStoreName }}</text>
             <view class="record-row__meta">
@@ -204,6 +171,7 @@ onPullDownRefresh(async () => {
         </template>
       </view>
     </view>
+    <PromotionTransferDialog ref="transferDialog" @transferred="handleTransferred" />
   </view>
 </template>
 
@@ -262,6 +230,21 @@ onPullDownRefresh(async () => {
   color: #a5aab4;
   font-size: 24rpx;
   line-height: 30rpx;
+}
+
+.summary-card__retry {
+  margin: 4rpx 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #d77b6d;
+  font-size: 24rpx;
+  line-height: 30rpx;
+  text-align: left;
+}
+
+.summary-card__retry::after {
+  border: 0;
 }
 
 .summary-card__amount-row {

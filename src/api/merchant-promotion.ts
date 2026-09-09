@@ -71,6 +71,47 @@ export interface MerchantPromotionPageResult<T> {
   total: number
 }
 
+export interface MerchantPromotionTransferContext {
+  merchantId: number
+  canTransfer: boolean
+  unavailableReason?: string
+  /** 金额使用十进制字符串，避免大额或小数在转入时损失精度。 */
+  availableAmount: string
+  /** 当前个人微信分账账户 ID，用于确认期间防止接收方被后台更换。 */
+  receiverId?: number
+  memberNickname?: string
+  mobileMask?: string
+}
+
+export interface MerchantPromotionTransferRequest {
+  requestNo: string
+  receiverId: number
+  amount: string
+}
+
+export interface MerchantPromotionTransferResult {
+  transferNo: string
+  requestNo: string
+  merchantId: number
+  memberId: number
+  memberNickname: string
+  mobileMask: string
+  amount: string
+  merchantBalance: string
+  createTime: string
+}
+
+export function getMerchantPromotionTransferContext() {
+  return http.get<MerchantPromotionTransferContext>('/merchant/promotion/transfer-context')
+}
+
+export function transferMerchantPromotionCoins(request: MerchantPromotionTransferRequest) {
+  return http.post<MerchantPromotionTransferResult>('/merchant/promotion/transfers', request)
+}
+
+export function getMerchantPromotionTransferResult(requestNo: string) {
+  return http.get<MerchantPromotionTransferResult | null>(`/merchant/promotion/transfers/${encodeURIComponent(requestNo)}`)
+}
 export function getMerchantPromotionAccount() {
   return http.get<MerchantPromotionAccount>('/merchant/promotion/account')
 }
@@ -82,6 +123,13 @@ export function getMerchantPromotionOverview(beginTime?: string, endTime?: strin
   if (endTime)
     query['params[endTime]'] = endTime
   return http.get<MerchantPromotionOverview>('/merchant/promotion/overview', query)
+}
+
+/** 今日入账只统计当天已发放的奖励，两个页面使用相同的查询口径。 */
+export function getMerchantPromotionTodayOverview(now = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  return getMerchantPromotionOverview(`${date} 00:00:00`, `${date} 23:59:59`)
 }
 
 export function getMerchantPromotionRewardPage(params: {
