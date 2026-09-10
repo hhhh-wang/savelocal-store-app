@@ -18,6 +18,7 @@ const {
   open,
   close,
   loadContext,
+  goToSettlementAccount,
   fillAll,
   submit,
   checkResult,
@@ -42,8 +43,8 @@ defineExpose({ open })
 
       <template v-else-if="step === 'error'">
         <text class="transfer-dialog__description">{{ error }}</text>
-        <button class="transfer-dialog__primary" @tap="loadContext">
-          重新加载
+        <button class="transfer-dialog__primary" @tap="goToSettlementAccount">
+          去绑定
         </button>
       </template>
 

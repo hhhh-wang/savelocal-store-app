@@ -70,13 +70,16 @@ async function loadQualifications() {
     merchantStoreAudit.load(storeId, true),
     getMerchantStoreAuditOptions(),
   ])
-  const documents = options.requiredDocuments.filter(item => !item.code.startsWith('LEGAL_ID_'))
+  const documents = [
+    ...options.requiredDocuments.map(item => ({ ...item, isRequired: '1' })),
+    ...(options.optionalDocuments || []).map(item => ({ ...item, isRequired: '0' })),
+  ].filter(item => !item.code.startsWith('LEGAL_ID_'))
   qualificationTemplates.value = documents.map((item, index) => ({
     typeId: index + 1,
     qualificationCode: item.code,
     qualificationName: item.name,
     qualificationScope: '2',
-    isRequired: '1',
+    isRequired: item.isRequired,
   }))
   qualifications.value = merchantStoreAudit.snapshot.qualifications.map((item, index) => ({
     qualificationId: index + 1,
@@ -88,7 +91,9 @@ async function loadQualifications() {
     validFrom: item.validFrom,
     validTo: item.validTo,
     auditStatus: Object.keys(merchantStoreAudit.issueMessages)
-      .some(field => field.startsWith(`qualifications.${item.qualificationCode}.`)) ? '2' : undefined,
+      .some(field => field.startsWith(`qualifications.${item.qualificationCode}.`))
+      ? '2'
+      : undefined,
     rejectReason: Object.entries(merchantStoreAudit.issueMessages)
       .find(([field]) => field.startsWith(`qualifications.${item.qualificationCode}.`))?.[1],
   }))

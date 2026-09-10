@@ -87,6 +87,14 @@ export function useMerchantPromotionTransfer(onTransferred: () => void | Promise
     requestVersion++
   }
 
+  function goToSettlementAccount() {
+    if (busy.value)
+      return
+    visible.value = false
+    requestVersion++
+    uni.navigateTo({ url: '/pages/me/settlement-account/index' })
+  }
+
   async function complete(transfer: MerchantPromotionTransferResult) {
     result.value = transfer
     pending.value = undefined
@@ -292,6 +300,7 @@ export function useMerchantPromotionTransfer(onTransferred: () => void | Promise
     open,
     close,
     loadContext,
+    goToSettlementAccount,
     fillAll,
     submit,
     checkResult,

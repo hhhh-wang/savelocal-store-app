@@ -130,10 +130,10 @@ const textFields: AuditMaterialsTextField[] = [
 ]
 
 const documents = ref<AuditMaterialsDocumentItem[]>([
-  { key: 'business-license', title: '营业执照', required: true, emptyText: '营业执照' },
-  { key: 'food-permit', title: '食品经营许可证', required: true },
-  { key: 'id-front', title: '法人身份证正面', required: true },
-  { key: 'id-back', title: '法人身份证反面', required: true },
+  { key: 'business-license', title: '营业执照', required: false, emptyText: '营业执照' },
+  { key: 'food-permit', title: '食品经营许可证', required: false },
+  { key: 'id-front', title: '法人身份证正面', required: false },
+  { key: 'id-back', title: '法人身份证反面', required: false },
 ])
 
 const requiredFieldKeys = [

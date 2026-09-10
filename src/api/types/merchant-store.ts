@@ -12,10 +12,10 @@ export interface MerchantStoreAuditMaterials {
   longitude?: number
   latitude?: number
   businessLicenseCode: string
-  businessLicenseUrl: string
-  foodPermitUrl: string
-  legalPersonIdFrontUrl: string
-  legalPersonIdBackUrl: string
+  businessLicenseUrl?: string
+  foodPermitUrl?: string
+  legalPersonIdFrontUrl?: string
+  legalPersonIdBackUrl?: string
 }
 
 export interface MerchantStoreAuditIssue {
@@ -138,6 +138,7 @@ export interface MerchantStoreAuditOptions {
     categories: Array<{ label: string, value: string }>
   }>
   requiredDocuments: Array<{ code: string, name: string }>
+  optionalDocuments?: Array<{ code: string, name: string }>
 }
 
 export interface MerchantStoreAuditDraft {
