@@ -1,11 +1,10 @@
 <script lang="ts" setup>
-import type { RegionCodes } from './store-address'
 import type { MerchantFoodAddressSuggestion } from '@/api/types/merchant-food'
 import { getMerchantFoodAddressSuggestions, getMerchantFoodKeywordAddressSuggestions } from '@/api/merchant-food'
 import locationIcon from '@/static/icons/location-icon.png'
 import { useMerchantFoodStore, useMerchantStoreAuditStore } from '@/store'
 import { debounce } from '@/utils/debounce'
-import { normalizeCoordinate, resolveRegionCodesFromAdcode } from './store-address'
+import { normalizeMapLocation } from './store-address'
 
 defineOptions({
   name: 'StoreAddress',
@@ -22,7 +21,9 @@ const fallbackUrl = '/pages/me/store-info/index'
 const merchantFoodStore = useMerchantFoodStore()
 const merchantStoreAudit = useMerchantStoreAuditStore()
 const submitting = ref(false)
-const regionCodes = reactive<RegionCodes>({ provinceCode: '', cityCode: '', districtCode: '' })
+const initializing = ref(true)
+const mapSelecting = ref(false)
+const mapSelectionFailed = ref(false)
 const addressSuggestions = ref<MerchantFoodAddressSuggestion[]>([])
 const loadingAddressSuggestions = ref(false)
 const addressSuggestionVisible = ref(false)
@@ -40,6 +41,9 @@ const mapScale = ref(14)
 const ADDRESS_SUGGESTION_LIMIT = 10
 const ADDRESS_SUGGESTION_DEBOUNCE_MS = 300
 let addressSuggestionRequestSeq = 0
+let mapLocationRevision = 0
+let addressRevision = 0
+let disposed = false
 
 interface MapChangePayload {
   latitude: number
@@ -60,28 +64,29 @@ function handleClose() {
   })
 }
 
-function loadUserLocation() {
-  uni.getLocation({
-    type: 'gcj02',
-    isHighAccuracy: true,
-    success(res) {
-      mapLocation.latitude = res.latitude
-      mapLocation.longitude = res.longitude
-      console.log('门店地址定位成功:', {
-        latitude: res.latitude,
-        longitude: res.longitude,
-      })
-    },
-    fail(error) {
-      console.log('门店地址定位失败，使用默认经纬度:', error)
-    },
-  })
+async function loadUserLocation() {
+  const locationRevision = mapLocationRevision
+  try {
+    const res = await uni.getLocation({
+      type: 'gcj02',
+      isHighAccuracy: true,
+      highAccuracyExpireTime: 3000,
+    })
+    const location = normalizeMapLocation(res.latitude, res.longitude)
+    if (locationRevision === mapLocationRevision && location) {
+      updateMapLocation(location)
+    }
+  }
+  catch (error) {
+    console.log('门店地址定位失败，请搜索地址或拖动地图选点:', error)
+  }
 }
 
-function resetRegionCodes() {
-  regionCodes.provinceCode = ''
-  regionCodes.cityCode = ''
-  regionCodes.districtCode = ''
+function updateMapLocation(location: { latitude: number, longitude: number }) {
+  mapLocationRevision += 1
+  mapLocation.latitude = location.latitude
+  mapLocation.longitude = location.longitude
+  mapSelectionFailed.value = false
 }
 
 function clearAddressSuggestions() {
@@ -98,14 +103,9 @@ function formatAddressSuggestionMeta(item: MerchantFoodAddressSuggestion) {
 }
 
 async function requestAddressLocation() {
-  const currentLatitude = normalizeCoordinate(mapLocation.latitude)
-  const currentLongitude = normalizeCoordinate(mapLocation.longitude)
-
-  if (currentLatitude && currentLongitude) {
-    return {
-      latitude: currentLatitude,
-      longitude: currentLongitude,
-    }
+  const currentLocation = normalizeMapLocation(mapLocation.latitude, mapLocation.longitude)
+  if (currentLocation) {
+    return currentLocation
   }
 
   const location = await uni.getLocation({
@@ -113,13 +113,12 @@ async function requestAddressLocation() {
     isHighAccuracy: true,
     highAccuracyExpireTime: 3000,
   })
-  const latitude = normalizeCoordinate(location.latitude)
-  const longitude = normalizeCoordinate(location.longitude)
-  if (latitude === undefined || longitude === undefined) {
+  const normalizedLocation = normalizeMapLocation(location.latitude, location.longitude)
+  if (!normalizedLocation) {
     throw new Error('定位结果无效')
   }
 
-  return { latitude, longitude }
+  return normalizedLocation
 }
 
 async function loadAddressSuggestions() {
@@ -133,8 +132,9 @@ async function loadAddressSuggestions() {
       return
     }
 
-    mapLocation.latitude = location.latitude
-    mapLocation.longitude = location.longitude
+    if (!normalizeMapLocation(mapLocation.latitude, mapLocation.longitude)) {
+      updateMapLocation(location)
+    }
     const suggestions = await getMerchantFoodAddressSuggestions({
       ...location,
       limit: ADDRESS_SUGGESTION_LIMIT,
@@ -169,13 +169,9 @@ async function loadAddressSuggestions() {
 }
 
 async function requestKeywordSearchLocation() {
-  const currentLatitude = normalizeCoordinate(mapLocation.latitude)
-  const currentLongitude = normalizeCoordinate(mapLocation.longitude)
-  if (currentLatitude !== undefined && currentLongitude !== undefined && (currentLatitude !== 0 || currentLongitude !== 0)) {
-    return {
-      latitude: currentLatitude,
-      longitude: currentLongitude,
-    }
+  const currentLocation = normalizeMapLocation(mapLocation.latitude, mapLocation.longitude)
+  if (currentLocation) {
+    return currentLocation
   }
 
   try {
@@ -184,13 +180,7 @@ async function requestKeywordSearchLocation() {
       isHighAccuracy: true,
       highAccuracyExpireTime: 3000,
     })
-    const latitude = normalizeCoordinate(location.latitude)
-    const longitude = normalizeCoordinate(location.longitude)
-    if (latitude === undefined || longitude === undefined) {
-      return undefined
-    }
-
-    return { latitude, longitude }
+    return normalizeMapLocation(location.latitude, location.longitude)
   }
   catch {
     // 关键词搜索不依赖定位；定位不可用时由腾讯地图在全国范围内匹配。
@@ -247,52 +237,64 @@ const debouncedLoadKeywordAddressSuggestions = debounce((keyword: string) => {
 }, ADDRESS_SUGGESTION_DEBOUNCE_MS)
 
 function handleAddressIconTap() {
-  if (loadingAddressSuggestions.value) {
+  if (submitting.value || loadingAddressSuggestions.value) {
     return
   }
 
+  debouncedLoadKeywordAddressSuggestions.cancel()
   if (addressSuggestions.value.length) {
     addressSuggestionVisible.value = true
     return
   }
 
-  void loadAddressSuggestions()
+  const keyword = form.address.trim()
+  if (keyword.length >= 2) {
+    void loadKeywordAddressSuggestions(keyword)
+  }
+  else {
+    void loadAddressSuggestions()
+  }
 }
 
 function selectAddressSuggestion(item: MerchantFoodAddressSuggestion) {
-  const address = (item.detailAddress || item.address || item.title || '').trim()
-  const latitude = normalizeCoordinate(item.latitude)
-  const longitude = normalizeCoordinate(item.longitude)
-  const codes = resolveRegionCodesFromAdcode(item.adcode)
-
-  if (!address || latitude === undefined || longitude === undefined || !codes.districtCode) {
-    uni.showToast({ title: '该地址缺少完整定位信息，请重新选择', icon: 'none' })
+  if (submitting.value) {
     return
   }
 
+  const address = (item.detailAddress || item.address || item.title || '').trim()
+  if (!address) {
+    return
+  }
+
+  debouncedLoadKeywordAddressSuggestions.cancel()
+  addressRevision += 1
   form.address = address
-  regionCodes.provinceCode = codes.provinceCode
-  regionCodes.cityCode = codes.cityCode
-  regionCodes.districtCode = codes.districtCode
-  mapLocation.latitude = latitude
-  mapLocation.longitude = longitude
-  mapScale.value = 16
+  const location = normalizeMapLocation(item.latitude, item.longitude)
+  if (location) {
+    updateMapLocation(location)
+    mapScale.value = 16
+  }
   clearAddressSuggestions()
 }
 
 function handleAddressInput(event: { detail?: { value?: string } }) {
+  addressRevision += 1
   debouncedLoadKeywordAddressSuggestions.cancel()
-  resetRegionCodes()
   clearAddressSuggestions()
 
-  const keyword = (event.detail?.value || form.address).trim()
+  form.address = event.detail?.value ?? form.address
+  const keyword = form.address.trim()
   if (keyword.length >= 2) {
     debouncedLoadKeywordAddressSuggestions(keyword)
   }
 }
 
 async function handleSubmit() {
-  if (!form.address.trim()) {
+  if (submitting.value) {
+    return
+  }
+  const addressText = form.address.trim()
+  if (!addressText) {
     uni.showToast({
       title: '请填写门店地址',
       icon: 'none',
@@ -300,68 +302,103 @@ async function handleSubmit() {
     return
   }
 
-  const latitude = normalizeCoordinate(mapLocation.latitude)
-  const longitude = normalizeCoordinate(mapLocation.longitude)
-  if (!regionCodes.provinceCode || !regionCodes.cityCode || !regionCodes.districtCode) {
-    uni.showToast({ title: '门店地区编码不完整，请联系管理员', icon: 'none' })
+  if (initializing.value || mapSelecting.value) {
+    uni.showToast({ title: '请等待地图定位完成', icon: 'none' })
     return
   }
-  if (!latitude || !longitude) {
-    uni.showToast({ title: '请先选择完整的门店定位', icon: 'none' })
+  const location = normalizeMapLocation(mapLocation.latitude, mapLocation.longitude)
+  if (!location || mapSelectionFailed.value) {
+    uni.showToast({ title: '请在地图上确认门店位置', icon: 'none' })
     return
   }
-  if (submitting.value)
-    return
   submitting.value = true
+  debouncedLoadKeywordAddressSuggestions.cancel()
+  clearAddressSuggestions()
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
     await merchantStoreAudit.saveAddress(storeId, {
-      addressText: form.address.trim(),
-      provinceCode: regionCodes.provinceCode,
-      cityCode: regionCodes.cityCode,
-      districtCode: regionCodes.districtCode,
-      longitude,
-      latitude,
+      addressText,
+      ...location,
     })
     uni.showToast({ title: '已保存到草稿', icon: 'success' })
+  }
+  catch (error) {
+    console.error('保存门店地址失败:', error)
   }
   finally {
     submitting.value = false
   }
 }
 
-function handleMapChange(payload: MapChangePayload) {
-  mapLocation.latitude = payload.latitude
-  mapLocation.longitude = payload.longitude
-
-  if (payload.source === 'regionchange') {
-    console.log('门店地址地图滑动后经纬度:', {
-      latitude: payload.latitude,
-      longitude: payload.longitude,
-    })
+function handleMapSelecting(selecting: boolean) {
+  mapSelecting.value = selecting
+  if (selecting) {
+    mapLocationRevision += 1
+    debouncedLoadKeywordAddressSuggestions.cancel()
+    clearAddressSuggestions()
   }
 }
 
+function handleMapChange(payload: MapChangePayload) {
+  if (submitting.value) {
+    return
+  }
+  const location = normalizeMapLocation(payload.latitude, payload.longitude)
+  if (location) {
+    updateMapLocation(location)
+    debouncedLoadKeywordAddressSuggestions.cancel()
+    clearAddressSuggestions()
+  }
+  else {
+    handleMapSelectionError()
+  }
+}
+
+function handleMapSelectionError() {
+  mapSelectionFailed.value = true
+  uni.showToast({ title: '获取地图位置失败，请重新拖动地图', icon: 'none' })
+}
+
 onMounted(async () => {
+  const initialAddressRevision = addressRevision
+  const initialLocationRevision = mapLocationRevision
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    if (disposed) {
+      return
+    }
     await merchantStoreAudit.load(storeId, true)
+    if (disposed) {
+      return
+    }
     const store = merchantStoreAudit.snapshot.store
-    form.address = store.addressDetail || ''
-    regionCodes.provinceCode = store.provinceCode || ''
-    regionCodes.cityCode = store.cityCode || ''
-    regionCodes.districtCode = store.districtCode || ''
-    mapLocation.latitude = Number(store.latitude || 0)
-    mapLocation.longitude = Number(store.longitude || 0)
-    if (!mapLocation.latitude || !mapLocation.longitude)
-      loadUserLocation()
+    if (addressRevision === initialAddressRevision) {
+      form.address = store.addressText || store.addressDetail || ''
+    }
+    if (mapLocationRevision !== initialLocationRevision) {
+      return
+    }
+    const location = normalizeMapLocation(store.latitude, store.longitude)
+    if (location) {
+      updateMapLocation(location)
+    }
+    else {
+      await loadUserLocation()
+    }
   }
   catch (error) {
     console.error('门店地址资料加载失败:', error)
   }
+  finally {
+    if (!disposed) {
+      initializing.value = false
+    }
+  }
 })
 
 onUnmounted(() => {
+  disposed = true
+  mapLocationRevision += 1
   debouncedLoadKeywordAddressSuggestions.cancel()
   clearAddressSuggestions()
 })
@@ -413,9 +450,13 @@ onUnmounted(() => {
             <input
               v-model="form.address"
               class="store-address-field__input"
-              placeholder="请输入门店地址"
+              placeholder="搜索或直接填写详细地址"
               placeholder-class="store-address-field__placeholder"
+              :maxlength="255"
+              :disabled="submitting"
+              confirm-type="search"
               @input="handleAddressInput"
+              @confirm="handleAddressIconTap"
             >
             <view
               class="store-address-field__location"
@@ -428,6 +469,10 @@ onUnmounted(() => {
                 mode="aspectFit"
               />
             </view>
+          </view>
+
+          <view class="store-address-field__description">
+            可搜索地址，也可直接填写门牌号、楼层等详细信息
           </view>
 
           <view v-if="loadingAddressSuggestions" class="store-address-field__suggestion-state">
@@ -476,22 +521,32 @@ onUnmounted(() => {
             height="500rpx"
             border-radius="20rpx"
             background="#edf5fb"
-            selectable
             selection-mode="center"
+            :selectable="!submitting && !initializing"
             :latitude="mapLocation.latitude"
             :longitude="mapLocation.longitude"
-            :enable-poi="true"
-            :enable-scroll="true"
-            :enable-zoom="true"
+            :enable-poi="!submitting && !initializing"
+            :enable-scroll="!submitting && !initializing"
+            :enable-zoom="!submitting && !initializing"
             @change="handleMapChange"
+            @selecting="handleMapSelecting"
+            @selectionerror="handleMapSelectionError"
           />
+          <view class="store-address-map-section__description">
+            拖动地图，将图钉尖端对准门店实际位置，定位以图钉为准
+          </view>
         </view>
       </view>
     </view>
 
     <view class="store-address-footer">
-      <view class="store-address-footer__button" hover-class="store-address-footer__button--hover" @tap="handleSubmit">
-        提交
+      <view
+        class="store-address-footer__button"
+        :class="{ 'store-address-footer__button--disabled': submitting || initializing || mapSelecting }"
+        hover-class="store-address-footer__button--hover"
+        @tap="handleSubmit"
+      >
+        {{ submitting ? '保存中...' : initializing || mapSelecting ? '定位中...' : '提交' }}
       </view>
     </view>
   </view>
@@ -646,6 +701,14 @@ onUnmounted(() => {
   color: #b8bdc7;
 }
 
+.store-address-field__description,
+.store-address-map-section__description {
+  margin-top: 12rpx;
+  color: #8a8f98;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
 .store-address-field__suggestion-state {
   margin: 12rpx 0 0 58rpx;
   color: #8a8f98;
@@ -721,7 +784,8 @@ onUnmounted(() => {
   box-shadow: 0 18rpx 34rpx rgba(245, 196, 0, 0.28);
 }
 
-.store-address-footer__button--hover {
+.store-address-footer__button--hover,
+.store-address-footer__button--disabled {
   opacity: 0.88;
 }
 </style>

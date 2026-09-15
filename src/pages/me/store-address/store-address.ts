@@ -24,7 +24,19 @@ export function resolveRegionCodesFromAdcode(adcode: unknown): RegionCodes {
 export function normalizeCoordinate(value: unknown) {
   const coordinate = typeof value === 'number'
     ? value
-    : typeof value === 'string' ? Number(value) : Number.NaN
+    : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN
 
   return Number.isFinite(coordinate) ? coordinate : undefined
+}
+
+export function normalizeMapLocation(latitudeValue: unknown, longitudeValue: unknown) {
+  const latitude = normalizeCoordinate(latitudeValue)
+  const longitude = normalizeCoordinate(longitudeValue)
+  if (latitude === undefined || longitude === undefined
+    || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180
+    || (latitude === 0 && longitude === 0)) {
+    return undefined
+  }
+
+  return { latitude, longitude }
 }

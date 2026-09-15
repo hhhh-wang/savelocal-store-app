@@ -2,8 +2,6 @@
 import type { ComponentPublicInstance } from 'vue'
 import defaultMarkerIcon from '@/static/icons/map-marker.png'
 
-let mapInstanceSeed = 0
-
 type LocationSource = 'init' | 'poi' | 'tap' | 'regionchange'
 type SelectionMode = 'center' | 'tap'
 
@@ -61,6 +59,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (e: 'change', payload: LocationPayload): void
+  (e: 'selecting', value: boolean): void
+  (e: 'selectionerror'): void
   (e: 'updated'): void
   (e: 'markertap', event: any): void
   (e: 'poitap', event: any): void
@@ -71,12 +71,15 @@ const emit = defineEmits<{
   (e: 'update:scale', value: number): void
 }>()
 
-const mapId = `tencent-map-${++mapInstanceSeed}`
-const instance = getCurrentInstance()
+const instance = getCurrentInstance()!
+const mapId = `tencent-map-${instance.uid}`
 const selectedLatitude = ref(props.latitude)
 const selectedLongitude = ref(props.longitude)
 const currentScale = ref(props.scale)
 const mapContext = shallowRef<ReturnType<typeof uni.createMapContext>>()
+let centerRequestSeq = 0
+let selecting = false
+let selectionFailed = false
 const centerPinVisible = computed(() => props.selectable && props.selectionMode === 'center')
 const hasCustomMarkers = computed(() => props.markers.length > 0)
 
@@ -109,16 +112,24 @@ watch(
 )
 
 watch(
-  () => props.latitude,
-  (value) => {
-    selectedLatitude.value = value
+  () => [props.latitude, props.longitude],
+  ([latitude, longitude]) => {
+    if (latitude === selectedLatitude.value && longitude === selectedLongitude.value) {
+      return
+    }
+    centerRequestSeq += 1
+    selectedLatitude.value = latitude
+    selectedLongitude.value = longitude
+    selectionFailed = false
+    setSelecting(false)
   },
 )
 
 watch(
-  () => props.longitude,
-  (value) => {
-    selectedLongitude.value = value
+  () => [props.selectable, props.selectionMode],
+  () => {
+    centerRequestSeq += 1
+    setSelecting(false)
   },
 )
 
@@ -129,7 +140,24 @@ onMounted(() => {
     : uni.createMapContext(mapId)
 })
 
-async function emitLocationChange(payload: LocationPayload) {
+onUnmounted(() => {
+  centerRequestSeq += 1
+})
+
+function setSelecting(value: boolean) {
+  if (selecting !== value) {
+    selecting = value
+    emit('selecting', value)
+  }
+}
+
+function isValidLocation(location: { latitude?: number, longitude?: number } | undefined) {
+  return location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)
+    && Math.abs(location.latitude!) <= 90 && Math.abs(location.longitude!) <= 180
+}
+
+function emitLocationChange(payload: LocationPayload) {
+  selectionFailed = false
   selectedLatitude.value = payload.latitude
   selectedLongitude.value = payload.longitude
 
@@ -138,27 +166,49 @@ async function emitLocationChange(payload: LocationPayload) {
   emit('change', payload)
 }
 
-async function updateByCenter(source: LocationSource) {
-  if (!mapContext.value) {
-    return
-  }
-
+async function updateByCenter(source: LocationSource, centerLocation?: { latitude: number, longitude: number }) {
+  const requestSeq = ++centerRequestSeq
+  setSelecting(true)
   try {
-    const center = await new Promise<{ latitude: number, longitude: number }>((resolve, reject) => {
-      mapContext.value!.getCenterLocation({
-        success: resolve,
-        fail: reject,
-      })
-    })
+    const center = isValidLocation(centerLocation)
+      ? centerLocation!
+      : await new Promise<{ latitude: number, longitude: number }>((resolve, reject) => {
+          if (!mapContext.value) {
+            reject(new Error('地图尚未就绪'))
+            return
+          }
+          mapContext.value.getCenterLocation({
+            success: resolve,
+            fail: reject,
+          })
+        })
 
-    await emitLocationChange({
+    if (requestSeq !== centerRequestSeq) {
+      return
+    }
+    if (!isValidLocation(center)) {
+      throw new Error('地图位置无效')
+    }
+    // 原生 App 也会在程序设置中心点后回调，避免同一坐标反复触发选点。
+    if (!selectionFailed && center.latitude === selectedLatitude.value && center.longitude === selectedLongitude.value) {
+      return
+    }
+    emitLocationChange({
       latitude: center.latitude,
       longitude: center.longitude,
       source,
     })
   }
   catch {
-    // ignore map context failures to avoid interrupting page interaction
+    if (requestSeq === centerRequestSeq) {
+      selectionFailed = true
+      emit('selectionerror')
+    }
+  }
+  finally {
+    if (requestSeq === centerRequestSeq) {
+      setSelecting(false)
+    }
   }
 }
 
@@ -179,15 +229,17 @@ function handlePoiTap(event: any) {
 
   const { latitude, longitude } = event.detail || {}
 
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+  if (!isValidLocation({ latitude, longitude })) {
     return
   }
 
-  void emitLocationChange({
+  centerRequestSeq += 1
+  emitLocationChange({
     latitude,
     longitude,
     source: 'poi',
   })
+  setSelecting(false)
 }
 
 function handleTap(event: any) {
@@ -199,15 +251,17 @@ function handleTap(event: any) {
 
   const { latitude, longitude } = event.detail || {}
 
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+  if (!isValidLocation({ latitude, longitude })) {
     return
   }
 
-  void emitLocationChange({
+  centerRequestSeq += 1
+  emitLocationChange({
     latitude,
     longitude,
     source: 'tap',
   })
+  setSelecting(false)
 }
 
 function handleRegionChange(event: any) {
@@ -217,11 +271,29 @@ function handleRegionChange(event: any) {
     return
   }
 
-  if (event.type !== 'end') {
+  const detail = event.detail || {}
+  const type = detail.type || event.type
+  const causedBy = detail.causedBy || event.causedBy
+  // 外部设置中心点也会触发事件，不能把程序更新当成用户选点。
+  if (causedBy === 'update') {
     return
   }
 
-  void updateByCenter('regionchange')
+  if (type === 'begin') {
+    centerRequestSeq += 1
+    setSelecting(true)
+    return
+  }
+  // App 原生地图的 regionchange 可能没有 begin/end，需直接读取当前中心点。
+  if (type && type !== 'end' && type !== 'regionchange') {
+    return
+  }
+
+  if (Number.isFinite(detail.scale) && detail.scale !== currentScale.value) {
+    currentScale.value = detail.scale
+    emit('update:scale', detail.scale)
+  }
+  void updateByCenter('regionchange', detail.centerLocation)
 }
 </script>
 
@@ -277,7 +349,7 @@ function handleRegionChange(event: any) {
   width: 50rpx;
   height: 50rpx;
   margin-left: -25rpx;
-  margin-top: -25rpx;
+  margin-top: -50rpx;
   pointer-events: none;
 }
 
