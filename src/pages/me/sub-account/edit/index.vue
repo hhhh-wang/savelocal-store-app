@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import type { SubAccount, SubAccountForm } from '../sub-account'
-import { subAccountStores } from '../sub-account'
+import type { SubAccountStore } from '../sub-account'
+import { createMerchantSubAccount, getMerchantSubAccount, getMerchantSubAccountStores, updateMerchantSubAccount } from '@/api/merchant-sub-account'
+import { useUserStore } from '@/store'
 
 interface OpenerEventChannel {
   emit: (eventName: string, ...args: any[]) => void
@@ -17,43 +18,59 @@ definePage({
 })
 
 const fallbackUrl = '/pages/me/sub-account/index'
-const accountId = ref('')
+const userStore = useUserStore()
+const accountId = ref<number>()
 const selectionVisible = ref(false)
-const pendingStoreNames = ref<string[]>([])
+const pendingStoreIds = ref<number[]>([])
 const errorMessage = ref('')
+const loading = ref(false)
+const saving = ref(false)
+const stores = ref<SubAccountStore[]>([])
 let openerEventChannel: OpenerEventChannel | null = null
 
 const form = reactive({
-  username: '',
+  loginName: '',
+  nickName: '',
   password: '',
   mobile: '',
-  merchantName: '',
-  storeNames: [] as string[],
+  storeIds: [] as number[],
 })
 
-const isEditing = computed(() => !!accountId.value)
+const isEditing = computed(() => accountId.value !== undefined)
 const pageTitle = computed(() => isEditing.value ? '编辑子账号' : '新建子账号')
-const selectedStoreText = computed(() => form.storeNames.join('、'))
+const selectedStoreText = computed(() => stores.value
+  .filter(store => form.storeIds.includes(store.storeId))
+  .map(store => store.storeName)
+  .join('、'))
 
-function parseAccount(rawAccount?: string) {
-  if (!rawAccount)
+async function loadEditor() {
+  if (userStore.userInfo.userId > 0 && userStore.userInfo.canManageSubAccounts !== true) {
+    uni.showToast({ title: '仅主账号可管理子账号', icon: 'none' })
+    uni.navigateBack()
     return
-  try {
-    const account = JSON.parse(decodeURIComponent(rawAccount)) as SubAccount
-    accountId.value = account.id
-    form.username = account.username
-    form.mobile = account.mobile
-    form.merchantName = account.merchantName
-    form.storeNames = [...account.storeNames]
   }
-  catch {
-    uni.showToast({ title: '账号数据读取失败', icon: 'none' })
+  loading.value = true
+  try {
+    stores.value = await getMerchantSubAccountStores()
+    if (!isEditing.value)
+      return
+    const account = await getMerchantSubAccount(accountId.value!)
+    form.loginName = account.loginName
+    form.nickName = account.nickName
+    form.mobile = account.mobile
+    form.storeIds = [...account.storeIds]
+  }
+  catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '子账号数据读取失败'
+  }
+  finally {
+    loading.value = false
   }
 }
 
 function openStoreSelection() {
   errorMessage.value = ''
-  pendingStoreNames.value = [...form.storeNames]
+  pendingStoreIds.value = [...form.storeIds]
   selectionVisible.value = true
 }
 
@@ -61,14 +78,14 @@ function closeSelection() {
   selectionVisible.value = false
 }
 
-function togglePendingStore(storeName: string) {
-  pendingStoreNames.value = pendingStoreNames.value.includes(storeName)
-    ? pendingStoreNames.value.filter(name => name !== storeName)
-    : [...pendingStoreNames.value, storeName]
+function togglePendingStore(storeId: number) {
+  pendingStoreIds.value = pendingStoreIds.value.includes(storeId)
+    ? pendingStoreIds.value.filter(id => id !== storeId)
+    : [...pendingStoreIds.value, storeId]
 }
 
 function confirmSelection() {
-  form.storeNames = [...pendingStoreNames.value]
+  form.storeIds = [...pendingStoreIds.value]
   closeSelection()
 }
 
@@ -79,10 +96,11 @@ function validatePassword() {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,20}$/.test(password)
 }
 
-function saveAccount() {
-  const username = form.username.trim()
+async function saveAccount() {
+  const loginName = form.loginName.trim()
+  const nickName = form.nickName.trim()
   const mobile = form.mobile.trim()
-  if (!/^\w{5,20}$/.test(username)) {
+  if (!/^\w{5,20}$/.test(loginName)) {
     errorMessage.value = '账号名称需为5-20位数字、字母或下划线'
     return
   }
@@ -94,30 +112,53 @@ function saveAccount() {
     errorMessage.value = '请输入正确的11位手机号'
     return
   }
-  if (!form.storeNames.length) {
+  if (!nickName) {
+    errorMessage.value = '请输入账号昵称'
+    return
+  }
+  if (!form.storeIds.length) {
     errorMessage.value = '请选择管理门店'
     return
   }
 
   errorMessage.value = ''
   uni.hideKeyboard()
-  const payload: SubAccountForm = {
-    username,
+  const payload = {
+    loginName,
+    nickName,
     password: form.password || undefined,
     mobile,
-    merchantName: form.merchantName.trim() || '未填写',
-    storeNames: [...form.storeNames],
+    storeIds: [...form.storeIds],
   }
-  openerEventChannel?.emit('save', payload)
-  uni.navigateBack()
+  saving.value = true
+  try {
+    if (isEditing.value) {
+      await updateMerchantSubAccount(accountId.value!, payload)
+    }
+    else {
+      await createMerchantSubAccount(payload)
+    }
+    openerEventChannel?.emit('saved')
+    uni.showToast({ title: isEditing.value ? '已保存' : '已新建', icon: 'success' })
+    uni.navigateBack()
+  }
+  catch {
+    // http 层已显示请求错误，保留当前表单以便修正。
+  }
+  finally {
+    saving.value = false
+  }
 }
 
 onLoad((options) => {
-  parseAccount(options?.account)
+  const merchantUserId = Number(options?.merchantUserId)
+  if (Number.isSafeInteger(merchantUserId) && merchantUserId > 0)
+    accountId.value = merchantUserId
   const currentPage = getCurrentPages()[getCurrentPages().length - 1] as {
     getOpenerEventChannel?: () => OpenerEventChannel
   } | undefined
   openerEventChannel = currentPage?.getOpenerEventChannel?.() || null
+  void loadEditor()
 })
 </script>
 
@@ -143,7 +184,7 @@ onLoad((options) => {
             <text class="sub-account-edit-field__required">*</text>
           </view>
           <input
-            v-model="form.username"
+            v-model="form.loginName"
             class="sub-account-edit-field__input"
             placeholder="5-20位，可使用数字、字母及下划线"
             placeholder-class="sub-account-edit-field__placeholder"
@@ -179,15 +220,15 @@ onLoad((options) => {
         </view>
 
         <view class="sub-account-edit-field sub-account-edit-field--merchant">
-          <text class="sub-account-edit-field__label">商家名称</text>
+          <text class="sub-account-edit-field__label">账号昵称</text>
           <input
-            v-model="form.merchantName"
+            v-model="form.nickName"
             class="sub-account-edit-field__input sub-account-edit-field__input--right"
             placeholder="请输入"
             placeholder-class="sub-account-edit-field__placeholder"
             :maxlength="30"
           >
-          <text class="sub-account-edit-field__description">商家名称将显示在账号登录页，用于备注或区分账号</text>
+          <text class="sub-account-edit-field__description">用于在账号管理和登录信息中区分该子账号</text>
         </view>
 
         <button class="sub-account-edit-field sub-account-edit-field--selector" @tap="openStoreSelection">
@@ -205,8 +246,8 @@ onLoad((options) => {
     </scroll-view>
 
     <view class="sub-account-edit-footer">
-      <button class="sub-account-edit-footer__button" hover-class="sub-account-edit-footer__button--hover" @tap="saveAccount">
-        保存
+      <button class="sub-account-edit-footer__button" :disabled="loading || saving" hover-class="sub-account-edit-footer__button--hover" @tap="saveAccount">
+        {{ saving ? '保存中' : '保存' }}
       </button>
     </view>
 
@@ -221,16 +262,16 @@ onLoad((options) => {
         </view>
         <scroll-view class="sub-account-selector__list" scroll-y>
           <button
-            v-for="storeName in subAccountStores"
-            :key="storeName"
+            v-for="store in stores"
+            :key="store.storeId"
             class="sub-account-selector__item"
-            :class="{ 'sub-account-selector__item--selected': pendingStoreNames.includes(storeName) }"
-            :aria-pressed="pendingStoreNames.includes(storeName)"
-            @tap="togglePendingStore(storeName)"
+            :class="{ 'sub-account-selector__item--selected': pendingStoreIds.includes(store.storeId) }"
+            :aria-pressed="pendingStoreIds.includes(store.storeId)"
+            @tap="togglePendingStore(store.storeId)"
           >
-            <text>{{ storeName }}</text>
+            <text>{{ store.storeName }}</text>
             <view class="sub-account-selector__check">
-              <view v-if="pendingStoreNames.includes(storeName)" class="i-carbon-checkmark" />
+              <view v-if="pendingStoreIds.includes(store.storeId)" class="i-carbon-checkmark" />
             </view>
           </button>
         </scroll-view>

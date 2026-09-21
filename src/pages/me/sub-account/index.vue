@@ -1,6 +1,8 @@
 <script lang="ts" setup>
-import type { SubAccount, SubAccountForm } from './sub-account'
-import { createDemoSubAccounts, maskSubAccountMobile } from './sub-account'
+import type { SubAccount, SubAccountStore } from './sub-account'
+import { fromSubAccountStatus, maskSubAccountMobile } from './sub-account'
+import { changeMerchantSubAccountStatus, getMerchantSubAccounts, getMerchantSubAccountStores } from '@/api/merchant-sub-account'
+import { useUserStore } from '@/store'
 
 defineOptions({ name: 'SubAccountManagement' })
 
@@ -12,101 +14,114 @@ definePage({
   },
 })
 
-const accounts = ref<SubAccount[]>(createDemoSubAccounts())
+const accounts = ref<SubAccount[]>([])
+const userStore = useUserStore()
 const keyword = ref('')
 const scopeIndex = ref(0)
-const statusIndex = ref(1)
-let nextAccountId = 1
+const statusIndex = ref(0)
+const loading = ref(false)
+const loaded = ref(false)
+const availableStores = ref<SubAccountStore[]>([])
+const pageNum = ref(0)
+const total = ref(0)
+const pageSize = 20
 
-const scopeOptions = [
-  { label: '总部', value: 'headquarters' },
-  { label: '门店', value: 'store' },
-  { label: '全部范围', value: 'all' },
-]
+const scopeOptions = computed(() => [
+  { label: '全部门店', value: undefined as number | undefined },
+  ...availableStores.value.map(store => ({ label: store.storeName, value: store.storeId })),
+])
 const statusOptions = [
   { label: '全部状态', value: 'all' },
   { label: '已启用', value: 'enabled' },
   { label: '已禁用', value: 'disabled' },
 ]
 
-const filteredAccounts = computed(() => {
-  const search = keyword.value.trim()
-  const scope = scopeOptions[scopeIndex.value].value
-  const status = statusOptions[statusIndex.value].value
+const filteredAccounts = computed(() => accounts.value)
 
-  return accounts.value.filter((account) => {
-    const matchesKeyword = !search || account.username === search || account.mobile === search
-    const matchesScope = scope === 'all'
-      || (scope === 'headquarters' ? account.storeNames.length === 0 : account.storeNames.length > 0)
-    const matchesStatus = status === 'all' || account.status === status
-    return matchesKeyword && matchesScope && matchesStatus
-  })
-})
+const selectedStatus = computed(() => statusOptions[statusIndex.value].value)
+const selectedStoreId = computed(() => scopeOptions.value[scopeIndex.value]?.value)
+const hasMore = computed(() => accounts.value.length < total.value)
+
+async function loadAccounts(reset = true) {
+  if (userStore.userInfo.userId > 0 && userStore.userInfo.canManageSubAccounts !== true) {
+    uni.showToast({ title: '仅主账号可管理子账号', icon: 'none' })
+    uni.navigateBack()
+    return
+  }
+  if (loading.value || (!reset && !hasMore.value))
+    return
+  loading.value = true
+  try {
+    const keywordValue = keyword.value.trim()
+    if (!availableStores.value.length) {
+      availableStores.value = await getMerchantSubAccountStores()
+    }
+    const page = await getMerchantSubAccounts({
+      pageNum: reset ? 1 : pageNum.value + 1,
+      pageSize,
+      loginName: keywordValue || undefined,
+      mobile: keywordValue || undefined,
+      status: selectedStatus.value === 'enabled' ? '0' : selectedStatus.value === 'disabled' ? '1' : undefined,
+      storeId: selectedStoreId.value,
+    })
+    accounts.value = reset ? page.rows : [...accounts.value, ...page.rows]
+    pageNum.value = reset ? 1 : pageNum.value + 1
+    total.value = page.total
+    loaded.value = true
+  }
+  finally {
+    loading.value = false
+  }
+}
 
 function confirmSearch() {
   uni.hideKeyboard()
+  void loadAccounts()
 }
 
 function showAllAccounts() {
   keyword.value = ''
-  scopeIndex.value = 2
+  scopeIndex.value = 0
   statusIndex.value = 0
+  void loadAccounts()
 }
 
-function toggleAccountStatus(account: SubAccount) {
+async function toggleAccountStatus(account: SubAccount) {
   const action = account.status === 'enabled' ? '禁用' : '启用'
   uni.showModal({
     title: `确认${action}该子账号？`,
-    content: `账号：${account.username}`,
+    content: `账号：${account.loginName}`,
     confirmText: action,
     confirmColor: '#333333',
-    success: ({ confirm }) => {
+    async success({ confirm }) {
       if (!confirm)
         return
-      account.status = account.status === 'enabled' ? 'disabled' : 'enabled'
-      uni.showToast({ title: `已${action}`, icon: 'success' })
+      try {
+        const nextStatus = account.status === 'enabled' ? 'disabled' : 'enabled'
+        await changeMerchantSubAccountStatus(account.merchantUserId, fromSubAccountStatus(nextStatus))
+        account.status = nextStatus
+        uni.showToast({ title: `已${action}`, icon: 'success' })
+      }
+      catch {
+        // http 层已显示请求失败信息，列表保留服务端原状态。
+      }
     },
   })
 }
 
 function openEditor(account?: SubAccount) {
-  const accountPayload = account ? `?account=${encodeURIComponent(JSON.stringify(account))}` : ''
   uni.navigateTo({
-    url: `/pages/me/sub-account/edit/index${accountPayload}`,
+    url: `/pages/me/sub-account/edit/index${account ? `?merchantUserId=${account.merchantUserId}` : ''}`,
     events: {
-      save: (form: SubAccountForm) => saveAccount(form, account?.id),
+      saved: () => loadAccounts(),
     },
   })
 }
 
-function saveAccount(form: SubAccountForm, accountId?: string) {
-  const { password: _password, ...accountForm } = form
-  const otherAccounts = accounts.value.filter(account => account.id !== accountId)
-  if (otherAccounts.some(account => account.username === form.username)) {
-    uni.showToast({ title: '该账号名已存在', icon: 'none' })
-    return
-  }
-  if (otherAccounts.some(account => account.mobile === form.mobile)) {
-    uni.showToast({ title: '该手机号已被其他子账号使用', icon: 'none' })
-    return
-  }
-
-  const existingAccount = accounts.value.find(account => account.id === accountId)
-  const isEditing = !!existingAccount
-  const status = existingAccount?.status || 'enabled'
-  if (existingAccount) {
-    Object.assign(existingAccount, accountForm)
-  }
-  else {
-    accounts.value.unshift({ ...accountForm, id: `local-account-${nextAccountId++}`, status })
-  }
-
-  // 保存后展示该账号所在范围和状态，避免新建成功却被之前的筛选条件隐藏。
-  keyword.value = ''
-  scopeIndex.value = form.storeNames.length ? 1 : 0
-  statusIndex.value = statusOptions.findIndex(option => option.value === status)
-  uni.showToast({ title: isEditing ? '已保存' : '已新建', icon: 'success' })
-}
+onShow(() => { void loadAccounts() })
+watch(statusIndex, () => { void loadAccounts() })
+watch(scopeIndex, () => { void loadAccounts() })
+onReachBottom(() => { void loadAccounts(false) })
 </script>
 
 <template>
@@ -168,13 +183,13 @@ function saveAccount(form: SubAccountForm, accountId?: string) {
       </view>
 
       <view class="account-list">
-        <view v-for="account in filteredAccounts" :key="account.id" class="account-card">
+        <view v-for="account in filteredAccounts" :key="account.merchantUserId" class="account-card">
           <text class="account-card__status" :class="{ 'account-card__status--disabled': account.status === 'disabled' }">
             {{ account.status === 'enabled' ? '已启用' : '已禁用' }}
           </text>
 
           <view class="account-card__heading">
-            <text class="account-card__username">{{ account.username }}</text>
+            <text class="account-card__username">{{ account.loginName }}</text>
             <text class="account-card__mobile">{{ maskSubAccountMobile(account.mobile) }}</text>
           </view>
 
@@ -185,7 +200,7 @@ function saveAccount(form: SubAccountForm, accountId?: string) {
             </view>
             <view class="account-card__row">
               <text class="account-card__label">管理门店:</text>
-              <text class="account-card__value">{{ account.storeNames.join('、') || '暂无门店' }}</text>
+              <text class="account-card__value">{{ account.stores.map(store => store.storeName).join('、') || account.storeNames || '暂无门店' }}</text>
             </view>
           </view>
 
@@ -199,7 +214,7 @@ function saveAccount(form: SubAccountForm, accountId?: string) {
           </view>
         </view>
 
-        <view v-if="!filteredAccounts.length" class="account-empty">
+        <view v-if="loaded && !loading && !filteredAccounts.length" class="account-empty">
           <view class="i-carbon-user-multiple account-empty__icon" />
           <text class="account-empty__title">暂无符合条件的子账号</text>
           <text class="account-empty__description">请检查完整账号名、手机号或筛选条件</text>
@@ -207,11 +222,13 @@ function saveAccount(form: SubAccountForm, accountId?: string) {
             查看全部账号
           </button>
         </view>
+        <text v-else-if="loaded && loading" class="account-list__loading">加载中</text>
+        <text v-else-if="loaded && !hasMore && filteredAccounts.length" class="account-list__loading">没有更多账号</text>
       </view>
     </view>
 
     <view class="sub-account-footer">
-      <button class="sub-account-footer__button" hover-class="account-button--hover" @tap="openEditor()">
+      <button class="sub-account-footer__button" :disabled="loading" hover-class="account-button--hover" @tap="openEditor()">
         新建子账号
       </button>
     </view>
@@ -450,6 +467,14 @@ function saveAccount(form: SubAccountForm, accountId?: string) {
   margin-top: 14rpx;
   color: #999;
   font-size: 24rpx;
+}
+
+.account-list__loading {
+  display: block;
+  padding: 28rpx 0;
+  color: #999;
+  font-size: 24rpx;
+  text-align: center;
 }
 
 .account-empty__reset {

@@ -154,6 +154,10 @@ export function getCurrentUserInfo() {
       permissions: Array.isArray(res.permissions) ? res.permissions : source.permissions,
       merchantInfo: res.merchantInfo,
       ...source,
+      subAccountEnabled: Boolean(res.subAccountEnabled),
+      isMainAccount: Boolean(res.isMainAccount),
+      canManageSubAccounts: Boolean(res.canManageSubAccounts),
+      allowedStores: Array.isArray(res.allowedStores) ? res.allowedStores : [],
     } satisfies IUserInfoRes
   })
 }

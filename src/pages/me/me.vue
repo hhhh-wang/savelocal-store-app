@@ -15,7 +15,7 @@ import settlementAccountIcon from '@/static/icons/me/rules-center.png'
 import storeInfoIcon from '@/static/icons/me/store-info.png'
 import violationRecordsIcon from '@/static/icons/me/violation-records.png'
 import settingIcon from '@/static/icons/setting.png'
-import { useMerchantFoodStore } from '@/store'
+import { useMerchantFoodStore, useUserStore } from '@/store'
 import {
   canCreateStore as canCreateMerchantStore,
   resolveStoreAccessAction,
@@ -35,6 +35,7 @@ definePage({
 })
 
 const merchantFoodStore = useMerchantFoodStore()
+const userStore = useUserStore()
 const tokenStore = useTokenStore()
 const isLoggingOut = ref(false)
 const storeAccessVisible = ref(false)
@@ -152,18 +153,23 @@ interface MenuItem {
   icon?: string
   path?: string
   action?: 'logout'
+  mainAccountOnly?: boolean
 }
 
-const menuItems: MenuItem[] = [
+const allMenuItems: MenuItem[] = [
   { title: '门店信息', icon: storeInfoIcon, path: '/pages/me/store-info/index' },
   { title: '通知设置', icon: notificationSettingsIcon },
   { title: '我的合同', icon: myContractsIcon, path: '/pages/me/my-contracts/index' },
   { title: '联系客服', icon: customerServiceIcon },
   { title: '违规记录', icon: violationRecordsIcon },
   { title: '结算账户', icon: settlementAccountIcon, path: '/pages/me/settlement-account/index' },
-  { title: '子账号管理', icon: branchesIcon, path: '/pages/me/sub-account/index' },
+  { title: '子账号管理', icon: branchesIcon, path: '/pages/me/sub-account/index', mainAccountOnly: true },
   { title: '退出登录', icon: logoutIcon, action: 'logout' },
 ]
+
+const menuItems = computed(() => allMenuItems.filter((item) => {
+  return !item.mainAccountOnly || userStore.userInfo.canManageSubAccounts === true
+}))
 
 function openSettings() {
   uni.showToast({
@@ -281,7 +287,7 @@ async function handleCreateStore() {
   }
 }
 
-function handleMenuItemTap(item: (typeof menuItems)[number]) {
+function handleMenuItemTap(item: MenuItem) {
   if (item.action === 'logout') {
     void handleLogout()
     return

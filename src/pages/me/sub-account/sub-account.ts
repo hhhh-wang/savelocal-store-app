@@ -1,34 +1,37 @@
 export type SubAccountStatus = 'enabled' | 'disabled'
 
+export interface SubAccountStore {
+  storeId: number
+  storeName: string
+}
+
 export interface SubAccountForm {
-  username: string
+  loginName: string
+  nickName: string
   password?: string
   mobile: string
+  storeIds: number[]
+}
+
+export interface SubAccount {
+  merchantUserId: number
+  merchantId: number
   merchantName: string
-  storeNames: string[]
-}
-
-export interface SubAccount extends SubAccountForm {
-  id: string
+  loginName: string
+  nickName: string
+  mobile: string
   status: SubAccountStatus
+  storeIds: number[]
+  stores: SubAccountStore[]
+  storeNames?: string
 }
 
-export const subAccountStores = [
-  '太平总店',
-  '太平万达店',
-  '太平城东店',
-]
+export function toSubAccountStatus(status: string): SubAccountStatus {
+  return status === '0' ? 'enabled' : 'disabled'
+}
 
-// 原型阶段使用内存中的示例数据；后续由子账号接口提供，暂不写入本地存储。
-export function createDemoSubAccounts(): SubAccount[] {
-  return [{
-    id: 'demo-account-001',
-    username: 'kje2831',
-    mobile: '15500005552',
-    merchantName: '太平',
-    storeNames: [],
-    status: 'enabled',
-  }]
+export function fromSubAccountStatus(status: SubAccountStatus): string {
+  return status === 'enabled' ? '0' : '1'
 }
 
 export function maskSubAccountMobile(mobile: string) {
