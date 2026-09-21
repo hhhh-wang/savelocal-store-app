@@ -5,7 +5,7 @@ import { createMerchantStoreDraft } from '@/api/merchant-store'
 import { useMerchantPromotionSummary } from '@/hooks/useMerchantPromotion'
 import { buildStoreCreateLockRoute } from '@/pages/me/store-create-lock/store-create-lock'
 import arrowDownIcon from '@/static/icons/arrow-down.png'
-import aboutUsIcon from '@/static/icons/me/about-us.png'
+import branchesIcon from '@/static/icons/me/branches.png'
 import customerServiceIcon from '@/static/icons/me/customer-service.png'
 import localCoinIcon from '@/static/icons/me/local-coin.png'
 import logoutIcon from '@/static/icons/me/logout.png'
@@ -161,7 +161,7 @@ const menuItems: MenuItem[] = [
   { title: '联系客服', icon: customerServiceIcon },
   { title: '违规记录', icon: violationRecordsIcon },
   { title: '结算账户', icon: settlementAccountIcon, path: '/pages/me/settlement-account/index' },
-  { title: '关于我们', icon: aboutUsIcon },
+  { title: '子账号管理', icon: branchesIcon, path: '/pages/me/sub-account/index' },
   { title: '退出登录', icon: logoutIcon, action: 'logout' },
 ]
 
