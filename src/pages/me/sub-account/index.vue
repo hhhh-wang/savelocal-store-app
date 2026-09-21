@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import type { SubAccount, SubAccountForm } from './sub-account'
-import SubAccountEditor from './components/sub-account-editor.vue'
-import { createDemoSubAccounts, getSubAccountRoleNames, maskSubAccountMobile, subAccountRoles } from './sub-account'
+import { createDemoSubAccounts, maskSubAccountMobile } from './sub-account'
 
 defineOptions({ name: 'SubAccountManagement' })
 
@@ -16,20 +15,13 @@ definePage({
 const accounts = ref<SubAccount[]>(createDemoSubAccounts())
 const keyword = ref('')
 const scopeIndex = ref(0)
-const roleIndex = ref(0)
 const statusIndex = ref(1)
-const editorVisible = ref(false)
-const editingAccount = ref<SubAccount>()
 let nextAccountId = 1
 
 const scopeOptions = [
   { label: '总部', value: 'headquarters' },
   { label: '门店', value: 'store' },
   { label: '全部范围', value: 'all' },
-]
-const roleOptions = [
-  { label: '全部角色', value: 'all' },
-  ...subAccountRoles.map(role => ({ label: role.name, value: role.id })),
 ]
 const statusOptions = [
   { label: '全部状态', value: 'all' },
@@ -40,16 +32,14 @@ const statusOptions = [
 const filteredAccounts = computed(() => {
   const search = keyword.value.trim()
   const scope = scopeOptions[scopeIndex.value].value
-  const role = roleOptions[roleIndex.value].value
   const status = statusOptions[statusIndex.value].value
 
   return accounts.value.filter((account) => {
     const matchesKeyword = !search || account.username === search || account.mobile === search
     const matchesScope = scope === 'all'
       || (scope === 'headquarters' ? account.storeNames.length === 0 : account.storeNames.length > 0)
-    const matchesRole = role === 'all' || account.roleIds.includes(role)
     const matchesStatus = status === 'all' || account.status === status
-    return matchesKeyword && matchesScope && matchesRole && matchesStatus
+    return matchesKeyword && matchesScope && matchesStatus
   })
 })
 
@@ -60,18 +50,7 @@ function confirmSearch() {
 function showAllAccounts() {
   keyword.value = ''
   scopeIndex.value = 2
-  roleIndex.value = 0
   statusIndex.value = 0
-}
-
-function showRoles(account: SubAccount) {
-  uni.showModal({
-    title: '账号角色',
-    content: getSubAccountRoleNames(account.roleIds).join('\n') || '暂无角色',
-    showCancel: false,
-    confirmText: '知道了',
-    confirmColor: '#333333',
-  })
 }
 
 function toggleAccountStatus(account: SubAccount) {
@@ -91,12 +70,18 @@ function toggleAccountStatus(account: SubAccount) {
 }
 
 function openEditor(account?: SubAccount) {
-  editingAccount.value = account
-  editorVisible.value = true
+  const accountPayload = account ? `?account=${encodeURIComponent(JSON.stringify(account))}` : ''
+  uni.navigateTo({
+    url: `/pages/me/sub-account/edit/index${accountPayload}`,
+    events: {
+      save: (form: SubAccountForm) => saveAccount(form, account?.id),
+    },
+  })
 }
 
-function saveAccount(form: SubAccountForm) {
-  const otherAccounts = accounts.value.filter(account => account.id !== editingAccount.value?.id)
+function saveAccount(form: SubAccountForm, accountId?: string) {
+  const { password: _password, ...accountForm } = form
+  const otherAccounts = accounts.value.filter(account => account.id !== accountId)
   if (otherAccounts.some(account => account.username === form.username)) {
     uni.showToast({ title: '该账号名已存在', icon: 'none' })
     return
@@ -106,30 +91,22 @@ function saveAccount(form: SubAccountForm) {
     return
   }
 
-  const isEditing = !!editingAccount.value
-  const status = editingAccount.value?.status || 'enabled'
-  if (editingAccount.value) {
-    Object.assign(editingAccount.value, form)
+  const existingAccount = accounts.value.find(account => account.id === accountId)
+  const isEditing = !!existingAccount
+  const status = existingAccount?.status || 'enabled'
+  if (existingAccount) {
+    Object.assign(existingAccount, accountForm)
   }
   else {
-    accounts.value.unshift({ ...form, id: `local-account-${nextAccountId++}`, status })
+    accounts.value.unshift({ ...accountForm, id: `local-account-${nextAccountId++}`, status })
   }
 
   // 保存后展示该账号所在范围和状态，避免新建成功却被之前的筛选条件隐藏。
   keyword.value = ''
   scopeIndex.value = form.storeNames.length ? 1 : 0
-  roleIndex.value = 0
   statusIndex.value = statusOptions.findIndex(option => option.value === status)
-  editorVisible.value = false
   uni.showToast({ title: isEditing ? '已保存' : '已新建', icon: 'success' })
 }
-
-onBackPress(() => {
-  if (!editorVisible.value)
-    return false
-  editorVisible.value = false
-  return true
-})
 </script>
 
 <template>
@@ -178,18 +155,6 @@ onBackPress(() => {
         </picker>
         <picker
           class="account-filters__picker"
-          :range="roleOptions"
-          range-key="label"
-          :value="roleIndex"
-          @change="roleIndex = Number($event.detail.value)"
-        >
-          <view class="account-filters__item">
-            <text class="account-filters__label">{{ roleOptions[roleIndex].label }}</text>
-            <view class="account-filters__arrow" />
-          </view>
-        </picker>
-        <picker
-          class="account-filters__picker"
           :range="statusOptions"
           range-key="label"
           :value="statusIndex"
@@ -218,12 +183,6 @@ onBackPress(() => {
               <text class="account-card__label">商家名称:</text>
               <text class="account-card__value">{{ account.merchantName }}</text>
             </view>
-            <button class="account-card__row account-card__roles" @tap="showRoles(account)">
-              <text class="account-card__label">账号角色:</text>
-              <text class="account-card__role-name">{{ getSubAccountRoleNames(account.roleIds)[0] || '暂无角色' }}</text>
-              <text v-if="account.roleIds.length > 1" class="account-card__role-count">等{{ account.roleIds.length }}个角色</text>
-              <view class="account-card__arrow" />
-            </button>
             <view class="account-card__row">
               <text class="account-card__label">管理门店:</text>
               <text class="account-card__value">{{ account.storeNames.join('、') || '暂无门店' }}</text>
@@ -256,13 +215,6 @@ onBackPress(() => {
         新建子账号
       </button>
     </view>
-
-    <sub-account-editor
-      v-model:visible="editorVisible"
-      :account="editingAccount"
-      merchant-name="太平"
-      @save="saveAccount"
-    />
   </view>
 </template>
 
@@ -455,38 +407,6 @@ onBackPress(() => {
   overflow-wrap: anywhere;
 }
 
-.account-card__roles {
-  align-items: center;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-}
-
-.account-card__role-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.account-card__role-count {
-  flex-shrink: 0;
-  margin-left: -8rpx;
-}
-
-.account-card__arrow {
-  width: 12rpx;
-  height: 12rpx;
-  flex-shrink: 0;
-  border-top: 2rpx solid #333;
-  border-right: 2rpx solid #333;
-  transform: rotate(45deg);
-}
-
 .account-card__actions {
   display: flex;
   justify-content: flex-end;
@@ -568,7 +488,6 @@ onBackPress(() => {
 }
 
 .account-search__clear::after,
-.account-card__roles::after,
 .account-card__button::after,
 .account-empty__reset::after,
 .sub-account-footer__button::after {
