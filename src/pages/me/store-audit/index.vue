@@ -47,6 +47,11 @@ const form = reactive<AuditMaterialsFormValue>({
 })
 
 const storeId = ref(0)
+const initialAuditPassed = ref(false)
+
+function openLedger() {
+  uni.navigateTo({ url: `/pages/me/store-ledger/index?storeId=${storeId.value}` })
+}
 const auditStatus = ref('0')
 const auditVersion = ref(0)
 const auditSummary = ref('')
@@ -362,6 +367,7 @@ function selectAddressSuggestion(item: AuditMaterialsAddressSuggestion) {
 }
 
 function applyDraft(draft: MerchantStoreAuditDraft) {
+  initialAuditPassed.value = draft.isPublished === '1'
   storeId.value = draft.storeId
   auditStatus.value = draft.auditStatus || '0'
   auditVersion.value = draft.auditVersion || 0
@@ -668,6 +674,13 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         @upload-document="handleDocumentUpload"
         @submit="handleSubmit"
       />
+      <view v-if="initialAuditPassed" class="mx-4 my-4 rounded-3 bg-white p-4">
+        <text class="block font-semibold">商家收款开户</text>
+        <text class="my-2 block text-sm text-[#667085]">请同步完善收款资料。门店资料二审通过后，将启动嘉联开户，再由法人本人完成签约。</text>
+        <button class="bg-[#1677ff] text-sm text-white" @click="openLedger">
+          完善收款资料 / 查看签约进度
+        </button>
+      </view>
     </view>
   </view>
 </template>

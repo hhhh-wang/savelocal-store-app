@@ -2,9 +2,9 @@
 import { getMerchantProfitSharingReceiver } from '@/api/merchant-profit-sharing'
 import { useMerchantFoodStore } from '@/store'
 import {
-  personalAccountPath,
   isLegacyMerchantBound,
   isPersonalWechatBound,
+  personalAccountPath,
 } from './settlement-account'
 
 defineOptions({ name: 'SettlementAccount' })
@@ -57,6 +57,16 @@ function openAccount() {
     url: personalAccountPath,
   })
 }
+
+async function openLedger() {
+  try {
+    const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    uni.navigateTo({ url: `/pages/me/store-ledger/index?storeId=${storeId}` })
+  }
+  catch {
+    uni.showToast({ title: '请先选择门店', icon: 'none' })
+  }
+}
 </script>
 
 <template>
@@ -75,6 +85,9 @@ function openAccount() {
       </view>
 
       <view class="settlement-options">
+        <button class="mb-4 w-full rounded-3 bg-[#eef5ff] p-4 text-sm text-[#1677ff]" @click="openLedger">
+          嘉联收款账户 · 开户、签约及进度查询
+        </button>
         <view
           class="settlement-option"
           hover-class="settlement-option--hover"
@@ -104,7 +117,6 @@ function openAccount() {
           </view>
           <view class="i-carbon-chevron-right settlement-option__arrow" />
         </view>
-
       </view>
 
       <view class="settlement-note">
