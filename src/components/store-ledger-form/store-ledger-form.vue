@@ -184,11 +184,11 @@ onUnmounted(() => clearInterval(timer))
           复制法人签约链接
         </button>
       </view>
-      <button v-if="view.enabled && !view.editable" class="mt-3 text-sm" :disabled="busy" @click="refresh">
+      <button v-if="!view.editable" class="mt-3 text-sm" :disabled="busy" @click="refresh">
         刷新开户进度
       </button>
     </view>
-    <template v-if="view?.enabled && view.initialAuditPassed">
+    <template v-if="view?.initialAuditPassed">
       <view class="mb-4 rounded-3 bg-white p-4">
         <text class="mb-2 block font-semibold">收款账户类型</text>
         <picker :disabled="disabled" :range="['法人对私银行卡', '企业对公账户']" :value="form.merchType === '1' ? 1 : 0" @change="changeType">

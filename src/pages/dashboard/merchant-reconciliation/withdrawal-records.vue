@@ -58,7 +58,9 @@ function closeDetail() {
   detailVisible.value = false
 }
 
-function statusLabel(status?: string) {
+function statusLabel(status?: string, channel?: string) {
+  if (channel === 'JLPAY')
+    return { 0: '待审核', 1: '审核驳回', 2: '待执行分账', 3: '分账处理中', 4: '分账成功', 5: '分账失败' }[String(status || '')] || '处理中'
   return {
     0: '待审核',
     1: '审核驳回',
@@ -115,7 +117,7 @@ function showAgreement() {
     <view class="arrival-banner">
       <view class="arrival-banner__copy">
         <view class="i-carbon-notification-filled arrival-banner__icon" />
-        <text>提现金额一般1~3个工作日到账</text>
+        <text>分账进度与银行到账分别确认，请以实际收款记录为准</text>
       </view>
       <view class="arrival-banner__action" @tap="showAgreement">
         协议说明
@@ -139,10 +141,10 @@ function showAgreement() {
           </view>
           <text class="withdrawal-record__amount">¥ {{ formatAmount(record.payableAmount) }}</text>
         </view>
-        <text class="withdrawal-record__account">{{ record.profitSharingReceiverName || record.settlementNameSnapshot || '微信收款用户' }}</text>
+        <text class="withdrawal-record__account">{{ record.executionChannel === 'JLPAY' ? '嘉联分账 · ' : '历史微信 · ' }}{{ record.profitSharingReceiverName || record.settlementNameSnapshot || '收款账户' }}</text>
         <view class="withdrawal-record__meta">
           <text>{{ record.transferFinishTime || record.transferTime || record.createTime || '-' }}</text>
-          <text class="withdrawal-record__status" :class="`withdrawal-record__status--${statusTone(record.withdrawStatus)}`">{{ statusLabel(record.withdrawStatus) }}</text>
+          <text class="withdrawal-record__status" :class="`withdrawal-record__status--${statusTone(record.withdrawStatus)}`">{{ statusLabel(record.withdrawStatus, record.executionChannel) }}</text>
         </view>
       </view>
     </view>
@@ -167,10 +169,10 @@ function showAgreement() {
               <text>申请金额</text><text>¥{{ formatAmount(selectedWithdrawal.applyAmount) }}</text>
             </view>
             <view class="withdrawal-detail-row">
-              <text>到账金额</text><text>¥{{ formatAmount(selectedWithdrawal.payableAmount) }}</text>
+              <text>应付金额</text><text>¥{{ formatAmount(selectedWithdrawal.payableAmount) }}</text>
             </view>
             <view class="withdrawal-detail-row">
-              <text>状态</text><text :class="`withdrawal-record__status--${statusTone(selectedWithdrawal.withdrawStatus)}`">{{ statusLabel(selectedWithdrawal.withdrawStatus) }}</text>
+              <text>状态</text><text :class="`withdrawal-record__status--${statusTone(selectedWithdrawal.withdrawStatus)}`">{{ statusLabel(selectedWithdrawal.withdrawStatus, selectedWithdrawal.executionChannel) }}</text>
             </view>
             <view v-if="selectedWithdrawal.wxTransferBillNo" class="withdrawal-detail-row">
               <text>微信转账单号</text><text>{{ selectedWithdrawal.wxTransferBillNo }}</text>
@@ -190,7 +192,7 @@ function showAgreement() {
               <text>{{ detail.orderNo || '-' }}</text><text>¥{{ formatAmount(detail.amount) }}</text>
             </view>
             <view class="withdrawal-detail-item__meta">
-              <text>{{ sceneLabel(detail.tradeScene) }}</text><text>{{ profitSharingStatusLabel(detail.profitSharingStatus) }}</text>
+              <text>{{ sceneLabel(detail.tradeScene) }}</text><text>{{ selectedWithdrawal?.executionChannel === 'JLPAY' ? statusLabel(selectedWithdrawal.withdrawStatus, 'JLPAY') : profitSharingStatusLabel(detail.profitSharingStatus) }}</text>
             </view>
             <view v-if="detail.wxProfitSharingOrderId" class="withdrawal-detail-item__sub">
               原分账单号：{{ detail.wxProfitSharingOrderId }}

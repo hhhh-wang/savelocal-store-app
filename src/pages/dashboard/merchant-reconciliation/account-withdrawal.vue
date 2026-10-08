@@ -4,6 +4,7 @@ import type {
   MerchantWithdrawTransferConfirmQr,
 } from '@/api/merchant-withdrawal'
 import {
+  applyMerchantWithdraw,
   createMerchantWithdrawTransferConfirmQr,
   getMerchantWithdrawContext,
 } from '@/api/merchant-withdrawal'
@@ -27,6 +28,7 @@ const withdrawContext = ref<MerchantWithdrawContext>()
 const transferConfirmQr = ref<MerchantWithdrawTransferConfirmQr>()
 const qrVisible = ref(false)
 const tradeScene = ref('STORE_BUYOUT')
+const isJlpay = computed(() => withdrawContext.value?.executionChannel === 'JLPAY')
 
 const availableAmount = computed(() => Number(withdrawContext.value?.availableAmount || 0))
 const frozenAmount = computed(() => Number(withdrawContext.value?.frozenAmount || 0))
@@ -88,6 +90,43 @@ async function showTransferConfirmQr() {
   if (!context)
     return
 
+  if (context.executionChannel === 'JLPAY') {
+    if (!receiverReady.value) {
+      uni.showModal({
+        title: '请先完成嘉联收款开户',
+        content: context.processingTransferFailReason || '法人签约及绑定通过后才能申请提现。',
+        confirmText: '去开户',
+        success: (result) => {
+          if (result.confirm)
+            openSettlementAccount()
+        },
+      })
+      return
+    }
+    if (context.processingWithdrawId) {
+      openPage(WITHDRAWAL_PATHS.records)
+      return
+    }
+    const answer = await uni.showModal({ title: '嘉联提现申请', editable: true, placeholderText: `最多可申请 ${availableAmount.value.toFixed(2)} 元`, confirmText: '提交申请' })
+    if (!answer.confirm)
+      return
+    const amount = String(answer.content || '').trim()
+    if (!/^\d+(?:\.\d{1,2})?$/.test(amount) || Number(amount) <= 0 || Number(amount) > availableAmount.value) {
+      uni.showToast({ title: '请输入可提现范围内的金额，最多两位小数', icon: 'none' })
+      return
+    }
+    submitting.value = true
+    try {
+      await applyMerchantWithdraw({ storeId: context.storeId, tradeScene: context.tradeScene, applyAmount: Number(amount) })
+      uni.showToast({ title: '提现申请已提交', icon: 'success' })
+      await loadWithdrawContext()
+    }
+    finally {
+      submitting.value = false
+    }
+    return
+  }
+
   if (!receiverReady.value) {
     uni.showModal({
       title: '请先绑定微信收款账户',
@@ -126,7 +165,7 @@ async function showTransferConfirmQr() {
     <view class="account-withdrawal-hero">
       <view class="agreement-banner">
         <view class="i-carbon-warning-filled agreement-banner__icon" />
-        <text class="agreement-banner__text">单笔提现额度200元，单日提现额度为2000元</text>
+        <text class="agreement-banner__text">{{ isJlpay ? '嘉联收款账户提现，审核后由平台执行分账' : '单笔提现额度200元，单日提现额度为2000元' }}</text>
       </view>
 
       <view class="balance-panel">
@@ -135,7 +174,7 @@ async function showTransferConfirmQr() {
         <text class="balance-panel__available">可提现金额（元）：{{ loading ? '--' : availableAmountText }}</text>
         <text class="balance-panel__frozen">冻结金额（元）：{{ loading ? '--' : frozenAmountText }}</text>
         <text v-if="withdrawContext?.transferAccountReady || withdrawContext?.receiverId" class="balance-panel__receiver">
-          到账账户：{{ withdrawContext.receiverName || '微信收款用户' }} {{ withdrawContext.receiverAccountMasked || '' }}
+          收款账户：{{ withdrawContext.receiverName || (isJlpay ? '嘉联入账账户' : '微信收款用户') }} {{ withdrawContext.receiverAccountMasked || '' }}
         </text>
 
         <button

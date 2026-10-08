@@ -1,10 +1,10 @@
 <script lang="ts" setup>
+import { getLedger } from '@/api/merchant-ledger'
 import { getMerchantProfitSharingReceiver } from '@/api/merchant-profit-sharing'
 import { useMerchantFoodStore } from '@/store'
 import {
   isLegacyMerchantBound,
   isPersonalWechatBound,
-  personalAccountPath,
 } from './settlement-account'
 
 defineOptions({ name: 'SettlementAccount' })
@@ -19,6 +19,7 @@ definePage({
 const merchantFoodStore = useMerchantFoodStore()
 const loading = ref(false)
 const receiver = ref<Awaited<ReturnType<typeof getMerchantProfitSharingReceiver>>>()
+const ledger = ref<Awaited<ReturnType<typeof getLedger>>>()
 
 const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '当前门店')
 const personalWechatBound = computed(() => isPersonalWechatBound(receiver.value))
@@ -32,6 +33,7 @@ async function loadAccountStatus() {
   loading.value = true
   try {
     const storeId = await merchantFoodStore.ensureCurrentStoreId()
+    ledger.value = await getLedger(String(storeId))
     receiver.value = await getMerchantProfitSharingReceiver(storeId)
   }
   catch (error) {
@@ -46,16 +48,10 @@ function getOptionStatus() {
   if (loading.value)
     return '查询中'
   if (personalWechatBound.value)
-    return '当前使用'
+    return '历史已绑定'
   if (legacyMerchantBound.value)
-    return '需运营解绑'
+    return '历史记录'
   return '未绑定'
-}
-
-function openAccount() {
-  uni.navigateTo({
-    url: personalAccountPath,
-  })
 }
 
 async function openLedger() {
@@ -80,8 +76,9 @@ async function openLedger() {
     <view class="settlement-content">
       <view class="settlement-intro">
         <text class="settlement-intro__eyebrow">{{ storeName }}</text>
-        <text class="settlement-intro__title">绑定收款账户</text>
-        <text class="settlement-intro__desc">使用个人微信授权，用于接收商家转账提现。</text>
+        <text class="settlement-intro__title">嘉联收款账户</text>
+        <text class="settlement-intro__desc">支持法人对私和企业对公账户，完成开户、法人签约及绑定后使用。</text>
+        <text class="settlement-intro__desc">{{ ledger?.stateLabel || '正在查询收款进度' }}</text>
       </view>
 
       <view class="settlement-options">
@@ -89,16 +86,15 @@ async function openLedger() {
           嘉联收款账户 · 开户、签约及进度查询
         </button>
         <view
+          v-if="receiver"
           class="settlement-option"
-          hover-class="settlement-option--hover"
-          @tap="openAccount"
         >
           <view class="settlement-option__icon settlement-option__icon--personal">
             <view class="i-carbon-user-avatar-filled settlement-option__icon-glyph" />
           </view>
           <view class="settlement-option__body">
             <view class="settlement-option__heading">
-              <text class="settlement-option__title">个人微信</text>
+              <text class="settlement-option__title">历史微信账户</text>
               <view
                 class="settlement-option__status"
                 :class="{ 'settlement-option__status--active': personalWechatBound }"
@@ -107,21 +103,20 @@ async function openLedger() {
                 <text>{{ getOptionStatus() }}</text>
               </view>
             </view>
-            <text class="settlement-option__desc">由收款人扫码授权，无需手动填写 OpenID</text>
+            <text class="settlement-option__desc">保留原渠道记录用于历史核对，新增账户请使用嘉联开户</text>
             <text v-if="personalWechatBound" class="settlement-option__account">
               {{ receiver?.receiverName || '微信收款人' }} · {{ receiver?.receiverAccountMasked || '已授权' }}
             </text>
             <text v-else-if="legacyMerchantBound" class="settlement-option__account settlement-option__account--warning">
-              当前为历史商户号绑定，请联系平台运营解绑后再绑定个人微信
+              历史微信商户号绑定记录
             </text>
           </view>
-          <view class="i-carbon-chevron-right settlement-option__arrow" />
         </view>
       </view>
 
       <view class="settlement-note">
         <view class="i-carbon-information settlement-note__icon" />
-        <text>更换已绑定的结算方式前，请先联系平台运营解绑。</text>
+        <text>变更已生效的结算银行卡请联系平台办理，存在在途资金时需先完成核对。</text>
       </view>
     </view>
   </view>

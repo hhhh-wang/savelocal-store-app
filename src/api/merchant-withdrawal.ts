@@ -1,6 +1,7 @@
 import { http } from '@/http/http'
 
 export interface MerchantWithdrawContext {
+  executionChannel?: string
   storeId: number
   storeName?: string
   tradeScene: string
@@ -21,6 +22,7 @@ export interface MerchantWithdrawContext {
 }
 
 export interface MerchantWithdrawApply {
+  executionChannel?: string
   withdrawId: number
   withdrawNo: string
   storeId: number
