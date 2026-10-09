@@ -60,7 +60,7 @@ function closeDetail() {
 
 function statusLabel(status?: string, channel?: string) {
   if (channel === 'JLPAY')
-    return { 0: '待审核', 1: '审核驳回', 2: '待执行分账', 3: '分账处理中', 4: '分账成功', 5: '分账失败' }[String(status || '')] || '处理中'
+    return { 0: '待审核', 1: '审核驳回', 2: '待执行分账', 3: '分账处理中', 4: '分账成功', 5: '分账失败', 6: '部分分账完成' }[String(status || '')] || '处理中'
   return {
     0: '待审核',
     1: '审核驳回',
@@ -79,6 +79,7 @@ function statusTone(status?: string) {
     3: 'processing',
     4: 'success',
     5: 'failed',
+    6: 'success',
   }[String(status || '')] || 'processing'
 }
 
