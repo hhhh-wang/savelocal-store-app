@@ -29,6 +29,10 @@ export interface MerchantWithdrawApply {
   tradeScene: string
   applyAmount: number
   payableAmount: number
+  paidAmount?: number
+  releasedAmount?: number
+  returnedAmount?: number
+  pendingAmount?: number
   profitSharingReceiverId?: number
   profitSharingReceiverType?: string
   profitSharingReceiverName?: string
@@ -56,6 +60,11 @@ export interface MerchantWithdrawApplyDetail {
   orderId?: number
   orderNo?: string
   amount?: number
+  paidAmount?: number
+  releasedAmount?: number
+  returnedAmount?: number
+  pendingAmount?: number
+  paymentState?: string
   storeId?: number
   storeName?: string
   tradeScene?: string

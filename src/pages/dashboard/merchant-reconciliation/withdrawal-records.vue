@@ -102,6 +102,17 @@ function profitSharingStatusLabel(status?: string) {
   }[String(status || '')] || '处理中'
 }
 
+function ledgerDetailStatusLabel(state?: string) {
+  return {
+    PENDING: '待分账',
+    PROCESSING: '分账处理中',
+    PARTIAL_PROCESSING: '部分已分账，余款处理中',
+    SUCCESS: '已全部分账',
+    PARTIAL: '部分已分账，余款已释放',
+    RELEASED: '未分账，资金已释放',
+  }[String(state || '')] || '待核实'
+}
+
 function formatAmount(value?: number | string) {
   return Number(value || 0).toFixed(2)
 }
@@ -140,7 +151,13 @@ function showAgreement() {
             <text>{{ record.withdrawNo || '提现记录' }}</text>
             <text>{{ record.storeNameSnapshot || '当前门店' }} · {{ sceneLabel(record.tradeScene) }}</text>
           </view>
-          <text class="withdrawal-record__amount">¥ {{ formatAmount(record.payableAmount) }}</text>
+          <text class="withdrawal-record__amount">{{ record.executionChannel === 'JLPAY' ? '申请 ' : '' }}¥ {{ formatAmount(record.executionChannel === 'JLPAY' ? record.applyAmount : record.payableAmount) }}</text>
+        </view>
+        <view v-if="record.executionChannel === 'JLPAY'" class="withdrawal-record__funds">
+          <text>已分账 ¥{{ formatAmount(record.paidAmount) }}</text>
+          <text>已释放 ¥{{ formatAmount(record.releasedAmount) }}</text>
+          <text v-if="Number(record.pendingAmount) > 0">待处理 ¥{{ formatAmount(record.pendingAmount) }}</text>
+          <text v-if="Number(record.returnedAmount) > 0">已回退 ¥{{ formatAmount(record.returnedAmount) }}</text>
         </view>
         <text class="withdrawal-record__account">{{ record.executionChannel === 'JLPAY' ? '嘉联分账 · ' : '历史微信 · ' }}{{ record.profitSharingReceiverName || record.settlementNameSnapshot || '收款账户' }}</text>
         <view class="withdrawal-record__meta">
@@ -172,6 +189,20 @@ function showAgreement() {
             <view class="withdrawal-detail-row">
               <text>应付金额</text><text>¥{{ formatAmount(selectedWithdrawal.payableAmount) }}</text>
             </view>
+            <template v-if="selectedWithdrawal.executionChannel === 'JLPAY'">
+              <view class="withdrawal-detail-row">
+                <text>实际已分账</text><text>¥{{ formatAmount(selectedWithdrawal.paidAmount) }}</text>
+              </view>
+              <view class="withdrawal-detail-row">
+                <text>未成功已释放</text><text>¥{{ formatAmount(selectedWithdrawal.releasedAmount) }}</text>
+              </view>
+              <view class="withdrawal-detail-row">
+                <text>仍待处理</text><text>¥{{ formatAmount(selectedWithdrawal.pendingAmount) }}</text>
+              </view>
+              <view v-if="Number(selectedWithdrawal.returnedAmount) > 0" class="withdrawal-detail-row">
+                <text>已分账本金回退</text><text>¥{{ formatAmount(selectedWithdrawal.returnedAmount) }}</text>
+              </view>
+            </template>
             <view class="withdrawal-detail-row">
               <text>状态</text><text :class="`withdrawal-record__status--${statusTone(selectedWithdrawal.withdrawStatus)}`">{{ statusLabel(selectedWithdrawal.withdrawStatus, selectedWithdrawal.executionChannel) }}</text>
             </view>
@@ -190,10 +221,16 @@ function showAgreement() {
           </view>
           <view v-for="detail in selectedDetails" :key="detail.detailId" class="withdrawal-detail-item">
             <view class="withdrawal-detail-item__top">
-              <text>{{ detail.orderNo || '-' }}</text><text>¥{{ formatAmount(detail.amount) }}</text>
+              <text>{{ detail.orderNo || '-' }}</text><text>{{ selectedWithdrawal?.executionChannel === 'JLPAY' ? '申请 ' : '' }}¥{{ formatAmount(detail.amount) }}</text>
             </view>
             <view class="withdrawal-detail-item__meta">
-              <text>{{ sceneLabel(detail.tradeScene) }}</text><text>{{ selectedWithdrawal?.executionChannel === 'JLPAY' ? statusLabel(selectedWithdrawal.withdrawStatus, 'JLPAY') : profitSharingStatusLabel(detail.profitSharingStatus) }}</text>
+              <text>{{ sceneLabel(detail.tradeScene) }}</text><text>{{ selectedWithdrawal?.executionChannel === 'JLPAY' ? ledgerDetailStatusLabel(detail.paymentState) : profitSharingStatusLabel(detail.profitSharingStatus) }}</text>
+            </view>
+            <view v-if="selectedWithdrawal?.executionChannel === 'JLPAY'" class="withdrawal-record__funds">
+              <text>已分账 ¥{{ formatAmount(detail.paidAmount) }}</text>
+              <text>已释放 ¥{{ formatAmount(detail.releasedAmount) }}</text>
+              <text v-if="Number(detail.pendingAmount) > 0">待处理 ¥{{ formatAmount(detail.pendingAmount) }}</text>
+              <text v-if="Number(detail.returnedAmount) > 0">已回退 ¥{{ formatAmount(detail.returnedAmount) }}</text>
             </view>
             <view v-if="detail.wxProfitSharingOrderId" class="withdrawal-detail-item__sub">
               原分账单号：{{ detail.wxProfitSharingOrderId }}
@@ -288,10 +325,20 @@ function showAgreement() {
 .withdrawal-record__amount {
   flex-shrink: 0;
   color: #303030;
-  font-size: 37rpx;
+  font-size: 30rpx;
   font-weight: 400;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.withdrawal-record__funds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx 24rpx;
+  margin-top: 16rpx;
+  color: #53657a;
+  font-size: 26rpx;
+  line-height: 1.5;
 }
 
 .withdrawal-record__account {
