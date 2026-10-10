@@ -17,13 +17,33 @@ definePage({
 })
 
 const merchantFoodStore = useMerchantFoodStore()
-const loading = ref(false)
+const loading = ref(true)
+const loadError = ref('')
+const routeStoreId = ref<number>()
+const accountStoreId = ref<number>()
 const receiver = ref<Awaited<ReturnType<typeof getMerchantProfitSharingReceiver>>>()
 const ledger = ref<Awaited<ReturnType<typeof getLedger>>>()
 
-const storeName = computed(() => merchantFoodStore.currentStore?.storeName || '当前门店')
+const storeName = computed(() => merchantFoodStore.stores.find(store => store.storeId === accountStoreId.value)?.storeName || '当前门店')
 const personalWechatBound = computed(() => isPersonalWechatBound(receiver.value))
 const legacyMerchantBound = computed(() => isLegacyMerchantBound(receiver.value))
+const hasLegacyReceiver = computed(() => !!receiver.value?.receiverId || personalWechatBound.value || legacyMerchantBound.value)
+const accountStatus = computed(() => loading.value ? '正在查询' : ledger.value?.stateLabel.replace(/嘉联/g, '') || '暂未获取账户状态')
+const bankCardTail = computed(() => ledger.value?.materials.bankCardNo.replace(/\D/g, '').slice(-4) || '')
+const actionText = computed(() => {
+  if (loading.value)
+    return '正在加载'
+  if (ledger.value?.signLink)
+    return '去完成签约'
+  if (ledger.value?.editable)
+    return bankCardTail.value ? '继续完善账户' : '绑定银行卡'
+  return ledger.value?.state === 'BOUND' ? '查看账户信息' : '查看办理进度'
+})
+
+onLoad((options) => {
+  const id = Number(options?.storeId)
+  routeStoreId.value = Number.isSafeInteger(id) && id > 0 ? id : undefined
+})
 
 onShow(() => {
   void loadAccountStatus()
@@ -31,37 +51,38 @@ onShow(() => {
 
 async function loadAccountStatus() {
   loading.value = true
+  loadError.value = ''
+  ledger.value = undefined
+  receiver.value = undefined
   try {
-    const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    ledger.value = await getLedger(String(storeId))
-    receiver.value = await getMerchantProfitSharingReceiver(storeId)
+    const currentStoreId = await merchantFoodStore.ensureCurrentStoreId()
+    const storeId = routeStoreId.value || currentStoreId
+    accountStoreId.value = storeId
+    const [ledgerResult, receiverResult] = await Promise.allSettled([
+      getLedger(String(storeId)),
+      getMerchantProfitSharingReceiver(storeId),
+    ])
+    if (ledgerResult.status === 'rejected')
+      throw ledgerResult.reason
+    ledger.value = ledgerResult.value
+    if (receiverResult.status === 'fulfilled')
+      receiver.value = receiverResult.value
+    else
+      console.error('加载历史结算账户失败:', receiverResult.reason)
   }
   catch (error) {
     console.error('加载结算账户失败:', error)
+    loadError.value = error instanceof Error ? error.message : '账户信息加载失败，请稍后重试'
   }
   finally {
     loading.value = false
   }
 }
 
-function getOptionStatus() {
-  if (loading.value)
-    return '查询中'
-  if (personalWechatBound.value)
-    return '历史已绑定'
-  if (legacyMerchantBound.value)
-    return '历史记录'
-  return '未绑定'
-}
-
-async function openLedger() {
-  try {
-    const storeId = await merchantFoodStore.ensureCurrentStoreId()
-    uni.navigateTo({ url: `/pages/me/store-ledger/index?storeId=${storeId}` })
-  }
-  catch {
-    uni.showToast({ title: '请先选择门店', icon: 'none' })
-  }
+function openLedger() {
+  if (loading.value || !accountStoreId.value || !ledger.value)
+    return
+  uni.navigateTo({ url: `/pages/me/store-ledger/index?storeId=${accountStoreId.value}` })
 }
 </script>
 
@@ -74,50 +95,69 @@ async function openLedger() {
     </view>
 
     <view class="settlement-content">
-      <view class="settlement-intro">
-        <text class="settlement-intro__eyebrow">{{ storeName }}</text>
-        <text class="settlement-intro__title">嘉联收款账户</text>
-        <text class="settlement-intro__desc">支持法人对私和企业对公账户，完成开户、法人签约及绑定后使用。</text>
-        <text class="settlement-intro__desc">{{ ledger?.stateLabel || '正在查询收款进度' }}</text>
+      <view class="settlement-store">
+        <view class="i-carbon-store settlement-store__icon" />
+        <text>{{ storeName }}</text>
       </view>
 
-      <view class="settlement-options">
-        <button class="mb-4 w-full rounded-3 bg-[#eef5ff] p-4 text-sm text-[#1677ff]" @click="openLedger">
-          嘉联收款账户 · 开户、签约及进度查询
-        </button>
-        <view
-          v-if="receiver"
-          class="settlement-option"
-        >
-          <view class="settlement-option__icon settlement-option__icon--personal">
-            <view class="i-carbon-user-avatar-filled settlement-option__icon-glyph" />
+      <view class="settlement-card">
+        <view class="settlement-card__heading">
+          <view class="settlement-card__icon">
+            <view class="i-carbon-wallet settlement-card__glyph" />
           </view>
-          <view class="settlement-option__body">
-            <view class="settlement-option__heading">
-              <text class="settlement-option__title">历史微信账户</text>
-              <view
-                class="settlement-option__status"
-                :class="{ 'settlement-option__status--active': personalWechatBound }"
-              >
-                <view v-if="personalWechatBound" class="i-carbon-checkmark settlement-option__check" />
-                <text>{{ getOptionStatus() }}</text>
-              </view>
-            </view>
-            <text class="settlement-option__desc">保留原渠道记录用于历史核对，新增账户请使用嘉联开户</text>
-            <text v-if="personalWechatBound" class="settlement-option__account">
-              {{ receiver?.receiverName || '微信收款人' }} · {{ receiver?.receiverAccountMasked || '已授权' }}
-            </text>
-            <text v-else-if="legacyMerchantBound" class="settlement-option__account settlement-option__account--warning">
-              历史微信商户号绑定记录
-            </text>
+          <view class="settlement-card__intro">
+            <text class="settlement-card__title">结算银行卡</text>
+            <text class="settlement-card__desc">绑定银行卡及开户行，用于门店结算</text>
           </view>
         </view>
+
+        <view class="settlement-details">
+          <view class="settlement-details__row">
+            <text class="settlement-details__label">当前状态</text>
+            <text class="settlement-details__value">{{ accountStatus }}</text>
+          </view>
+          <view v-if="ledger?.materials.bankName" class="settlement-details__row">
+            <text class="settlement-details__label">开户银行</text>
+            <text class="settlement-details__value">{{ ledger.materials.bankName }}</text>
+          </view>
+          <view v-if="ledger?.materials.bankBranchName" class="settlement-details__row">
+            <text class="settlement-details__label">开户支行</text>
+            <text class="settlement-details__value">{{ ledger.materials.bankBranchName }}</text>
+          </view>
+          <view v-if="bankCardTail" class="settlement-details__row">
+            <text class="settlement-details__label">结算账户</text>
+            <text class="settlement-details__value">{{ ledger?.materials.merchType === '1' ? '企业对公' : '法人对私' }} · 尾号 {{ bankCardTail }}</text>
+          </view>
+        </view>
+
+        <view v-if="loadError" class="settlement-error">
+          <text>{{ loadError }}</text>
+          <button class="settlement-retry" @click="loadAccountStatus">
+            重新加载
+          </button>
+        </view>
+        <button
+          v-else
+          class="settlement-primary"
+          :disabled="loading || !ledger"
+          :loading="loading"
+          hover-class="settlement-primary--hover"
+          @click="openLedger"
+        >
+          {{ actionText }}
+        </button>
       </view>
 
-      <view class="settlement-note">
-        <view class="i-carbon-information settlement-note__icon" />
-        <text>变更已生效的结算银行卡请联系平台办理，存在在途资金时需先完成核对。</text>
+      <view v-if="hasLegacyReceiver" class="settlement-card settlement-history">
+        <view class="settlement-history__heading">
+          <text class="settlement-history__title">历史微信账户</text>
+          <text class="settlement-history__status">{{ personalWechatBound ? '已绑定' : legacyMerchantBound ? '历史记录' : '未绑定' }}</text>
+        </view>
+        <text v-if="personalWechatBound" class="settlement-history__account">{{ receiver?.receiverName || '微信收款人' }} · {{ receiver?.receiverAccountMasked || '已授权' }}</text>
+        <text class="settlement-card__desc">用于历史收款核对，新增结算请绑定银行卡。</text>
       </view>
+
+      <text class="settlement-note">如需更换已生效的银行卡或开户行，请联系平台处理。</text>
     </view>
   </view>
 </template>
@@ -125,8 +165,8 @@ async function openLedger() {
 <style lang="scss" scoped>
 .settlement-page {
   min-height: 100vh;
-  background: #f4f5f7;
-  color: #202328;
+  background: #f6f7f9;
+  color: #24272b;
 }
 
 .settlement-header {
@@ -135,13 +175,12 @@ async function openLedger() {
   align-items: center;
   min-height: 88rpx;
   padding: calc(env(safe-area-inset-top) + 12rpx) 24rpx 12rpx;
-  border-bottom: 1rpx solid #eceef1;
   background: #fff;
 }
 
 .settlement-header__title {
   font-size: 34rpx;
-  font-weight: 700;
+  font-weight: 600;
   text-align: center;
 }
 
@@ -151,152 +190,183 @@ async function openLedger() {
 }
 
 .settlement-content {
-  padding: 40rpx 28rpx calc(env(safe-area-inset-bottom) + 48rpx);
+  padding: 28rpx 24rpx calc(env(safe-area-inset-bottom) + 48rpx);
 }
 
-.settlement-intro {
-  display: flex;
-  flex-direction: column;
-}
-
-.settlement-intro__eyebrow {
-  color: #687079;
-  font-size: 25rpx;
-}
-
-.settlement-intro__title {
-  margin-top: 10rpx;
-  color: #171a1f;
-  font-size: 42rpx;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.settlement-intro__desc {
-  margin-top: 14rpx;
-  color: #767d86;
-  font-size: 26rpx;
-  line-height: 1.65;
-}
-
-.settlement-options {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-  margin-top: 34rpx;
-}
-
-.settlement-option {
+.settlement-store {
   display: flex;
   align-items: center;
-  gap: 22rpx;
-  min-height: 176rpx;
-  padding: 28rpx 24rpx;
-  border: 1rpx solid #e7e9ec;
-  border-radius: 16rpx;
-  box-sizing: border-box;
+  gap: 12rpx;
+  margin: 0 4rpx 24rpx;
+  color: #767d87;
+  font-size: 26rpx;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.settlement-store__icon {
+  width: 30rpx;
+  height: 30rpx;
+  flex-shrink: 0;
+}
+
+.settlement-card {
+  padding: 30rpx 28rpx;
+  border: 1rpx solid #eceef1;
+  border-radius: 22rpx;
   background: #fff;
-  box-shadow: 0 10rpx 24rpx rgba(26, 32, 44, 0.05);
 }
 
-.settlement-option--hover {
-  opacity: 0.82;
-}
-
-.settlement-option__icon {
+.settlement-card__heading {
   display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.settlement-card__icon {
+  display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 84rpx;
-  height: 84rpx;
-  flex-shrink: 0;
-  border-radius: 16rpx;
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 18rpx;
+  background: #fff8df;
+  color: #8c6a23;
 }
 
-.settlement-option__icon--personal {
-  background: #e9f7f0;
-  color: #12845c;
+.settlement-card__glyph {
+  width: 38rpx;
+  height: 38rpx;
 }
 
-.settlement-option__icon-glyph {
-  width: 44rpx;
-  height: 44rpx;
-}
-
-.settlement-option__body {
-  min-width: 0;
+.settlement-card__intro {
   flex: 1;
-}
-
-.settlement-option__heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12rpx;
-}
-
-.settlement-option__title {
   min-width: 0;
-  color: #202328;
-  font-size: 30rpx;
-  font-weight: 700;
-  line-height: 1.35;
 }
 
-.settlement-option__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 4rpx;
-  flex-shrink: 0;
-  color: #9298a0;
-  font-size: 21rpx;
-  line-height: 1.4;
+.settlement-card__title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 600;
 }
 
-.settlement-option__status--active {
-  color: #16835c;
-}
-
-.settlement-option__check {
-  width: 24rpx;
-  height: 24rpx;
-}
-
-.settlement-option__desc,
-.settlement-option__account {
+.settlement-card__desc {
   display: block;
   margin-top: 10rpx;
-  color: #7e858e;
-  font-size: 23rpx;
-  line-height: 1.55;
-}
-
-.settlement-option__account {
-  color: #4e5965;
-}
-
-.settlement-option__arrow {
-  width: 32rpx;
-  height: 32rpx;
-  flex-shrink: 0;
-  color: #b1b6bd;
-}
-
-.settlement-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 10rpx;
-  margin-top: 28rpx;
-  padding: 0 4rpx;
-  color: #858c94;
-  font-size: 23rpx;
+  color: #858a93;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
-.settlement-note__icon {
-  width: 28rpx;
-  height: 28rpx;
+.settlement-details {
+  margin-top: 28rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid #f0f1f3;
+}
+
+.settlement-details__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24rpx;
+  padding: 12rpx 0;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+.settlement-details__label {
   flex-shrink: 0;
-  margin-top: 4rpx;
+  color: #858a93;
+}
+
+.settlement-details__value {
+  flex: 1;
+  min-width: 0;
+  color: #363b42;
+  text-align: right;
+  word-break: break-word;
+}
+
+.settlement-primary,
+.settlement-retry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 88rpx;
+  margin: 26rpx 0 0;
+  padding: 18rpx 24rpx;
+  border: 0;
+  border-radius: 18rpx;
+  box-sizing: border-box;
+  background: #ffcf37;
+  color: #24272b;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.settlement-primary::after,
+.settlement-retry::after {
+  border: 0;
+}
+
+.settlement-primary[disabled] {
+  background: #f3f4f6;
+  color: #969ca5;
+}
+
+.settlement-primary--hover {
+  opacity: 0.82;
+}
+
+.settlement-error {
+  margin-top: 18rpx;
+  color: #b64a3d;
+  font-size: 25rpx;
+  line-height: 1.6;
+}
+
+.settlement-retry {
+  background: #f5f6f8;
+  font-weight: 400;
+}
+
+.settlement-history {
+  margin-top: 20rpx;
+}
+
+.settlement-history__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.settlement-history__title {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.settlement-history__status {
+  flex-shrink: 0;
+  color: #858a93;
+  font-size: 23rpx;
+}
+
+.settlement-history__account {
+  display: block;
+  margin-top: 18rpx;
+  color: #555b64;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+.settlement-note {
+  display: block;
+  margin: 24rpx 8rpx 0;
+  color: #9298a1;
+  font-size: 23rpx;
+  line-height: 1.7;
 }
 </style>

@@ -34,9 +34,9 @@ const bankFields: Field[] = [
   { key: 'bankBranchName', label: '开户支行名称' },
 ]
 const groups = computed(() => [
-  ...(form.merchType === '1' ? [{ title: '营业执照', fields: corporateFields }] : []),
+  { title: '银行卡及开户行', fields: bankFields },
   { title: '法人资料', fields: legalFields },
-  { title: '结算银行卡', fields: bankFields },
+  ...(form.merchType === '1' ? [{ title: '营业执照', fields: corporateFields }] : []),
 ])
 const imageFields = computed<Field[]>(() => [
   ...(form.merchType === '1' ? [{ key: 'licenseFileId' as const, label: '营业执照照片' }] : []),
@@ -45,6 +45,7 @@ const imageFields = computed<Field[]>(() => [
   { key: 'bankFileId', label: '结算银行卡照片' },
 ])
 const disabled = computed(() => busy.value || !view.value?.editable)
+const statusLabel = computed(() => view.value?.stateLabel.replace(/嘉联/g, '') || '')
 
 function message(value: unknown): string {
   if (value instanceof Error)
@@ -87,7 +88,7 @@ async function save(submit: boolean) {
   error.value = ''
   try {
     apply(await saveLedger(props.storeId, view.value.version, { ...form }, submit))
-    uni.showToast({ title: submit ? '收款资料已提交' : '草稿已保存', icon: 'success' })
+    uni.showToast({ title: submit ? '账户资料已提交' : '草稿已保存', icon: 'success' })
   }
   catch (reason) {
     error.value = message(reason)
@@ -161,83 +162,456 @@ onUnmounted(() => clearInterval(timer))
 </script>
 
 <template>
-  <view class="min-h-screen bg-[#f5f7fa] p-4 text-[#23262c]">
-    <view class="mb-4 rounded-3 bg-white p-4">
-      <text class="block text-lg font-semibold">开通商家收款</text>
-      <text class="mt-2 block text-sm text-[#667085]">完善资料 → 门店二审通过 → 嘉联开户 → 法人签约 → 绑定审核通过</text>
-      <text class="mt-2 block text-sm text-[#667085]">硕米为出账方，商家为入账方。对私账户须使用法人本人银行卡，对公账户使用企业账户。</text>
+  <view class="ledger-form" :class="{ 'ledger-form--editable': view?.editable }">
+    <view class="ledger-intro">
+      <text class="ledger-intro__title">完善账户信息</text>
+      <text class="ledger-hint">填写银行卡及开户行，完成审核与签约后用于门店结算。</text>
     </view>
-    <view v-if="loading" class="p-4 text-center">
-      正在加载收款资料…
+    <view v-if="loading" class="ledger-panel ledger-loading">
+      正在加载账户信息…
     </view>
-    <view v-if="error" class="mb-4 rounded-3 bg-[#fff1f0] p-4 text-sm text-[#d4380d]">
+    <view v-if="error" class="ledger-error">
       {{ error }}
     </view>
-    <view v-if="view" class="mb-4 rounded-3 bg-white p-4">
-      <text class="block font-semibold">{{ view.stateLabel }}</text>
-      <text v-if="view.lastError" class="mt-2 block text-sm text-[#d4380d]">{{ view.lastError }}</text>
-      <text v-if="!view.initialAuditPassed" class="mt-2 block text-sm text-[#667085]">门店初审通过后，可在这里继续填写收款资料。</text>
-      <text v-if="view.enabled && view.initialAuditPassed && !view.profileApproved" class="mt-2 block text-sm text-[#667085]">可先保存或提交收款资料，门店资料二审通过后才会发起嘉联开户。</text>
-      <view v-if="view.signLink" class="mt-3">
-        <text class="mb-2 block text-sm">请将签约链接交给法人本人，用浏览器打开并完成嘉联电子签约。</text>
-        <button class="bg-[#1677ff] text-white" @click="copySignLink">
+    <view v-if="view" class="ledger-panel ledger-status">
+      <view class="ledger-status__heading">
+        <view class="ledger-status__body">
+          <text class="ledger-status__label">当前进度</text>
+          <text class="ledger-status__title">{{ statusLabel }}</text>
+        </view>
+        <button v-if="!view.editable" class="ledger-text-button" :disabled="busy" @click="refresh">
+          <view class="i-carbon-renew ledger-inline-icon" />
+          <text>{{ busy ? '查询中' : '刷新进度' }}</text>
+        </button>
+      </view>
+      <text v-if="view.lastError" class="ledger-status__error">{{ view.lastError }}</text>
+      <text v-if="!view.initialAuditPassed" class="ledger-hint">门店初审通过后，即可填写账户资料。</text>
+      <text v-if="view.enabled && view.initialAuditPassed && !view.profileApproved" class="ledger-hint">可先完善并提交资料，门店二审通过后继续办理开户。</text>
+      <view v-if="view.signLink" class="ledger-sign">
+        <text class="ledger-hint">请由法人本人打开签约链接，完成电子签约。</text>
+        <button class="ledger-button ledger-button--primary ledger-sign__button" @click="copySignLink">
           复制法人签约链接
         </button>
       </view>
-      <button v-if="!view.editable" class="mt-3 text-sm" :disabled="busy" @click="refresh">
-        刷新开户进度
-      </button>
     </view>
     <template v-if="view?.initialAuditPassed">
-      <view class="mb-4 rounded-3 bg-white p-4">
-        <text class="mb-2 block font-semibold">收款账户类型</text>
+      <view class="ledger-panel">
         <picker :disabled="disabled" :range="['法人对私银行卡', '企业对公账户']" :value="form.merchType === '1' ? 1 : 0" @change="changeType">
-          <view class="rounded-2 bg-[#f5f7fa] p-3">
-            {{ form.merchType === '1' ? '企业对公账户' : '法人对私银行卡' }}
+          <view class="ledger-account-type">
+            <text class="ledger-section-title">账户类型</text>
+            <view class="ledger-account-type__value">
+              <text>{{ form.merchType === '1' ? '企业对公账户' : '法人对私银行卡' }}</text>
+              <view v-if="!disabled" class="i-carbon-chevron-down ledger-inline-icon" />
+            </view>
           </view>
         </picker>
+        <text class="ledger-hint">{{ form.merchType === '1' ? '请使用与营业执照主体一致的企业账户。' : '请使用法人本人名下的银行卡。' }}</text>
       </view>
-      <view v-for="group in groups" :key="group.title" class="mb-4 rounded-3 bg-white p-4">
-        <text class="mb-3 block font-semibold">{{ group.title }}</text>
-        <view v-for="field in group.fields" :key="field.key" class="mb-3">
-          <text class="mb-1 block text-sm">{{ field.label }} *</text>
-          <input v-model="form[field.key]" :disabled="disabled" :maxlength="256" class="h-11 rounded-2 bg-[#f5f7fa] px-3 text-sm" :placeholder="field.hint || (`请填写${field.label}`)">
+      <view v-for="group in groups" :key="group.title" class="ledger-panel ledger-fields">
+        <text class="ledger-section-title ledger-fields__title">{{ group.title }}</text>
+        <view v-for="field in group.fields" :key="field.key" class="ledger-field">
+          <text class="ledger-field__label">{{ field.label }}<text class="ledger-required">*</text></text>
+          <input
+            v-model="form[field.key]"
+            :disabled="disabled"
+            :maxlength="256"
+            class="ledger-field__input"
+            placeholder-class="ledger-field__placeholder"
+            :placeholder="field.hint || (`请填写${field.label}`)"
+          >
         </view>
       </view>
-      <view class="mb-4 rounded-3 bg-white p-4">
-        <text class="mb-3 block font-semibold">证件及银行卡照片</text>
-        <view v-for="field in imageFields" :key="field.key" class="mb-3 flex items-center justify-between gap-2">
-          <text class="text-sm">{{ field.label }}</text>
-          <button :disabled="disabled" class="m-0 text-sm" @click="upload(field.key)">
-            {{ form[field.key] ? '已上传，点击更换' : '上传图片' }}
+      <view class="ledger-panel">
+        <text class="ledger-section-title">证件及银行卡照片</text>
+        <text class="ledger-hint">请上传清晰完整的照片，支持5MB以内的PNG、JPG图片。</text>
+        <view class="ledger-upload-grid">
+          <button
+            v-for="field in imageFields"
+            :key="field.key"
+            :disabled="disabled"
+            class="ledger-upload"
+            :class="{ 'ledger-upload--complete': form[field.key] }"
+            hover-class="ledger-button--hover"
+            @click="upload(field.key)"
+          >
+            <view v-if="form[field.key]" class="i-carbon-checkmark ledger-upload__icon" />
+            <view v-else class="i-carbon-add ledger-upload__icon" />
+            <text class="ledger-upload__title">{{ field.label }}</text>
+            <text class="ledger-upload__hint">{{ form[field.key] ? (disabled ? '已上传' : '已上传 · 更换') : (disabled ? '未上传' : '点击上传') }}</text>
           </button>
         </view>
-        <text class="text-xs text-[#667085]">支持5MB以内的PNG、JPG图片，资料仅用于收款开户。</text>
       </view>
-      <view class="mb-4 rounded-3 bg-white p-4">
-        <text class="block font-semibold">分账合作协议 *</text>
-        <text class="my-2 block text-sm text-[#667085]">上传硕米与商家双方签署的合作协议，包含分账比例约定，最多20张。</text>
-        <view v-for="(file, index) in form.agreementFileIds" :key="file + index" class="mb-2 flex items-center justify-between">
-          <text class="text-sm">协议图片 {{ index + 1 }} · 已上传</text>
-          <button v-if="!disabled" class="m-0 text-sm" @click="form.agreementFileIds.splice(index, 1)">
+      <view class="ledger-panel">
+        <view class="ledger-agreement-heading">
+          <text class="ledger-section-title">合作协议<text class="ledger-required">*</text></text>
+          <text class="ledger-agreement-heading__count">{{ form.agreementFileIds.length }}/20</text>
+        </view>
+        <text class="ledger-hint">上传双方已签署、包含分账比例约定的合作协议。</text>
+        <view v-for="(file, index) in form.agreementFileIds" :key="file + index" class="ledger-agreement">
+          <view class="ledger-agreement__name">
+            <view class="i-carbon-document ledger-inline-icon" />
+            <text>协议图片 {{ index + 1 }}</text>
+          </view>
+          <button v-if="!disabled" class="ledger-text-button" @click="form.agreementFileIds.splice(index, 1)">
             移除
           </button>
+          <text v-else class="ledger-agreement__state">已上传</text>
         </view>
-        <button :disabled="disabled" class="text-sm" @click="upload()">
-          添加协议图片
+        <button v-if="view.editable" :disabled="disabled || form.agreementFileIds.length >= 20" class="ledger-button ledger-agreement__add" @click="upload()">
+          <view class="i-carbon-add ledger-inline-icon" />
+          <text>添加协议图片</text>
         </button>
+        <text v-else-if="!form.agreementFileIds.length" class="ledger-hint">暂无协议图片</text>
       </view>
-      <view v-if="view.editable" class="mb-8 flex gap-3">
-        <button class="flex-1 text-sm" :disabled="busy" @click="save(false)">
+      <text class="ledger-privacy">资料仅用于账户开通，请确认信息真实、准确。</text>
+      <view v-if="view.editable" class="ledger-actions">
+        <button class="ledger-button ledger-actions__draft" :disabled="busy" hover-class="ledger-button--hover" @click="save(false)">
           保存草稿
         </button>
-        <button class="flex-1 bg-[#1677ff] text-sm text-white" :disabled="busy" :loading="busy" @click="save(true)">
-          提交收款资料
+        <button class="ledger-button ledger-button--primary ledger-actions__submit" :disabled="busy" :loading="busy" hover-class="ledger-button--hover" @click="save(true)">
+          提交账户资料
         </button>
       </view>
     </template>
-    <button v-if="!view && !loading" @click="load">
+    <button v-if="!view && !loading" class="ledger-button ledger-reload" @click="load">
       重新加载
     </button>
   </view>
 </template>
+
+<style lang="scss" scoped>
+.ledger-form {
+  padding: 28rpx 24rpx calc(env(safe-area-inset-bottom) + 40rpx);
+  color: #24272b;
+}
+
+.ledger-form--editable {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 160rpx);
+}
+
+.ledger-intro {
+  padding: 4rpx 4rpx 26rpx;
+}
+
+.ledger-intro__title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 600;
+}
+
+.ledger-hint {
+  display: block;
+  margin-top: 12rpx;
+  color: #858a93;
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
+.ledger-panel {
+  margin-bottom: 20rpx;
+  padding: 28rpx;
+  border: 1rpx solid #eceef1;
+  border-radius: 22rpx;
+  background: #fff;
+}
+
+.ledger-loading {
+  padding: 48rpx 28rpx;
+  color: #858a93;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+.ledger-error {
+  margin-bottom: 20rpx;
+  padding: 22rpx 26rpx;
+  border-radius: 18rpx;
+  background: #fff3f0;
+  color: #b64a3d;
+  font-size: 25rpx;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.ledger-status__heading,
+.ledger-account-type,
+.ledger-agreement-heading,
+.ledger-agreement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.ledger-status__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ledger-status__label {
+  display: block;
+  color: #9298a1;
+  font-size: 23rpx;
+}
+
+.ledger-status__title {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.ledger-status__error {
+  display: block;
+  margin-top: 14rpx;
+  color: #b64a3d;
+  font-size: 24rpx;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.ledger-sign {
+  margin-top: 20rpx;
+  padding-top: 8rpx;
+  border-top: 1rpx solid #f0f1f3;
+}
+
+.ledger-section-title {
+  display: block;
+  font-size: 29rpx;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.ledger-account-type__value,
+.ledger-agreement__name {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  color: #555b64;
+  font-size: 26rpx;
+}
+
+.ledger-inline-icon {
+  width: 28rpx;
+  height: 28rpx;
+  flex-shrink: 0;
+}
+
+.ledger-fields {
+  padding-bottom: 10rpx;
+}
+
+.ledger-fields__title {
+  padding-bottom: 20rpx;
+}
+
+.ledger-field {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  min-height: 96rpx;
+  border-top: 1rpx solid #f0f1f3;
+}
+
+.ledger-field__label {
+  width: 224rpx;
+  flex-shrink: 0;
+  padding: 16rpx 0;
+  color: #555b64;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+.ledger-required {
+  margin-left: 6rpx;
+  color: #cb6b56;
+  font-size: 24rpx;
+}
+
+.ledger-field__input {
+  flex: 1;
+  min-width: 0;
+  height: 88rpx;
+  padding: 0;
+  color: #24272b;
+  font-size: 26rpx;
+  text-align: right;
+}
+
+.ledger-field__placeholder {
+  color: #b1b5bd;
+}
+
+.ledger-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.ledger-upload {
+  display: flex;
+  min-width: 0;
+  min-height: 208rpx;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 24rpx 12rpx;
+  border: 1rpx dashed #dce0e5;
+  border-radius: 16rpx;
+  box-sizing: border-box;
+  background: #fafbfc;
+  color: #666e79;
+  line-height: 1.5;
+}
+
+.ledger-upload::after,
+.ledger-button::after,
+.ledger-text-button::after {
+  border: 0;
+}
+
+.ledger-upload--complete {
+  border-style: solid;
+  border-color: #eadfbd;
+  background: #fffcf4;
+}
+
+.ledger-upload[disabled] {
+  color: #858a93;
+}
+
+.ledger-upload__icon {
+  width: 38rpx;
+  height: 38rpx;
+  margin-bottom: 16rpx;
+  color: #9aa0a9;
+}
+
+.ledger-upload--complete .ledger-upload__icon {
+  color: #9b7a34;
+}
+
+.ledger-upload__title {
+  font-size: 25rpx;
+}
+
+.ledger-upload__hint {
+  margin-top: 8rpx;
+  color: #9298a1;
+  font-size: 22rpx;
+}
+
+.ledger-agreement-heading__count,
+.ledger-agreement__state {
+  color: #9298a1;
+  font-size: 23rpx;
+}
+
+.ledger-agreement {
+  min-height: 80rpx;
+  margin-top: 12rpx;
+  border-bottom: 1rpx solid #f0f1f3;
+}
+
+.ledger-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  min-height: 88rpx;
+  margin: 0;
+  padding: 18rpx 24rpx;
+  border: 1rpx solid #e3e6ea;
+  border-radius: 18rpx;
+  box-sizing: border-box;
+  background: #fff;
+  color: #363b42;
+  font-size: 28rpx;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.ledger-button--primary {
+  border-color: #ffcf37;
+  background: #ffcf37;
+  color: #24272b;
+  font-weight: 600;
+}
+
+.ledger-button[disabled] {
+  opacity: 0.5;
+}
+
+.ledger-button--hover {
+  opacity: 0.82;
+}
+
+.ledger-text-button {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  min-height: 64rpx;
+  margin: 0;
+  padding: 8rpx 0 8rpx 12rpx;
+  border: 0;
+  background: transparent;
+  color: #767d87;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.ledger-text-button[disabled] {
+  background: transparent;
+  color: #b1b5bd;
+}
+
+.ledger-sign__button,
+.ledger-agreement__add {
+  width: 100%;
+  margin-top: 22rpx;
+}
+
+.ledger-agreement__add {
+  min-height: 76rpx;
+  font-size: 25rpx;
+}
+
+.ledger-privacy {
+  display: block;
+  margin: 24rpx 8rpx 0;
+  color: #9298a1;
+  font-size: 23rpx;
+  line-height: 1.7;
+}
+
+.ledger-actions {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  gap: 20rpx;
+  padding: 20rpx 24rpx calc(env(safe-area-inset-bottom) + 20rpx);
+  border-top: 1rpx solid #eceef1;
+  background: #fff;
+}
+
+.ledger-actions__draft {
+  flex: 1;
+}
+
+.ledger-actions__submit {
+  flex: 1.5;
+}
+
+.ledger-reload {
+  width: 100%;
+}
+</style>

@@ -49,8 +49,8 @@ const form = reactive<AuditMaterialsFormValue>({
 const storeId = ref(0)
 const initialAuditPassed = ref(false)
 
-function openLedger() {
-  uni.navigateTo({ url: `/pages/me/store-ledger/index?storeId=${storeId.value}` })
+function openSettlementAccount() {
+  uni.navigateTo({ url: `/pages/me/settlement-account/index?storeId=${storeId.value}` })
 }
 const auditStatus = ref('0')
 const auditVersion = ref(0)
@@ -674,12 +674,20 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         @upload-document="handleDocumentUpload"
         @submit="handleSubmit"
       />
-      <view v-if="initialAuditPassed" class="mx-4 my-4 rounded-3 bg-white p-4">
-        <text class="block font-semibold">商家收款开户</text>
-        <text class="my-2 block text-sm text-[#667085]">请同步完善收款资料。门店资料二审通过后，将启动嘉联开户，再由法人本人完成签约。</text>
-        <button class="bg-[#1677ff] text-sm text-white" @click="openLedger">
-          完善收款资料 / 查看签约进度
-        </button>
+      <view
+        v-if="initialAuditPassed"
+        class="store-audit-settlement"
+        hover-class="store-audit-settlement--hover"
+        @tap="openSettlementAccount"
+      >
+        <view class="store-audit-settlement__body">
+          <text class="store-audit-settlement__title">结算账户</text>
+          <text class="store-audit-settlement__desc">前往结算账户，绑定银行卡及开户行</text>
+        </view>
+        <view class="store-audit-settlement__action">
+          <text>去绑定</text>
+          <view class="i-carbon-chevron-right store-audit-settlement__arrow" />
+        </view>
       </view>
     </view>
   </view>
@@ -783,5 +791,56 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
   font-size: 26rpx;
   line-height: 1.5;
   word-break: break-word;
+}
+
+.store-audit-settlement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-top: 22rpx;
+  padding: 28rpx;
+  border: 1rpx solid #eceef1;
+  border-radius: 22rpx;
+  background: #fff;
+}
+
+.store-audit-settlement--hover {
+  background: #fafafa;
+}
+
+.store-audit-settlement__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.store-audit-settlement__title {
+  display: block;
+  color: #24272b;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.store-audit-settlement__desc {
+  display: block;
+  margin-top: 10rpx;
+  color: #858a93;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.store-audit-settlement__action {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6rpx;
+  color: #555b64;
+  font-size: 25rpx;
+}
+
+.store-audit-settlement__arrow {
+  width: 26rpx;
+  height: 26rpx;
+  color: #a5aab4;
 }
 </style>
