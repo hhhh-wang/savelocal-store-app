@@ -140,6 +140,10 @@ function changeType(event: { detail: { value: string | number } }) {
 async function save(submit: boolean) {
   if (!view.value || disabled.value)
     return
+  if (submit && !view.value.enabled) {
+    error.value = '开户提交暂未开放，可先保存草稿'
+    return
+  }
   if (submit && (!form.bankCode || !form.bankBranchCode)) {
     error.value = '请从下拉搜索结果中选择开户银行及支行'
     return
@@ -250,7 +254,9 @@ onUnmounted(() => clearInterval(timer))
       </view>
       <text v-if="view.lastError" class="ledger-status__error">{{ view.lastError }}</text>
       <text v-if="!view.initialAuditPassed" class="ledger-hint">门店初审通过后，即可填写账户资料。</text>
-      <text v-if="view.enabled && view.initialAuditPassed && !view.profileApproved" class="ledger-hint">可先完善并提交资料，门店二审通过后继续办理开户。</text>
+      <text v-if="view.editable && !view.enabled" class="ledger-hint">开户提交暂未开放，可先填写账户信息、上传照片并保存草稿。</text>
+      <text v-else-if="view.editable && !view.profileApproved" class="ledger-hint">可先完善并提交资料，门店二审通过后继续办理开户。</text>
+      <text v-else-if="view.initialAuditPassed && !view.editable" class="ledger-hint">当前开户阶段的资料已锁定，如需修改请联系平台处理。</text>
       <view v-if="view.signLink" class="ledger-sign">
         <text class="ledger-hint">请由法人本人打开签约链接，完成电子签约。</text>
         <button class="ledger-button ledger-button--primary ledger-sign__button" @click="copySignLink">
@@ -354,8 +360,8 @@ onUnmounted(() => clearInterval(timer))
         <button class="ledger-button ledger-actions__draft" :disabled="busy" hover-class="ledger-button--hover" @click="save(false)">
           保存草稿
         </button>
-        <button class="ledger-button ledger-button--primary ledger-actions__submit" :disabled="busy" :loading="busy" hover-class="ledger-button--hover" @click="save(true)">
-          提交账户资料
+        <button class="ledger-button ledger-button--primary ledger-actions__submit" :disabled="busy || !view.enabled" :loading="busy" hover-class="ledger-button--hover" @click="save(true)">
+          {{ view.enabled ? '提交账户资料' : '暂未开放提交' }}
         </button>
       </view>
     </template>
