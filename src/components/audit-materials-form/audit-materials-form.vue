@@ -274,13 +274,16 @@ function handleSubmit() {
         </view>
       </view>
 
-      <view
-        class="audit-materials-form__submit"
-        :class="{ 'audit-materials-form__submit--disabled': readonly }"
-        hover-class="audit-materials-form__submit--hover"
-        @tap="handleSubmit"
-      >
-        {{ submitText }}
+      <view class="audit-materials-form__actions">
+        <view
+          class="audit-materials-form__submit"
+          :class="{ 'audit-materials-form__submit--disabled': readonly }"
+          hover-class="audit-materials-form__submit--hover"
+          @tap="handleSubmit"
+        >
+          {{ submitText }}
+        </view>
+        <slot name="secondary-action" />
       </view>
     </view>
   </view>
@@ -585,12 +588,19 @@ function handleSubmit() {
   line-height: 1.35;
 }
 
+.audit-materials-form__actions {
+  display: flex;
+  gap: 20rpx;
+  margin: 0 28rpx 30rpx;
+}
+
 .audit-materials-form__submit {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   height: 94rpx;
-  margin: 0 28rpx 30rpx;
   border-radius: 22rpx;
   background: linear-gradient(180deg, #ffd84d 0%, #ffcf37 100%);
   color: #202327;

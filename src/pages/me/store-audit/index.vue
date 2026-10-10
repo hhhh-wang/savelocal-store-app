@@ -673,15 +673,17 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         @select-address-suggestion="selectAddressSuggestion"
         @upload-document="handleDocumentUpload"
         @submit="handleSubmit"
-      />
-      <view
-        v-if="initialAuditPassed"
-        class="store-audit-settlement"
-        hover-class="store-audit-settlement--hover"
-        @tap="openSettlementAccount"
       >
-        去结算账户绑定开户行
-      </view>
+        <template v-if="initialAuditPassed" #secondary-action>
+          <view
+            class="store-audit-settlement"
+            hover-class="store-audit-settlement--hover"
+            @tap="openSettlementAccount"
+          >
+            结算账户
+          </view>
+        </template>
+      </audit-materials-form>
     </view>
   </view>
 </template>
@@ -788,10 +790,11 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
 
 .store-audit-settlement {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   height: 94rpx;
-  margin: 22rpx 28rpx 0;
   border-radius: 22rpx;
   background: linear-gradient(180deg, #ffd84d 0%, #ffcf37 100%);
   color: #202327;
