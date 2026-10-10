@@ -275,6 +275,7 @@ function handleSubmit() {
       </view>
 
       <view class="audit-materials-form__actions">
+        <slot name="secondary-action" />
         <view
           class="audit-materials-form__submit"
           :class="{ 'audit-materials-form__submit--disabled': readonly }"
@@ -283,7 +284,6 @@ function handleSubmit() {
         >
           {{ submitText }}
         </view>
-        <slot name="secondary-action" />
       </view>
     </view>
   </view>

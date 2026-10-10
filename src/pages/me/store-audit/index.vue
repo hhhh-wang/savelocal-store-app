@@ -47,7 +47,6 @@ const form = reactive<AuditMaterialsFormValue>({
 })
 
 const storeId = ref(0)
-const initialAuditPassed = ref(false)
 
 function openSettlementAccount() {
   uni.navigateTo({ url: `/pages/me/settlement-account/index?storeId=${storeId.value}` })
@@ -367,7 +366,6 @@ function selectAddressSuggestion(item: AuditMaterialsAddressSuggestion) {
 }
 
 function applyDraft(draft: MerchantStoreAuditDraft) {
-  initialAuditPassed.value = draft.isPublished === '1'
   storeId.value = draft.storeId
   auditStatus.value = draft.auditStatus || '0'
   auditVersion.value = draft.auditVersion || 0
@@ -674,7 +672,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         @upload-document="handleDocumentUpload"
         @submit="handleSubmit"
       >
-        <template v-if="initialAuditPassed" #secondary-action>
+        <template v-if="primaryAction === 'workbench'" #secondary-action>
           <view
             class="store-audit-settlement"
             hover-class="store-audit-settlement--hover"
