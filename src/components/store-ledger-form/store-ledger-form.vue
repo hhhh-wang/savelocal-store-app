@@ -13,20 +13,20 @@ const error = ref('')
 const activeBankField = ref('')
 let returningFromAudit = false
 type TextKey = Exclude<keyof LedgerMaterials, 'agreementFileIds'>
-interface Field { key: TextKey, label: string, hint?: string }
+interface Field { key: TextKey, label: string, hint?: string, date?: boolean }
 const corporateFields: Field[] = [
   { key: 'licenseNumber', label: '营业执照号码' },
   { key: 'licenseName', label: '营业执照名称' },
   { key: 'licenseAddress', label: '营业执照注册地址' },
-  { key: 'licenseBeginDate', label: '营业执照起始日期', hint: 'yyyy-MM-dd' },
-  { key: 'licenseEndDate', label: '营业执照截止日期', hint: 'yyyy-MM-dd' },
+  { key: 'licenseBeginDate', label: '营业执照起始日期', date: true },
+  { key: 'licenseEndDate', label: '营业执照截止日期', date: true },
 ]
 const legalFields: Field[] = [
   { key: 'legalName', label: '法人姓名' },
   { key: 'legalNumber', label: '法人身份证号码' },
   { key: 'mobile', label: '法人手机号' },
-  { key: 'legalBeginDate', label: '身份证起始日期', hint: 'yyyy-MM-dd' },
-  { key: 'legalEndDate', label: '身份证截止日期', hint: 'yyyy-MM-dd' },
+  { key: 'legalBeginDate', label: '身份证起始日期', date: true },
+  { key: 'legalEndDate', label: '身份证截止日期', date: true },
 ]
 const bankFields: Field[] = [
   { key: 'bankCardNo', label: '结算银行卡号' },
@@ -135,6 +135,35 @@ async function load() {
 
 function changeType(event: { detail: { value: string | number } }) {
   form.merchType = Number(event.detail.value) === 0 ? '2' : '1'
+}
+
+function dateValue(key: TextKey) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(form[key]) ? form[key] : ''
+}
+
+const datePairs: Partial<Record<TextKey, TextKey>> = {
+  legalBeginDate: 'legalEndDate',
+  licenseBeginDate: 'licenseEndDate',
+}
+const datePairStarts = Object.fromEntries(
+  Object.entries(datePairs).map(([begin, end]) => [end, begin]),
+) as Partial<Record<TextKey, TextKey>>
+
+function dateBound(key: TextKey, bound: 'start' | 'end') {
+  const paired = bound === 'end' ? datePairs[key] : datePairStarts[key]
+  return paired ? dateValue(paired) || undefined : undefined
+}
+
+function changeDate(key: TextKey, event: { detail?: { value?: string } }) {
+  const value = event.detail?.value || ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return
+  form[key] = value
+  const endKey = datePairs[key]
+  if (endKey && form[endKey] && form[endKey] < value) {
+    form[endKey] = ''
+    uni.showToast({ title: '截止日期早于起始日期，请重新选择', icon: 'none' })
+  }
 }
 
 async function save(submit: boolean) {
@@ -292,6 +321,21 @@ onUnmounted(() => clearInterval(timer))
             @input="field.key === 'bankName' ? changeBankName($event) : changeBranchName($event)"
             @select="field.key === 'bankName' ? selectBank($event) : selectBranch($event)"
           />
+          <picker
+            v-else-if="field.date"
+            class="ledger-field__date"
+            mode="date"
+            :disabled="disabled"
+            :value="dateValue(field.key)"
+            :start="dateBound(field.key, 'start')"
+            :end="dateBound(field.key, 'end')"
+            @change="changeDate(field.key, $event)"
+          >
+            <view class="ledger-field__picker" :class="{ 'ledger-field__picker--empty': !form[field.key] }">
+              <text>{{ form[field.key] || '请选择日期' }}</text>
+              <view v-if="!disabled" class="i-carbon-calendar ledger-inline-icon" />
+            </view>
+          </picker>
           <input
             v-else
             v-model="form[field.key]"
@@ -530,6 +574,25 @@ onUnmounted(() => clearInterval(timer))
   color: #24272b;
   font-size: 26rpx;
   text-align: right;
+}
+
+.ledger-field__date {
+  flex: 1;
+  min-width: 0;
+}
+
+.ledger-field__picker {
+  display: flex;
+  min-height: 88rpx;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10rpx;
+  color: #24272b;
+  font-size: 26rpx;
+}
+
+.ledger-field__picker--empty {
+  color: #b1b5bd;
 }
 
 .ledger-field__placeholder {
