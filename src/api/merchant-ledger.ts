@@ -48,6 +48,7 @@ export interface LedgerMaterials {
 }
 
 export interface LedgerView {
+  auditDocuments: { legalFront: boolean, legalBack: boolean, license: boolean }
   enabled: boolean
   initialAuditPassed: boolean
   profileApproved: boolean
@@ -110,6 +111,11 @@ function normalize(value: unknown): LedgerView {
       materials.agreementFileIds = agreements.filter((item): item is string => typeof item === 'string')
   }
   return {
+    auditDocuments: {
+      legalFront: record(value.auditDocuments) && value.auditDocuments.legalFront === true,
+      legalBack: record(value.auditDocuments) && value.auditDocuments.legalBack === true,
+      license: record(value.auditDocuments) && value.auditDocuments.license === true,
+    },
     enabled: value.enabled === true,
     initialAuditPassed: value.initialAuditPassed === true,
     profileApproved: value.profileApproved === true,
@@ -124,6 +130,23 @@ function normalize(value: unknown): LedgerView {
 }
 
 const path = (storeId: string) => `/merchant/stores/${storeId}/ledger`
+
+export interface LedgerBank { bankCode: string, bankName: string }
+export interface LedgerBankBranch { bankCode: string, branchCode: string, branchName: string }
+
+export async function searchLedgerBanks(storeId: string, keyword: string): Promise<LedgerBank[]> {
+  const result = await httpGet<LedgerBank[]>(`${path(storeId)}/banks`, { keyword })
+  if (!Array.isArray(result))
+    throw new Error('银行信息格式无效，请重试')
+  return result.filter(item => item && typeof item.bankCode === 'string' && !!item.bankCode && typeof item.bankName === 'string' && !!item.bankName)
+}
+
+export async function searchLedgerBankBranches(storeId: string, bankCode: string, keyword: string): Promise<LedgerBankBranch[]> {
+  const result = await httpGet<LedgerBankBranch[]>(`${path(storeId)}/bank-branches`, { bankCode, keyword })
+  if (!Array.isArray(result))
+    throw new Error('支行信息格式无效，请重试')
+  return result.filter(item => item && item.bankCode === bankCode && typeof item.branchCode === 'string' && !!item.branchCode && typeof item.branchName === 'string' && !!item.branchName)
+}
 
 export async function getLedger(storeId: string): Promise<LedgerView> {
   return normalize(await httpGet<unknown>(path(storeId)))

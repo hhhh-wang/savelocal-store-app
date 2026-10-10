@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { LedgerMaterials, LedgerView } from '@/api/merchant-ledger'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { emptyLedgerMaterials, getLedger, refreshLedger, saveLedger, uploadLedgerFile } from '@/api/merchant-ledger'
+import { emptyLedgerMaterials, getLedger, refreshLedger, saveLedger, searchLedgerBankBranches, searchLedgerBanks, uploadLedgerFile } from '@/api/merchant-ledger'
+import BankSearchField from './bank-search-field.vue'
 
 const props = defineProps<{ storeId: string }>()
 const view = ref<LedgerView>()
@@ -9,6 +10,8 @@ const form = reactive<LedgerMaterials>(emptyLedgerMaterials())
 const busy = ref(false)
 const loading = ref(true)
 const error = ref('')
+const activeBankField = ref('')
+let returningFromAudit = false
 type TextKey = Exclude<keyof LedgerMaterials, 'agreementFileIds'>
 interface Field { key: TextKey, label: string, hint?: string }
 const corporateFields: Field[] = [
@@ -28,24 +31,77 @@ const legalFields: Field[] = [
 const bankFields: Field[] = [
   { key: 'bankCardNo', label: '结算银行卡号' },
   { key: 'bankCardName', label: '结算户名' },
-  { key: 'bankCode', label: '开户总行代码' },
-  { key: 'bankName', label: '开户总行名称' },
-  { key: 'bankBranchCode', label: '开户支行联行号' },
-  { key: 'bankBranchName', label: '开户支行名称' },
+  { key: 'bankName', label: '开户银行' },
+  { key: 'bankBranchName', label: '开户支行' },
 ]
 const groups = computed(() => [
   { title: '银行卡及开户行', fields: bankFields },
   { title: '法人资料', fields: legalFields },
   ...(form.merchType === '1' ? [{ title: '营业执照', fields: corporateFields }] : []),
 ])
-const imageFields = computed<Field[]>(() => [
-  ...(form.merchType === '1' ? [{ key: 'licenseFileId' as const, label: '营业执照照片' }] : []),
-  { key: 'legalFrontFileId', label: '法人身份证正面' },
-  { key: 'legalBackFileId', label: '法人身份证反面' },
+const imageFields: Field[] = [
   { key: 'bankFileId', label: '结算银行卡照片' },
-])
+]
 const disabled = computed(() => busy.value || !view.value?.editable)
 const statusLabel = computed(() => view.value?.stateLabel.replace(/嘉联/g, '') || '')
+const missingAuditDocuments = computed(() => [
+  ...(!view.value?.auditDocuments.legalFront && !form.legalFrontFileId ? ['身份证正面'] : []),
+  ...(!view.value?.auditDocuments.legalBack && !form.legalBackFileId ? ['身份证背面'] : []),
+  ...(form.merchType === '1' && !view.value?.auditDocuments.license && !form.licenseFileId ? ['营业执照'] : []),
+])
+
+async function searchBanks(keyword: string) {
+  return (await searchLedgerBanks(props.storeId, keyword)).map(item => ({ code: item.bankCode, name: item.bankName }))
+}
+
+async function searchBranches(keyword: string) {
+  if (!form.bankCode)
+    return []
+  return (await searchLedgerBankBranches(props.storeId, form.bankCode, keyword)).map(item => ({ code: item.branchCode, name: item.branchName }))
+}
+
+function changeBankName(value: string) {
+  form.bankName = value
+  form.bankCode = ''
+  form.bankBranchName = ''
+  form.bankBranchCode = ''
+}
+
+function changeBranchName(value: string) {
+  form.bankBranchName = value
+  form.bankBranchCode = ''
+}
+
+function selectBank(option: { code: string, name: string }) {
+  changeBankName(option.name)
+  form.bankCode = option.code
+}
+
+function selectBranch(option: { code: string, name: string }) {
+  form.bankBranchName = option.name
+  form.bankBranchCode = option.code
+}
+
+function openAuditMaterials() {
+  returningFromAudit = true
+  uni.navigateTo({ url: `/pages/me/store-audit/index?storeId=${props.storeId}` })
+}
+
+onShow(async () => {
+  if (!returningFromAudit)
+    return
+  returningFromAudit = false
+  try {
+    const latest = await getLedger(props.storeId)
+    if (view.value?.version === latest.version && latest.editable)
+      view.value.auditDocuments = latest.auditDocuments
+    else
+      apply(latest)
+  }
+  catch (reason) {
+    error.value = message(reason)
+  }
+})
 
 function message(value: unknown): string {
   if (value instanceof Error)
@@ -84,6 +140,14 @@ function changeType(event: { detail: { value: string | number } }) {
 async function save(submit: boolean) {
   if (!view.value || disabled.value)
     return
+  if (submit && (!form.bankCode || !form.bankBranchCode)) {
+    error.value = '请从下拉搜索结果中选择开户银行及支行'
+    return
+  }
+  if (submit && missingAuditDocuments.value.length) {
+    error.value = `请先在审核资料中补充${missingAuditDocuments.value.join('、')}`
+    return
+  }
   busy.value = true
   error.value = ''
   try {
@@ -162,7 +226,7 @@ onUnmounted(() => clearInterval(timer))
 </script>
 
 <template>
-  <view class="ledger-form" :class="{ 'ledger-form--editable': view?.editable }">
+  <view class="ledger-form" :class="{ 'ledger-form--editable': view?.editable }" @tap="activeBankField = ''">
     <view class="ledger-intro">
       <text class="ledger-intro__title">完善账户信息</text>
       <text class="ledger-hint">填写银行卡及开户行，完成审核与签约后用于门店结算。</text>
@@ -211,7 +275,19 @@ onUnmounted(() => clearInterval(timer))
         <text class="ledger-section-title ledger-fields__title">{{ group.title }}</text>
         <view v-for="field in group.fields" :key="field.key" class="ledger-field">
           <text class="ledger-field__label">{{ field.label }}<text class="ledger-required">*</text></text>
+          <BankSearchField
+            v-if="field.key === 'bankName' || field.key === 'bankBranchName'"
+            :value="form[field.key]"
+            :active="activeBankField === field.key"
+            :disabled="disabled || (field.key === 'bankBranchName' && !form.bankCode)"
+            :placeholder="field.key === 'bankName' ? '输入银行名称搜索' : form.bankCode ? '输入支行名称或地区' : '请先选择开户银行'"
+            :search="field.key === 'bankName' ? searchBanks : searchBranches"
+            @focus="activeBankField = field.key"
+            @input="field.key === 'bankName' ? changeBankName($event) : changeBranchName($event)"
+            @select="field.key === 'bankName' ? selectBank($event) : selectBranch($event)"
+          />
           <input
+            v-else
             v-model="form[field.key]"
             :disabled="disabled"
             :maxlength="256"
@@ -222,8 +298,18 @@ onUnmounted(() => clearInterval(timer))
         </view>
       </view>
       <view class="ledger-panel">
-        <text class="ledger-section-title">证件及银行卡照片</text>
-        <text class="ledger-hint">请上传清晰完整的照片，支持5MB以内的PNG、JPG图片。</text>
+        <text class="ledger-section-title">银行卡照片</text>
+        <text class="ledger-hint">请上传清晰完整的银行卡照片，支持5MB以内的PNG、JPG图片。</text>
+        <view v-if="view.editable && missingAuditDocuments.length" class="ledger-audit-documents">
+          <text class="ledger-audit-documents__missing">审核资料还缺少{{ missingAuditDocuments.join('、') }}，请先补齐。</text>
+          <button class="ledger-text-button" @click="openAuditMaterials">
+            补充审核资料
+          </button>
+        </view>
+        <text v-else class="ledger-hint">{{ form.merchType === '1' ? '身份证正反面及营业执照' : '身份证正反面' }}将复用门店审核资料，无需重复上传。</text>
+        <button v-if="view.editable && !missingAuditDocuments.length" class="ledger-text-button" @click="openAuditMaterials">
+          查看审核资料
+        </button>
         <view class="ledger-upload-grid">
           <button
             v-for="field in imageFields"
@@ -446,9 +532,28 @@ onUnmounted(() => clearInterval(timer))
 
 .ledger-upload-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 18rpx;
   margin-top: 24rpx;
+}
+
+.ledger-audit-documents {
+  margin-top: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #fff8e8;
+}
+
+.ledger-audit-documents__missing {
+  color: #94713b;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.ledger-audit-documents .ledger-text-button {
+  justify-content: flex-start;
+  padding-left: 0;
+  color: #94713b;
 }
 
 .ledger-upload {
