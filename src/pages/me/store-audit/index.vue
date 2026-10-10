@@ -680,14 +680,7 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
         hover-class="store-audit-settlement--hover"
         @tap="openSettlementAccount"
       >
-        <view class="store-audit-settlement__body">
-          <text class="store-audit-settlement__title">结算账户</text>
-          <text class="store-audit-settlement__desc">前往结算账户，绑定银行卡及开户行</text>
-        </view>
-        <view class="store-audit-settlement__action">
-          <text>去绑定</text>
-          <view class="i-carbon-chevron-right store-audit-settlement__arrow" />
-        </view>
+        去结算账户绑定开户行
       </view>
     </view>
   </view>
@@ -796,51 +789,17 @@ async function handleSubmit(value: AuditMaterialsFormValue) {
 .store-audit-settlement {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-  margin-top: 22rpx;
-  padding: 28rpx;
-  border: 1rpx solid #eceef1;
+  justify-content: center;
+  height: 94rpx;
+  margin: 22rpx 28rpx 0;
   border-radius: 22rpx;
-  background: #fff;
+  background: linear-gradient(180deg, #ffd84d 0%, #ffcf37 100%);
+  color: #202327;
+  font-size: 36rpx;
+  font-weight: 700;
 }
 
 .store-audit-settlement--hover {
-  background: #fafafa;
-}
-
-.store-audit-settlement__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.store-audit-settlement__title {
-  display: block;
-  color: #24272b;
-  font-size: 30rpx;
-  font-weight: 600;
-}
-
-.store-audit-settlement__desc {
-  display: block;
-  margin-top: 10rpx;
-  color: #858a93;
-  font-size: 24rpx;
-  line-height: 1.6;
-}
-
-.store-audit-settlement__action {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 6rpx;
-  color: #555b64;
-  font-size: 25rpx;
-}
-
-.store-audit-settlement__arrow {
-  width: 26rpx;
-  height: 26rpx;
-  color: #a5aab4;
+  opacity: 0.82;
 }
 </style>
