@@ -1,189 +1,141 @@
-import { httpGet, httpPost, httpPut } from '@/http/http'
-
-export interface LedgerMaterials {
-  /** 1对公资料开户，2法人对私资料开户。 */
-  merchType: string
-  /** 营业执照号码。 */
-  licenseNumber: string
-  /** 营业执照名称。 */
-  licenseName: string
-  /** 营业执照注册地址。 */
-  licenseAddress: string
-  /** 营业执照起始日期。 */
-  licenseBeginDate: string
-  /** 营业执照截止日期。 */
-  licenseEndDate: string
-  /** 营业执照图片文件标识。 */
-  licenseFileId: string
-  /** 法人姓名。 */
-  legalName: string
-  /** 法人身份证号，仅加密存储。 */
-  legalNumber: string
-  /** 身份证起始日期。 */
-  legalBeginDate: string
-  /** 身份证截止日期。 */
-  legalEndDate: string
-  /** 身份证正面文件标识。 */
-  legalFrontFileId: string
-  /** 身份证反面文件标识。 */
-  legalBackFileId: string
-  /** 法人手机号。 */
-  mobile: string
-  /** 结算银行卡号，仅加密存储。 */
-  bankCardNo: string
-  /** 结算户名。 */
-  bankCardName: string
-  /** 银行卡照片文件标识。 */
-  bankFileId: string
-  /** 总行代码。 */
-  bankCode: string
-  /** 总行名称。 */
-  bankName: string
-  /** 支行联行号。 */
-  bankBranchCode: string
-  /** 支行名称。 */
-  bankBranchName: string
-  /** 硕米与商家签署的分账合作协议图片标识，1至20张。 */
-  agreementFileIds: string[]
-}
+import { httpGet, httpPost } from '@/http/http'
 
 export interface LedgerView {
-  auditDocuments: { legalFront: boolean, legalBack: boolean, license: boolean }
-  enabled: boolean
-  initialAuditPassed: boolean
-  profileApproved: boolean
-  editable: boolean
   version: number
+  accountVersion: number
   state: string
   stateLabel: string
   lastError: string
-  signLink: string
-  materials: LedgerMaterials
-}
-
-export function emptyLedgerMaterials(): LedgerMaterials {
-  return {
-    merchType: '',
-    licenseNumber: '',
-    licenseName: '',
-    licenseAddress: '',
-    licenseBeginDate: '',
-    licenseEndDate: '',
-    licenseFileId: '',
-    legalName: '',
-    legalNumber: '',
-    legalBeginDate: '',
-    legalEndDate: '',
-    legalFrontFileId: '',
-    legalBackFileId: '',
-    mobile: '',
-    bankCardNo: '',
-    bankCardName: '',
-    bankFileId: '',
-    bankCode: '',
-    bankName: '',
-    bankBranchCode: '',
-    bankBranchName: '',
-    agreementFileIds: [],
+  account: {
+    accountId: string
+    receiverMchId: string
+    merchType: string
+    subjectName: string
+    legalName: string
+    licenseNumberMasked: string
+    legalNumberMasked: string
+    applyStatus: string
+    accountState: string
+    subjectVerified: boolean
+    version: number
   }
+  binding: { bindingId: string, bindingState: string, bindingStatus: string, lastError: string }
+  settlement: {
+    bankCardName: string
+    bankCardNoMasked: string
+    bankTail: string
+    bankCode: string
+    bankName: string
+    bankBranchCode: string
+    bankBranchName: string
+    source: string
+    verifiedAt: string
+  }
+  control: { controlStatus: string, maintenance: boolean, storeCount: number }
+  sync: { lastSyncTime: string, accountSyncTime: string, bindingSyncTime: string, queryStatus: string, message: string }
 }
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+function version(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
+    throw new Error('账户版本格式无效，请刷新重试')
+  return value
+}
 
-/** 校验服务端边界，缺失的可选字符串归一为空字符串。 */
+/** 仅接收独立账户、绑定和结算快照，不再解析进件或附件模型。 */
 function normalize(value: unknown): LedgerView {
   if (!record(value) || typeof value.state !== 'string' || typeof value.stateLabel !== 'string'
-    || typeof value.version !== 'number' || !Number.isSafeInteger(value.version)) {
-    throw new Error('收款信息格式无效，请稍后重试')
+    || !record(value.account) || !record(value.binding) || !record(value.settlement)
+    || !record(value.control) || !record(value.sync)) {
+    throw new Error('账户信息格式无效，请稍后重试')
   }
-  const materials = emptyLedgerMaterials()
-  if (record(value.materials)) {
-    const keys = ['merchType', 'licenseNumber', 'licenseName', 'licenseAddress', 'licenseBeginDate', 'licenseEndDate', 'licenseFileId', 'legalName', 'legalNumber', 'legalBeginDate', 'legalEndDate', 'legalFrontFileId', 'legalBackFileId', 'mobile', 'bankCardNo', 'bankCardName', 'bankFileId', 'bankCode', 'bankName', 'bankBranchCode', 'bankBranchName'] as const
-    for (const key of keys) {
-      const item = value.materials[key]
-      if (typeof item === 'string')
-        materials[key] = item
-    }
-    const agreements = value.materials.agreementFileIds
-    if (Array.isArray(agreements))
-      materials.agreementFileIds = agreements.filter((item): item is string => typeof item === 'string')
-  }
+  const { account, binding, settlement, control, sync } = value
   return {
-    auditDocuments: {
-      legalFront: record(value.auditDocuments) && value.auditDocuments.legalFront === true,
-      legalBack: record(value.auditDocuments) && value.auditDocuments.legalBack === true,
-      license: record(value.auditDocuments) && value.auditDocuments.license === true,
-    },
-    enabled: value.enabled === true,
-    initialAuditPassed: value.initialAuditPassed === true,
-    profileApproved: value.profileApproved === true,
-    editable: value.editable === true,
-    version: value.version,
+    version: version(value.version),
+    accountVersion: version(value.accountVersion),
     state: value.state,
     stateLabel: value.stateLabel,
-    lastError: typeof value.lastError === 'string' ? value.lastError : '',
-    signLink: typeof value.signLink === 'string' ? value.signLink : '',
-    materials,
+    lastError: text(value.lastError),
+    account: {
+      accountId: text(account.accountId),
+      receiverMchId: text(account.receiverMchId),
+      merchType: text(account.merchType),
+      subjectName: text(account.subjectName),
+      legalName: text(account.legalName),
+      licenseNumberMasked: text(account.licenseNumberMasked),
+      legalNumberMasked: text(account.legalNumberMasked),
+      applyStatus: text(account.applyStatus),
+      accountState: text(account.accountState),
+      subjectVerified: account.subjectVerified === true,
+      version: version(account.version),
+    },
+    binding: {
+      bindingId: text(binding.bindingId),
+      bindingState: text(binding.bindingState),
+      bindingStatus: text(binding.bindingStatus),
+      lastError: text(binding.lastError),
+    },
+    settlement: {
+      bankCardName: text(settlement.bankCardName),
+      bankCardNoMasked: text(settlement.bankCardNoMasked),
+      bankTail: text(settlement.bankTail),
+      bankCode: text(settlement.bankCode),
+      bankName: text(settlement.bankName),
+      bankBranchCode: text(settlement.bankBranchCode),
+      bankBranchName: text(settlement.bankBranchName),
+      source: text(settlement.source),
+      verifiedAt: text(settlement.verifiedAt),
+    },
+    control: {
+      controlStatus: text(control.controlStatus),
+      maintenance: control.maintenance === true,
+      storeCount: version(control.storeCount),
+    },
+    sync: {
+      lastSyncTime: text(sync.lastSyncTime),
+      accountSyncTime: text(sync.accountSyncTime),
+      bindingSyncTime: text(sync.bindingSyncTime),
+      queryStatus: text(sync.queryStatus),
+      message: text(sync.message),
+    },
   }
+}
+
+export function ledgerBindingLabel(state: string): string {
+  const labels: Record<string, string> = {
+    UNVERIFIED: '待核对',
+    UNBOUND: '尚未绑定，请联系业务人员',
+    BINDING: '渠道审核中',
+    BIND_FAILED: '审核未通过，请联系业务人员',
+    BOUND: '已绑定',
+  }
+  return labels[state] || '尚未查询'
+}
+
+export function ledgerAccountType(value: string): string {
+  const labels: Record<string, string> = { 1: '企业对公', 2: '法人对私', 3: '普通商户账户' }
+  return labels[value] || '渠道未返回'
+}
+
+export function ledgerContactGuide() {
+  uni.showModal({
+    title: '联系业务人员',
+    content: '如需办理分账关系或变更结算银行卡，请联系为门店办理入驻的业务人员。人工办理完成后，返回此页刷新账户信息。',
+    showCancel: false,
+    confirmText: '我知道了',
+  })
 }
 
 const path = (storeId: string) => `/merchant/stores/${storeId}/ledger`
 
-export interface LedgerBank { bankCode: string, bankName: string }
-export interface LedgerBankBranch { bankCode: string, branchCode: string, branchName: string }
-
-export async function searchLedgerBanks(storeId: string, keyword: string): Promise<LedgerBank[]> {
-  const result = await httpGet<LedgerBank[]>(`${path(storeId)}/banks`, { keyword })
-  if (!Array.isArray(result))
-    throw new Error('银行信息格式无效，请重试')
-  return result.filter(item => item && typeof item.bankCode === 'string' && !!item.bankCode && typeof item.bankName === 'string' && !!item.bankName)
-}
-
-export async function searchLedgerBankBranches(storeId: string, bankCode: string, keyword: string): Promise<LedgerBankBranch[]> {
-  const result = await httpGet<LedgerBankBranch[]>(`${path(storeId)}/bank-branches`, { bankCode, keyword })
-  if (!Array.isArray(result))
-    throw new Error('支行信息格式无效，请重试')
-  return result.filter(item => item && item.bankCode === bankCode && typeof item.branchCode === 'string' && !!item.branchCode && typeof item.branchName === 'string' && !!item.branchName)
-}
-
 export async function getLedger(storeId: string): Promise<LedgerView> {
   return normalize(await httpGet<unknown>(path(storeId)))
 }
-
-export async function saveLedger(storeId: string, version: number, materials: LedgerMaterials, submit: boolean): Promise<LedgerView> {
-  const body = { version, materials }
-  return normalize(submit
-    ? await httpPost<unknown>(`${path(storeId)}/submit`, body)
-    : await httpPut<unknown>(`${path(storeId)}/materials`, body))
-}
-
 export async function refreshLedger(storeId: string): Promise<LedgerView> {
   return normalize(await httpPost<unknown>(`${path(storeId)}/refresh`))
-}
-
-/** 上传接口复用全局uploadFile认证拦截器；仅返回当前门店的私有附件标识。 */
-export function uploadLedgerFile(storeId: string, filePath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    uni.uploadFile({
-      url: `${path(storeId)}/files`,
-      filePath,
-      name: 'file',
-      success: (response) => {
-        try {
-          const payload: unknown = JSON.parse(response.data)
-          if (response.statusCode !== 200 || !record(payload) || payload.code !== 200
-            || !record(payload.data) || typeof payload.data.fileId !== 'string') {
-            throw new Error(record(payload) && typeof payload.msg === 'string' ? payload.msg : '附件上传失败')
-          }
-          resolve(payload.data.fileId)
-        }
-        catch (error) {
-          reject(error)
-        }
-      },
-      fail: error => reject(new Error(error.errMsg || '附件上传失败')),
-    })
-  })
 }

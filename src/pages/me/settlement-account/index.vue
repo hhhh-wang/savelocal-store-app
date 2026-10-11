@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { getLedger } from '@/api/merchant-ledger'
+import { getLedger, ledgerAccountType, ledgerBindingLabel, ledgerContactGuide, refreshLedger } from '@/api/merchant-ledger'
 import { getMerchantProfitSharingReceiver } from '@/api/merchant-profit-sharing'
 import { useMerchantFoodStore } from '@/store'
 import {
@@ -23,22 +23,15 @@ const routeStoreId = ref<number>()
 const accountStoreId = ref<number>()
 const receiver = ref<Awaited<ReturnType<typeof getMerchantProfitSharingReceiver>>>()
 const ledger = ref<Awaited<ReturnType<typeof getLedger>>>()
+let loadSequence = 0
 
 const storeName = computed(() => merchantFoodStore.stores.find(store => store.storeId === accountStoreId.value)?.storeName || '当前门店')
 const personalWechatBound = computed(() => isPersonalWechatBound(receiver.value))
 const legacyMerchantBound = computed(() => isLegacyMerchantBound(receiver.value))
 const hasLegacyReceiver = computed(() => !!receiver.value?.receiverId || personalWechatBound.value || legacyMerchantBound.value)
 const accountStatus = computed(() => loading.value ? '正在查询' : ledger.value?.stateLabel.replace(/嘉联/g, '') || '暂未获取账户状态')
-const bankCardTail = computed(() => ledger.value?.materials.bankCardNo.replace(/\D/g, '').slice(-4) || '')
-const actionText = computed(() => {
-  if (loading.value)
-    return '正在加载'
-  if (ledger.value?.signLink)
-    return '去完成签约'
-  if (ledger.value?.editable)
-    return bankCardTail.value ? '继续完善账户' : '绑定银行卡'
-  return ledger.value?.state === 'BOUND' ? '查看账户信息' : '查看办理进度'
-})
+const bankCardTail = computed(() => ledger.value?.settlement.bankTail || '')
+const actionText = computed(() => loading.value ? '正在加载' : '查看账户信息')
 
 onLoad((options) => {
   const id = Number(options?.storeId)
@@ -50,18 +43,36 @@ onShow(() => {
 })
 
 async function loadAccountStatus() {
+  const request = ++loadSequence
   loading.value = true
   loadError.value = ''
   ledger.value = undefined
   receiver.value = undefined
   try {
     const currentStoreId = await merchantFoodStore.ensureCurrentStoreId()
+    if (request !== loadSequence)
+      return
     const storeId = routeStoreId.value || currentStoreId
     accountStoreId.value = storeId
     const [ledgerResult, receiverResult] = await Promise.allSettled([
-      getLedger(String(storeId)),
+      getLedger(String(storeId)).then(async (snapshot) => {
+        if (request === loadSequence)
+          ledger.value = snapshot
+        if (!snapshot.account.accountId)
+          return snapshot
+        try {
+          return await refreshLedger(String(storeId))
+        }
+        catch (error) {
+          if (request === loadSequence)
+            loadError.value = error instanceof Error ? error.message : '本次刷新失败，当前显示上次账户快照'
+          return snapshot
+        }
+      }),
       getMerchantProfitSharingReceiver(storeId),
     ])
+    if (request !== loadSequence)
+      return
     if (ledgerResult.status === 'rejected')
       throw ledgerResult.reason
     ledger.value = ledgerResult.value
@@ -72,10 +83,12 @@ async function loadAccountStatus() {
   }
   catch (error) {
     console.error('加载结算账户失败:', error)
-    loadError.value = error instanceof Error ? error.message : '账户信息加载失败，请稍后重试'
+    if (request === loadSequence)
+      loadError.value = error instanceof Error ? error.message : '账户信息加载失败，请稍后重试'
   }
   finally {
-    loading.value = false
+    if (request === loadSequence)
+      loading.value = false
   }
 }
 
@@ -107,7 +120,7 @@ function openLedger() {
           </view>
           <view class="settlement-card__intro">
             <text class="settlement-card__title">结算银行卡</text>
-            <text class="settlement-card__desc">绑定银行卡及开户行，用于门店结算</text>
+            <text class="settlement-card__desc">查询人工办理后的门店结算信息</text>
           </view>
         </view>
 
@@ -116,19 +129,32 @@ function openLedger() {
             <text class="settlement-details__label">当前状态</text>
             <text class="settlement-details__value">{{ accountStatus }}</text>
           </view>
-          <view v-if="ledger?.materials.bankName" class="settlement-details__row">
-            <text class="settlement-details__label">开户银行</text>
-            <text class="settlement-details__value">{{ ledger.materials.bankName }}</text>
+          <view v-if="ledger?.settlement.bankCardName" class="settlement-details__row">
+            <text class="settlement-details__label">结算户名</text>
+            <text class="settlement-details__value">{{ ledger.settlement.bankCardName }}</text>
           </view>
-          <view v-if="ledger?.materials.bankBranchName" class="settlement-details__row">
+          <view v-if="ledger?.settlement.bankName" class="settlement-details__row">
+            <text class="settlement-details__label">开户银行</text>
+            <text class="settlement-details__value">{{ ledger.settlement.bankName }}</text>
+          </view>
+          <view v-if="ledger?.settlement.bankBranchName" class="settlement-details__row">
             <text class="settlement-details__label">开户支行</text>
-            <text class="settlement-details__value">{{ ledger.materials.bankBranchName }}</text>
+            <text class="settlement-details__value">{{ ledger.settlement.bankBranchName }}</text>
           </view>
           <view v-if="bankCardTail" class="settlement-details__row">
             <text class="settlement-details__label">结算账户</text>
-            <text class="settlement-details__value">{{ ledger?.materials.merchType === '1' ? '企业对公' : '法人对私' }} · 尾号 {{ bankCardTail }}</text>
+            <text class="settlement-details__value">{{ ledgerAccountType(ledger?.account.merchType || '') }} · 尾号 {{ bankCardTail }}</text>
+          </view>
+          <view v-if="ledger?.account.accountId" class="settlement-details__row">
+            <text class="settlement-details__label">分账关系</text>
+            <text class="settlement-details__value">{{ ledgerBindingLabel(ledger.binding.bindingState) }}</text>
+          </view>
+          <view class="settlement-details__row">
+            <text class="settlement-details__label">最近完整同步</text>
+            <text class="settlement-details__value">{{ ledger?.sync.lastSyncTime || '尚未同步' }}</text>
           </view>
         </view>
+        <text v-if="ledger?.sync.message" class="settlement-card__desc">{{ ledger.sync.message }}</text>
 
         <view v-if="loadError" class="settlement-error">
           <text>{{ loadError }}</text>
@@ -137,7 +163,6 @@ function openLedger() {
           </button>
         </view>
         <button
-          v-else
           class="settlement-primary"
           :disabled="loading || !ledger"
           :loading="loading"
@@ -145,6 +170,12 @@ function openLedger() {
           @click="openLedger"
         >
           {{ actionText }}
+        </button>
+        <button class="settlement-retry" :disabled="loading" @click="loadAccountStatus">
+          刷新账户信息
+        </button>
+        <button class="settlement-retry" @click="ledgerContactGuide">
+          联系业务人员变更结算卡
         </button>
       </view>
 
@@ -154,10 +185,10 @@ function openLedger() {
           <text class="settlement-history__status">{{ personalWechatBound ? '已绑定' : legacyMerchantBound ? '历史记录' : '未绑定' }}</text>
         </view>
         <text v-if="personalWechatBound" class="settlement-history__account">{{ receiver?.receiverName || '微信收款人' }} · {{ receiver?.receiverAccountMasked || '已授权' }}</text>
-        <text class="settlement-card__desc">用于历史收款核对，新增结算请绑定银行卡。</text>
+        <text class="settlement-card__desc">用于历史微信收款核对。</text>
       </view>
 
-      <text class="settlement-note">如需更换已生效的银行卡或开户行，请联系平台处理。</text>
+      <text class="settlement-note">结算卡变更由业务人员人工办理，办理完成后刷新账户信息。</text>
     </view>
   </view>
 </template>
