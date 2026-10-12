@@ -58,7 +58,7 @@ async function loadAccountStatus() {
       getLedger(String(storeId)).then(async (snapshot) => {
         if (request === loadSequence)
           ledger.value = snapshot
-        if (!snapshot.account.accountId)
+        if (!snapshot.account.accountId && !snapshot.ledgerAttachment?.attachmentId)
           return snapshot
         try {
           return await refreshLedger(String(storeId))
@@ -120,7 +120,7 @@ function openLedger() {
           </view>
           <view class="settlement-card__intro">
             <text class="settlement-card__title">结算银行卡</text>
-            <text class="settlement-card__desc">查询人工办理后的门店结算信息</text>
+            <text class="settlement-card__desc">查看出账方审核和平台分账绑定状态</text>
           </view>
         </view>
 
@@ -145,9 +145,13 @@ function openLedger() {
             <text class="settlement-details__label">结算账户</text>
             <text class="settlement-details__value">{{ ledgerAccountType(ledger?.account.merchType || '') }} · 尾号 {{ bankCardTail }}</text>
           </view>
-          <view v-if="ledger?.account.accountId" class="settlement-details__row">
+          <view v-if="ledger?.ledgerAttachment?.mchId" class="settlement-details__row">
+            <text class="settlement-details__label">出账方商户号</text>
+            <text class="settlement-details__value">{{ ledger.ledgerAttachment.mchId }}</text>
+          </view>
+          <view v-if="ledger?.ledgerAttachment?.attachmentId || ledger?.account.accountId" class="settlement-details__row">
             <text class="settlement-details__label">分账关系</text>
-            <text class="settlement-details__value">{{ ledgerBindingLabel(ledger.binding.bindingState) }}</text>
+            <text class="settlement-details__value">{{ ledgerBindingLabel(ledger.ledgerAttachment?.bindingState || ledger.binding.bindingState) }}</text>
           </view>
           <view class="settlement-details__row">
             <text class="settlement-details__label">最近完整同步</text>
@@ -188,7 +192,7 @@ function openLedger() {
         <text class="settlement-card__desc">用于历史微信收款核对。</text>
       </view>
 
-      <text class="settlement-note">结算卡变更由业务人员人工办理，办理完成后刷新账户信息。</text>
+      <text class="settlement-note">出账方和分账绑定由业务人员办理，办理完成后刷新账户信息。</text>
     </view>
   </view>
 </template>

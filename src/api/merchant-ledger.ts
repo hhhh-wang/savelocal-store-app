@@ -33,6 +33,20 @@ export interface LedgerView {
   }
   control: { controlStatus: string, maintenance: boolean, storeCount: number }
   sync: { lastSyncTime: string, accountSyncTime: string, bindingSyncTime: string, queryStatus: string, message: string }
+  ledgerAttachment: {
+    attachmentId: string
+    mchId: string
+    receiverMchId: string
+    termNo: string
+    issueState: string
+    bindingState: string
+    bindingStatus: string
+    issueError: string
+    bindingError: string
+    fileCount: number
+    channelStatus: string
+    controlStatus: string
+  } | null
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -103,6 +117,25 @@ function normalize(value: unknown): LedgerView {
       queryStatus: text(sync.queryStatus),
       message: text(sync.message),
     },
+    ledgerAttachment: value.ledgerAttachment == null ? null : normalizeAttachment(value.ledgerAttachment),
+  }
+}
+
+function normalizeAttachment(value: unknown) {
+  if (!record(value)) throw new Error('账户信息格式无效，请稍后重试')
+  return {
+    attachmentId: text(value.attachmentId),
+    mchId: text(value.mchId),
+    receiverMchId: text(value.receiverMchId),
+    termNo: text(value.termNo),
+    issueState: text(value.issueState),
+    bindingState: text(value.bindingState),
+    bindingStatus: text(value.bindingStatus),
+    issueError: text(value.issueError),
+    bindingError: text(value.bindingError),
+    fileCount: version(typeof value.fileCount === 'number' ? value.fileCount : 0),
+    channelStatus: text(value.channelStatus),
+    controlStatus: text(value.controlStatus),
   }
 }
 

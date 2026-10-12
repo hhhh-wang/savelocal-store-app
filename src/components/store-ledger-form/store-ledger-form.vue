@@ -22,7 +22,7 @@ async function load() {
     if (request !== sequence)
       return
     view.value = snapshot
-    if (snapshot.account.accountId) {
+    if (snapshot.account.accountId || snapshot.ledgerAttachment?.attachmentId) {
       const latest = await refreshLedger(storeId)
       if (request === sequence)
         view.value = latest
@@ -77,7 +77,22 @@ onUnmounted(() => {
       <text class="ledger-note">最近完整同步：{{ view?.sync.lastSyncTime || '尚未同步' }}</text>
     </view>
 
-    <template v-if="view?.account.accountId">
+    <view v-if="view?.ledgerAttachment?.mchId" class="ledger-group">
+      <text class="ledger-group__title">分账附件</text>
+      <view class="ledger-row">
+        <text>商户号</text><text>{{ view.ledgerAttachment.mchId }}</text>
+      </view>
+      <view class="ledger-row">
+        <text>终端号</text><text>{{ view.ledgerAttachment.termNo || '未登记' }}</text>
+      </view>
+      <view class="ledger-row">
+        <text>出账审核</text><text>{{ view.stateLabel }}</text>
+      </view>
+      <view class="ledger-row">
+        <text>平台分账关系</text><text>{{ ledgerBindingLabel(view.ledgerAttachment.bindingState) }}</text>
+      </view>
+    </view>
+    <template v-if="view?.account.accountId && !view.ledgerAttachment?.attachmentId">
       <view class="ledger-group">
         <text class="ledger-group__title">银行卡及开户行</text>
         <view class="ledger-row">
@@ -128,7 +143,7 @@ onUnmounted(() => {
       <button class="ledger-contact" @click="ledgerContactGuide">
         联系业务人员变更结算卡
       </button>
-      <text class="ledger-note">账户及分账关系由业务人员人工办理，办理完成后刷新查看渠道结果。</text>
+      <text class="ledger-note">出账方开通由业务人员办理。审核通过并完成绑定后，刷新即可查看结果。</text>
     </view>
   </view>
 </template>
